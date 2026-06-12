@@ -551,6 +551,7 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full pipeline detail.
   `backlog.json` (23 epics, 88 items) turned into GitHub issues/labels/milestones
   by [`scripts/github/seed-backlog.ps1`](scripts/github/seed-backlog.ps1) (idempotent by issue title).
 - **Architecture & design:**
+  - [`AGENTS.md`](AGENTS.md) — **rules every AI agent must follow** (story-first workflow, RLS guardrails, multi-agent delegation model)
   - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — services, request path, Azure→Vercel mapping
   - [`docs/MULTI_TENANCY.md`](docs/MULTI_TENANCY.md) — pool/silo/hybrid, RLS, catalog, migration
   - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — pipelines, Vercel, GHCR, cron, secrets

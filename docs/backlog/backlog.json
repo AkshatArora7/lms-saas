@@ -1,318 +1,1416 @@
 {
   "$comment": "Single source of truth for the LMS product backlog. Consumed by scripts/github/seed-backlog.ps1 to create GitHub labels, milestones (epics) and issues (stories/tasks/bugs). Edit here, then re-run the seeder (idempotent by title).",
   "milestones": [
-    { "title": "M0 — Foundation", "description": "Monorepo, CI/CD, schema, tenancy primitives. (Largely scaffolded.)" },
-    { "title": "M1 — Tenant + Identity MVP", "description": "Provision tenants/sub-tenants, SSO login, RBAC, rostering." },
-    { "title": "M2 — Teaching & Learning Core", "description": "Courses, content, enrollment, assignments, grading." },
-    { "title": "M3 — Assessment & Outcomes", "description": "Quizzing, rubrics, competencies, gradebook depth." },
-    { "title": "M4 — Engagement & Insight", "description": "Discussions, notifications, calendar, analytics, AI." },
-    { "title": "M5 — Scale & Commercialize", "description": "Billing, video, search, mobile, compliance hardening." }
+    {
+      "title": "M0 — Foundation",
+      "description": "Monorepo, CI/CD, schema, tenancy primitives. (Largely scaffolded.)"
+    },
+    {
+      "title": "M1 — Tenant + Identity MVP",
+      "description": "Provision tenants/sub-tenants, SSO login, RBAC, rostering."
+    },
+    {
+      "title": "M2 — Teaching & Learning Core",
+      "description": "Courses, content, enrollment, assignments, grading."
+    },
+    {
+      "title": "M3 — Assessment & Outcomes",
+      "description": "Quizzing, rubrics, competencies, gradebook depth."
+    },
+    {
+      "title": "M4 — Engagement & Insight",
+      "description": "Discussions, notifications, calendar, analytics, AI."
+    },
+    {
+      "title": "M5 — Scale & Commercialize",
+      "description": "Billing, video, search, mobile, compliance hardening."
+    }
   ],
   "labels": [
-    { "name": "type/epic", "color": "5319e7", "description": "A large body of work spanning many stories" },
-    { "name": "type/story", "color": "0e8a16", "description": "A user-facing increment of value" },
-    { "name": "type/task", "color": "1d76db", "description": "Technical work, no direct user story" },
-    { "name": "type/bug", "color": "b60205", "description": "Defect / incorrect behavior" },
-    { "name": "type/spike", "color": "fbca04", "description": "Time-boxed research / investigation" },
-    { "name": "priority/P0", "color": "b60205", "description": "Critical — drop everything" },
-    { "name": "priority/P1", "color": "d93f0b", "description": "High" },
-    { "name": "priority/P2", "color": "fbca04", "description": "Medium" },
-    { "name": "priority/P3", "color": "c2e0c6", "description": "Low / nice-to-have" },
-    { "name": "area/tenancy", "color": "5319e7", "description": "Multi-tenancy, provisioning, isolation" },
-    { "name": "area/integration", "color": "006b75", "description": "School portal / LTI / SSO / embedding / sub-tenants" },
-    { "name": "area/identity", "color": "0052cc", "description": "AuthN/AuthZ, RBAC" },
-    { "name": "area/rostering", "color": "0052cc", "description": "Org hierarchy, SIS/OneRoster, users" },
-    { "name": "area/courses", "color": "0e8a16", "description": "Courses & curriculum" },
-    { "name": "area/content", "color": "0e8a16", "description": "Content, SCORM, xAPI" },
-    { "name": "area/enrollment", "color": "0e8a16", "description": "Enrollment & registration" },
-    { "name": "area/assignments", "color": "1d76db", "description": "Assignments & submissions" },
-    { "name": "area/assessments", "color": "1d76db", "description": "Quizzing & assessment" },
-    { "name": "area/grading", "color": "1d76db", "description": "Gradebook & grading" },
-    { "name": "area/outcomes", "color": "1d76db", "description": "Rubrics, competencies, outcomes" },
-    { "name": "area/discussions", "color": "c5def5", "description": "Discussions & collaboration" },
-    { "name": "area/notifications", "color": "c5def5", "description": "Announcements & notifications" },
-    { "name": "area/calendar", "color": "c5def5", "description": "Calendar & scheduling" },
-    { "name": "area/analytics", "color": "fbca04", "description": "Analytics, reporting, Caliper/LRS" },
-    { "name": "area/ai", "color": "fbca04", "description": "AI & personalization (Groq)" },
-    { "name": "area/video", "color": "fef2c0", "description": "Video & media" },
-    { "name": "area/search", "color": "fef2c0", "description": "Search" },
-    { "name": "area/billing", "color": "fef2c0", "description": "Billing & subscriptions" },
-    { "name": "area/security", "color": "b60205", "description": "Security, audit, compliance (FERPA/GDPR)" },
-    { "name": "area/mobile", "color": "d4c5f9", "description": "Mobile apps & BFF" },
-    { "name": "area/platform", "color": "bfdadc", "description": "DevEx, CI/CD, observability, infra" },
-    { "name": "area/a11y", "color": "bfdadc", "description": "Accessibility & internationalization" }
+    {
+      "name": "type/epic",
+      "color": "5319e7",
+      "description": "A large body of work spanning many stories"
+    },
+    {
+      "name": "type/story",
+      "color": "0e8a16",
+      "description": "A user-facing increment of value"
+    },
+    {
+      "name": "type/task",
+      "color": "1d76db",
+      "description": "Technical work, no direct user story"
+    },
+    {
+      "name": "type/bug",
+      "color": "b60205",
+      "description": "Defect / incorrect behavior"
+    },
+    {
+      "name": "type/spike",
+      "color": "fbca04",
+      "description": "Time-boxed research / investigation"
+    },
+    {
+      "name": "priority/P0",
+      "color": "b60205",
+      "description": "Critical — drop everything"
+    },
+    {
+      "name": "priority/P1",
+      "color": "d93f0b",
+      "description": "High"
+    },
+    {
+      "name": "priority/P2",
+      "color": "fbca04",
+      "description": "Medium"
+    },
+    {
+      "name": "priority/P3",
+      "color": "c2e0c6",
+      "description": "Low / nice-to-have"
+    },
+    {
+      "name": "area/tenancy",
+      "color": "5319e7",
+      "description": "Multi-tenancy, provisioning, isolation"
+    },
+    {
+      "name": "area/integration",
+      "color": "006b75",
+      "description": "School portal / LTI / SSO / embedding / sub-tenants"
+    },
+    {
+      "name": "area/identity",
+      "color": "0052cc",
+      "description": "AuthN/AuthZ, RBAC"
+    },
+    {
+      "name": "area/rostering",
+      "color": "0052cc",
+      "description": "Org hierarchy, SIS/OneRoster, users"
+    },
+    {
+      "name": "area/courses",
+      "color": "0e8a16",
+      "description": "Courses & curriculum"
+    },
+    {
+      "name": "area/content",
+      "color": "0e8a16",
+      "description": "Content, SCORM, xAPI"
+    },
+    {
+      "name": "area/enrollment",
+      "color": "0e8a16",
+      "description": "Enrollment & registration"
+    },
+    {
+      "name": "area/assignments",
+      "color": "1d76db",
+      "description": "Assignments & submissions"
+    },
+    {
+      "name": "area/assessments",
+      "color": "1d76db",
+      "description": "Quizzing & assessment"
+    },
+    {
+      "name": "area/grading",
+      "color": "1d76db",
+      "description": "Gradebook & grading"
+    },
+    {
+      "name": "area/outcomes",
+      "color": "1d76db",
+      "description": "Rubrics, competencies, outcomes"
+    },
+    {
+      "name": "area/discussions",
+      "color": "c5def5",
+      "description": "Discussions & collaboration"
+    },
+    {
+      "name": "area/notifications",
+      "color": "c5def5",
+      "description": "Announcements & notifications"
+    },
+    {
+      "name": "area/calendar",
+      "color": "c5def5",
+      "description": "Calendar & scheduling"
+    },
+    {
+      "name": "area/analytics",
+      "color": "fbca04",
+      "description": "Analytics, reporting, Caliper/LRS"
+    },
+    {
+      "name": "area/ai",
+      "color": "fbca04",
+      "description": "AI & personalization (Groq)"
+    },
+    {
+      "name": "area/video",
+      "color": "fef2c0",
+      "description": "Video & media"
+    },
+    {
+      "name": "area/search",
+      "color": "fef2c0",
+      "description": "Search"
+    },
+    {
+      "name": "area/billing",
+      "color": "fef2c0",
+      "description": "Billing & subscriptions"
+    },
+    {
+      "name": "area/security",
+      "color": "b60205",
+      "description": "Security, audit, compliance (FERPA/GDPR)"
+    },
+    {
+      "name": "area/mobile",
+      "color": "d4c5f9",
+      "description": "Mobile apps & BFF"
+    },
+    {
+      "name": "area/platform",
+      "color": "bfdadc",
+      "description": "DevEx, CI/CD, observability, infra"
+    },
+    {
+      "name": "area/a11y",
+      "color": "bfdadc",
+      "description": "Accessibility & internationalization"
+    }
   ],
   "epics": [
     {
       "key": "E1",
       "title": "EPIC: Multi-Tenancy, Sub-Tenants & Provisioning",
       "milestone": "M1 — Tenant + Identity MVP",
-      "labels": ["area/tenancy"],
+      "labels": [
+        "area/tenancy"
+      ],
       "summary": "A tenant is a customer (a district, university, or company). Many customers are hierarchical: a district buys the platform and each school under it needs its own admins, branding, SSO and reporting while rolling up to the district. This epic delivers the hybrid pool/silo model AND a first-class sub-tenant (parent->child) hierarchy so we can sell to districts and onboard their schools as sub-tenants.",
       "stories": [
-        { "type": "story", "priority": "P0", "points": 8, "title": "Provision a new tenant (pool tier)", "as_a": "platform super-admin", "i_want": "to create a tenant with a slug, name, region and plan", "so_that": "a new customer can be onboarded in minutes onto shared infrastructure", "ac": ["POST /tenants creates a control-plane row with tier=pool, status=provisioning->active", "A unique subdomain (slug.lms.app) routes to the tenant", "RLS context works immediately (no infra to stand up)", "tenant.provisioned event emitted to the outbox"] },
-        { "type": "story", "priority": "P1", "points": 13, "title": "Promote a tenant to silo (dedicated DB)", "as_a": "platform super-admin", "i_want": "to migrate a tenant to an isolated Neon database/branch", "so_that": "enterprise customers get physical isolation, their own keys, or data residency", "ac": ["Saga provisions a Neon project/branch and runs migrations", "Tenant rows are bulk-copied; catalog database_ref repointed; tier flipped to silo", "No application code change; schema identical pool<->silo", "Rollback path if any saga step fails"] },
-        { "type": "story", "priority": "P0", "points": 13, "title": "Create a district with school sub-tenants", "as_a": "district administrator", "i_want": "to register my schools as sub-tenants under the district", "so_that": "each school is administered independently while the district sees consolidated data and billing", "ac": ["tenant gains parent_id self-reference (district->school)", "Sub-tenant inherits plan/billing from parent unless overridden", "District admin can list/search all child sub-tenants", "Aggregate (cross-sub-tenant) reporting is scoped to the district subtree only", "RLS still isolates each sub-tenant's row-level data"] },
-        { "type": "story", "priority": "P1", "points": 5, "title": "Delegate sub-tenant administration", "as_a": "district administrator", "i_want": "to grant a school admin rights limited to their school", "so_that": "schools self-manage without seeing sibling schools' data", "ac": ["Role assignment can be scoped to a sub-tenant", "School admin cannot read or write other sub-tenants", "District admin retains override visibility"] },
-        { "type": "story", "priority": "P2", "points": 5, "title": "Tenant resolution by subdomain, JWT and header", "as_a": "platform engineer", "i_want": "every request to resolve its TenantContext deterministically", "so_that": "pool/silo routing and RLS are always correct", "ac": ["Resolution order: subdomain -> JWT tenantId -> X-Tenant-Id (service-to-service only)", "Mismatch between sources is rejected (403)", "Resolved context carries {tenantId, parentTenantId, tier, databaseUrl}"] },
-        { "type": "story", "priority": "P2", "points": 8, "title": "Tenant offboarding & data export (FERPA/GDPR)", "as_a": "district administrator", "i_want": "to export or delete all of a school's data on contract end", "so_that": "we honor data-ownership and right-to-erasure obligations", "ac": ["GET /tenants/{id}/export returns OneRoster CSV + content archive", "Deletion fans a purge across all services (verified)", "Audit log records the export/delete with actor and hash chain"] },
-        { "type": "task", "priority": "P0", "points": 3, "title": "Add tenant.parent_id + subtree helpers to schema & RLS", "ac": ["tenant.parent_id uuid REFERENCES tenant(id)", "Materialized path or recursive CTE helper for district subtree", "RLS policies updated; rls.sql tenant_tables list kept in sync", "schema.sql validated (pglast) and applied in CI"] }
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 8,
+          "title": "Provision a new tenant (pool tier)",
+          "as_a": "platform super-admin",
+          "i_want": "to create a tenant with a slug, name, region and plan",
+          "so_that": "a new customer can be onboarded in minutes onto shared infrastructure",
+          "ac": [
+            "POST /tenants creates a control-plane row with tier=pool, status=provisioning->active",
+            "A unique subdomain (slug.lms.app) routes to the tenant",
+            "RLS context works immediately (no infra to stand up)",
+            "tenant.provisioned event emitted to the outbox"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 13,
+          "title": "Promote a tenant to silo (dedicated DB)",
+          "as_a": "platform super-admin",
+          "i_want": "to migrate a tenant to an isolated Neon database/branch",
+          "so_that": "enterprise customers get physical isolation, their own keys, or data residency",
+          "ac": [
+            "Saga provisions a Neon project/branch and runs migrations",
+            "Tenant rows are bulk-copied; catalog database_ref repointed; tier flipped to silo",
+            "No application code change; schema identical pool<->silo",
+            "Rollback path if any saga step fails"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 13,
+          "title": "Create a district with school sub-tenants",
+          "as_a": "district administrator",
+          "i_want": "to register my schools as sub-tenants under the district",
+          "so_that": "each school is administered independently while the district sees consolidated data and billing",
+          "ac": [
+            "tenant gains parent_id self-reference (district->school)",
+            "Sub-tenant inherits plan/billing from parent unless overridden",
+            "District admin can list/search all child sub-tenants",
+            "Aggregate (cross-sub-tenant) reporting is scoped to the district subtree only",
+            "RLS still isolates each sub-tenant's row-level data"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "Delegate sub-tenant administration",
+          "as_a": "district administrator",
+          "i_want": "to grant a school admin rights limited to their school",
+          "so_that": "schools self-manage without seeing sibling schools' data",
+          "ac": [
+            "Role assignment can be scoped to a sub-tenant",
+            "School admin cannot read or write other sub-tenants",
+            "District admin retains override visibility"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "Tenant resolution by subdomain, JWT and header",
+          "as_a": "platform engineer",
+          "i_want": "every request to resolve its TenantContext deterministically",
+          "so_that": "pool/silo routing and RLS are always correct",
+          "ac": [
+            "Resolution order: subdomain -> JWT tenantId -> X-Tenant-Id (service-to-service only)",
+            "Mismatch between sources is rejected (403)",
+            "Resolved context carries {tenantId, parentTenantId, tier, databaseUrl}"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 8,
+          "title": "Tenant offboarding & data export (FERPA/GDPR)",
+          "as_a": "district administrator",
+          "i_want": "to export or delete all of a school's data on contract end",
+          "so_that": "we honor data-ownership and right-to-erasure obligations",
+          "ac": [
+            "GET /tenants/{id}/export returns OneRoster CSV + content archive",
+            "Deletion fans a purge across all services (verified)",
+            "Audit log records the export/delete with actor and hash chain"
+          ]
+        },
+        {
+          "type": "task",
+          "priority": "P0",
+          "points": 3,
+          "title": "Add tenant.parent_id + subtree helpers to schema & RLS",
+          "ac": [
+            "tenant.parent_id uuid REFERENCES tenant(id)",
+            "Materialized path or recursive CTE helper for district subtree",
+            "RLS policies updated; rls.sql tenant_tables list kept in sync",
+            "schema.sql validated (pglast) and applied in CI"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "White-label tenant branding",
+          "as_a": "school administrator",
+          "i_want": "to set my school's logo, colours, theme and custom domain",
+          "so_that": "the LMS looks like part of our own portal to students and staff",
+          "ac": [
+            "tenant_branding stores logo, favicon, primary/secondary/accent colours, theme, custom_domain (unique), custom_css, support_email",
+            "Sub-tenants inherit unset fields from the parent (tenant_effective_branding); a district default can be overridden field-by-field",
+            "PUT/GET /tenants/{id}/branding; tenant.branding.updated event emitted",
+            "tenant_branding is under RLS (one tenant cannot read/write another's branding)"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "Per-tenant governance settings",
+          "as_a": "school administrator",
+          "i_want": "to configure my own policy rules beyond roles (password rules, quiz lockdown, grading defaults, self-registration)",
+          "so_that": "each tenant enforces its own governance without affecting others",
+          "ac": [
+            "tenant_setting is a per-tenant namespaced key -> JSON value store",
+            "PUT /tenants/{id}/settings/{key}; values validated against a known key catalog",
+            "Settings are read by the owning services to enforce behaviour",
+            "tenant_setting is under RLS"
+          ]
+        }
       ]
     },
     {
       "key": "E2",
       "title": "EPIC: School Portal Integration & Embedding",
       "milestone": "M1 — Tenant + Identity MVP",
-      "labels": ["area/integration"],
+      "labels": [
+        "area/integration"
+      ],
       "summary": "Schools already have a portal/website. We must plug INTO it rather than replace it. This epic covers four integration surfaces: (1) LTI 1.3 / Advantage so the LMS launches from the school's existing portal/LMS; (2) SSO federation (SAML/OIDC) against the school's IdP; (3) white-label / embeddable widgets and theming per sub-tenant; (4) OneRoster/SIS sync so rosters flow from the school's SIS. Together these let a school drop our LMS into their site as if it were native.",
       "stories": [
-        { "type": "story", "priority": "P0", "points": 13, "title": "Launch the LMS from a school portal via LTI 1.3", "as_a": "teacher using the school's existing portal", "i_want": "to click a link in our portal and land in the LMS already logged in and in context", "so_that": "staff and students never manage a second login", "ac": ["LTI 1.3 OIDC login + resource link launch implemented", "Tool deployment registered per sub-tenant", "Roles mapped from LTI claims to LMS roles", "Deep Linking 2.0 to embed specific courses/content", "Names & Roles Provisioning Service (NRPS) roster pull", "Assignment & Grade Service (AGS) grade passback"] },
-        { "type": "story", "priority": "P0", "points": 8, "title": "Single sign-on against the school IdP (SAML/OIDC)", "as_a": "student", "i_want": "to sign in with my school account", "so_that": "I use one identity managed by my school", "ac": ["identity_provider configurable per (sub-)tenant: saml|oidc|ldap|cas", "JIT user provisioning on first login", "external_id/subject linked to app_user", "Login fails closed if the IdP is misconfigured, with a clear admin error"] },
-        { "type": "story", "priority": "P1", "points": 8, "title": "Per-sub-tenant white-label theming", "as_a": "school administrator", "i_want": "to apply our logo, colors and domain", "so_that": "the LMS looks like part of our school's website", "ac": ["Theme (logo, palette, favicon, custom domain) stored per sub-tenant", "Web app resolves theme from TenantContext at the edge", "Custom domain (school.lms.app or learn.school.edu) supported via Vercel domains", "Falls back to district theme, then platform default"] },
-        { "type": "story", "priority": "P1", "points": 8, "title": "Embeddable course/widget via iframe + signed token", "as_a": "school webmaster", "i_want": "to embed a course card or dashboard widget in our CMS page", "so_that": "students access learning without leaving the school site", "ac": ["Signed, short-lived embed token scopes the widget to a tenant + resource", "CSP/frame-ancestors restricted to the school's allowed origins", "Widget is responsive and accessible"] },
-        { "type": "story", "priority": "P1", "points": 13, "title": "Roster sync from the school SIS via OneRoster 1.2", "as_a": "school administrator", "i_want": "users, classes and enrollments to sync from our SIS", "so_that": "we don't maintain rosters twice", "ac": ["OneRoster 1.2 REST ingestion (orgs, users, classes, enrollments)", "Idempotent upserts keyed on sourcedId via sis_id_map", "Incremental delta sync on a schedule (QStash cron)", "Conflict & error report surfaced to the admin"] },
-        { "type": "spike", "priority": "P2", "points": 3, "title": "Evaluate LTI Dynamic Registration for self-serve setup", "ac": ["Determine if 1EdTech Dynamic Registration reduces per-school onboarding", "Document tool/platform registration flow and risks", "Recommendation with effort estimate"] }
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 13,
+          "title": "Launch the LMS from a school portal via LTI 1.3",
+          "as_a": "teacher using the school's existing portal",
+          "i_want": "to click a link in our portal and land in the LMS already logged in and in context",
+          "so_that": "staff and students never manage a second login",
+          "ac": [
+            "LTI 1.3 OIDC login + resource link launch implemented",
+            "Tool deployment registered per sub-tenant",
+            "Roles mapped from LTI claims to LMS roles",
+            "Deep Linking 2.0 to embed specific courses/content",
+            "Names & Roles Provisioning Service (NRPS) roster pull",
+            "Assignment & Grade Service (AGS) grade passback"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 8,
+          "title": "Single sign-on against the school IdP (SAML/OIDC)",
+          "as_a": "student",
+          "i_want": "to sign in with my school account",
+          "so_that": "I use one identity managed by my school",
+          "ac": [
+            "identity_provider configurable per (sub-)tenant: saml|oidc|ldap|cas",
+            "JIT user provisioning on first login",
+            "external_id/subject linked to app_user",
+            "Login fails closed if the IdP is misconfigured, with a clear admin error"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "Per-sub-tenant white-label theming",
+          "as_a": "school administrator",
+          "i_want": "to apply our logo, colors and domain",
+          "so_that": "the LMS looks like part of our school's website",
+          "ac": [
+            "Theme (logo, palette, favicon, custom domain) stored per sub-tenant",
+            "Web app resolves theme from TenantContext at the edge",
+            "Custom domain (school.lms.app or learn.school.edu) supported via Vercel domains",
+            "Falls back to district theme, then platform default"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "Embeddable course/widget via iframe + signed token",
+          "as_a": "school webmaster",
+          "i_want": "to embed a course card or dashboard widget in our CMS page",
+          "so_that": "students access learning without leaving the school site",
+          "ac": [
+            "Signed, short-lived embed token scopes the widget to a tenant + resource",
+            "CSP/frame-ancestors restricted to the school's allowed origins",
+            "Widget is responsive and accessible"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 13,
+          "title": "Roster sync from the school SIS via OneRoster 1.2",
+          "as_a": "school administrator",
+          "i_want": "users, classes and enrollments to sync from our SIS",
+          "so_that": "we don't maintain rosters twice",
+          "ac": [
+            "OneRoster 1.2 REST ingestion (orgs, users, classes, enrollments)",
+            "Idempotent upserts keyed on sourcedId via sis_id_map",
+            "Incremental delta sync on a schedule (QStash cron)",
+            "Conflict & error report surfaced to the admin"
+          ]
+        },
+        {
+          "type": "spike",
+          "priority": "P2",
+          "points": 3,
+          "title": "Evaluate LTI Dynamic Registration for self-serve setup",
+          "ac": [
+            "Determine if 1EdTech Dynamic Registration reduces per-school onboarding",
+            "Document tool/platform registration flow and risks",
+            "Recommendation with effort estimate"
+          ]
+        }
       ]
     },
     {
       "key": "E3",
       "title": "EPIC: Identity, AuthN/AuthZ & RBAC",
       "milestone": "M1 — Tenant + Identity MVP",
-      "labels": ["area/identity"],
+      "labels": [
+        "area/identity"
+      ],
       "summary": "Authentication issues tenant-scoped tokens; authorization enforces granular, hierarchy-aware permissions. Roles can be scoped to an org unit (e.g., teacher of one section) and cascade down the org tree.",
       "stories": [
-        { "type": "story", "priority": "P0", "points": 8, "title": "Issue tenant-scoped access & refresh tokens", "as_a": "any user", "i_want": "to receive a JWT carrying my tenantId, tier, roles and entitlements", "so_that": "downstream services authorize me correctly", "ac": ["Access token (15m) + refresh token (30d) via @lms/auth", "Claims include tenantId, parentTenantId, tier, scopes", "Token verified at the gateway; rotation supported"] },
-        { "type": "story", "priority": "P0", "points": 8, "title": "Granular, org-scoped RBAC", "as_a": "administrator", "i_want": "to assign roles scoped to an org unit", "so_that": "permissions follow the org hierarchy (district->school->course->section)", "ac": ["role_assignment supports org_unit scope with cascade", "hasScope() checks permission + scope subtree", "Deny-by-default; explicit grants only", "Effective-permissions endpoint for debugging"] },
-        { "type": "story", "priority": "P1", "points": 5, "title": "Manage roles & custom permission sets", "as_a": "tenant administrator", "i_want": "to create custom roles from permissions", "so_that": "we match our institution's job functions", "ac": ["CRUD roles & role_permission mappings", "System roles are read-only; custom roles editable", "Changes audited"] },
-        { "type": "bug", "priority": "P1", "points": 2, "title": "Refresh token reuse must revoke the token family", "ac": ["Detect refresh-token replay", "Revoke entire token family on reuse", "Force re-authentication; event logged"] }
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 8,
+          "title": "Issue tenant-scoped access & refresh tokens",
+          "as_a": "any user",
+          "i_want": "to receive a JWT carrying my tenantId, tier, roles and entitlements",
+          "so_that": "downstream services authorize me correctly",
+          "ac": [
+            "Access token (15m) + refresh token (30d) via @lms/auth",
+            "Claims include tenantId, parentTenantId, tier, scopes",
+            "Token verified at the gateway; rotation supported"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 8,
+          "title": "Granular, org-scoped RBAC",
+          "as_a": "administrator",
+          "i_want": "to assign roles scoped to an org unit",
+          "so_that": "permissions follow the org hierarchy (district->school->course->section)",
+          "ac": [
+            "role_assignment supports org_unit scope with cascade",
+            "hasScope() checks permission + scope subtree",
+            "Deny-by-default; explicit grants only",
+            "Effective-permissions endpoint for debugging"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "Manage roles & custom permission sets",
+          "as_a": "tenant administrator",
+          "i_want": "to create custom roles from permissions",
+          "so_that": "we match our institution's job functions",
+          "ac": [
+            "CRUD roles & role_permission mappings",
+            "System roles are read-only; custom roles editable",
+            "Changes audited"
+          ]
+        },
+        {
+          "type": "bug",
+          "priority": "P1",
+          "points": 2,
+          "title": "Refresh token reuse must revoke the token family",
+          "ac": [
+            "Detect refresh-token replay",
+            "Revoke entire token family on reuse",
+            "Force re-authentication; event logged"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "Provable isolation of per-tenant permission rules",
+          "as_a": "compliance officer",
+          "i_want": "each tenant's roles and role->permission mappings to be isolated at the database engine, not just in code",
+          "so_that": "no tenant can ever read or alter another tenant's permission rules",
+          "ac": [
+            "role, role_assignment and role_permission are all under RLS",
+            "role_permission (no tenant_id) is isolated via a join to its parent role's tenant_id",
+            "Automated CI test proves a cross-tenant read of role_permission returns zero rows",
+            "permission remains a shared, read-only capability vocabulary"
+          ]
+        }
       ]
     },
     {
       "key": "E4",
       "title": "EPIC: Org Hierarchy & User/Roster Management",
       "milestone": "M1 — Tenant + Identity MVP",
-      "labels": ["area/rostering"],
+      "labels": [
+        "area/rostering"
+      ],
       "summary": "Within a (sub-)tenant, an org-unit tree models organization -> department -> semester -> course template -> course offering -> section/group. Users, roles and enrollments hang off this tree; this is the backbone the whole product queries against.",
       "stories": [
-        { "type": "story", "priority": "P0", "points": 5, "title": "Build and browse the org-unit tree", "as_a": "school administrator", "i_want": "to create departments, terms and sections under my school", "so_that": "courses and people are organized the way we operate", "ac": ["CRUD org_unit with typed levels and parent_id", "Materialized path keeps subtree queries fast", "Move/reparent updates the path of all descendants", "Soft-deactivate cascades to subtree"] },
-        { "type": "story", "priority": "P1", "points": 5, "title": "Invite and manage users", "as_a": "administrator", "i_want": "to invite users by email and assign roles", "so_that": "staff and students can access the right areas", "ac": ["Invite flow with status invited->active", "Bulk CSV import with validation report", "Deactivate without deleting (retain records)"] },
-        { "type": "story", "priority": "P2", "points": 3, "title": "Guardian/parent relationships", "as_a": "parent", "i_want": "to be linked to my child's account", "so_that": "I can view grades and announcements", "ac": ["Guardian<->student relationship modeled", "Guardian read-only access to scoped data", "Consent/age rules respected"] }
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 5,
+          "title": "Build and browse the org-unit tree",
+          "as_a": "school administrator",
+          "i_want": "to create departments, terms and sections under my school",
+          "so_that": "courses and people are organized the way we operate",
+          "ac": [
+            "CRUD org_unit with typed levels and parent_id",
+            "Materialized path keeps subtree queries fast",
+            "Move/reparent updates the path of all descendants",
+            "Soft-deactivate cascades to subtree"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "Invite and manage users",
+          "as_a": "administrator",
+          "i_want": "to invite users by email and assign roles",
+          "so_that": "staff and students can access the right areas",
+          "ac": [
+            "Invite flow with status invited->active",
+            "Bulk CSV import with validation report",
+            "Deactivate without deleting (retain records)"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 3,
+          "title": "Guardian/parent relationships",
+          "as_a": "parent",
+          "i_want": "to be linked to my child's account",
+          "so_that": "I can view grades and announcements",
+          "ac": [
+            "Guardian<->student relationship modeled",
+            "Guardian read-only access to scoped data",
+            "Consent/age rules respected"
+          ]
+        }
       ]
     },
     {
       "key": "E5",
       "title": "EPIC: Courses & Curriculum",
       "milestone": "M2 — Teaching & Learning Core",
-      "labels": ["area/courses"],
+      "labels": [
+        "area/courses"
+      ],
       "summary": "Authoring and delivering courses: templates that schools reuse term over term, offerings tied to a term/section, modules/units, and publish/lifecycle controls.",
       "stories": [
-        { "type": "story", "priority": "P0", "points": 8, "title": "Create a course from a reusable template", "as_a": "instructional designer", "i_want": "to define a course template and spin up offerings each term", "so_that": "we don't rebuild courses every semester", "ac": ["Course template -> offering with copy of structure", "Offering bound to org_unit (term/section)", "Selective copy (content yes, dates reset)"] },
-        { "type": "story", "priority": "P0", "points": 5, "title": "Organize course into modules/units with release conditions", "as_a": "teacher", "i_want": "to sequence content into modules with availability dates", "so_that": "students see material at the right time", "ac": ["Modules/topics ordering", "Availability windows & prerequisite release conditions", "Draft vs published state"] },
-        { "type": "story", "priority": "P1", "points": 5, "title": "Course copy & cross-school sharing", "as_a": "district curriculum lead", "i_want": "to push an approved course to multiple schools", "so_that": "the district standardizes curriculum", "ac": ["Copy a course to many sub-tenants/offerings", "Track provenance/version", "Local edits allowed post-copy"] }
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 8,
+          "title": "Create a course from a reusable template",
+          "as_a": "instructional designer",
+          "i_want": "to define a course template and spin up offerings each term",
+          "so_that": "we don't rebuild courses every semester",
+          "ac": [
+            "Course template -> offering with copy of structure",
+            "Offering bound to org_unit (term/section)",
+            "Selective copy (content yes, dates reset)"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 5,
+          "title": "Organize course into modules/units with release conditions",
+          "as_a": "teacher",
+          "i_want": "to sequence content into modules with availability dates",
+          "so_that": "students see material at the right time",
+          "ac": [
+            "Modules/topics ordering",
+            "Availability windows & prerequisite release conditions",
+            "Draft vs published state"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "Course copy & cross-school sharing",
+          "as_a": "district curriculum lead",
+          "i_want": "to push an approved course to multiple schools",
+          "so_that": "the district standardizes curriculum",
+          "ac": [
+            "Copy a course to many sub-tenants/offerings",
+            "Track provenance/version",
+            "Local edits allowed post-copy"
+          ]
+        }
       ]
     },
     {
       "key": "E6",
       "title": "EPIC: Content & Learning Materials (SCORM/xAPI)",
       "milestone": "M2 — Teaching & Learning Core",
-      "labels": ["area/content"],
+      "labels": [
+        "area/content"
+      ],
       "summary": "Upload, store and deliver learning content (files, pages, SCORM packages) with completion tracking via xAPI, backed by Vercel Blob.",
       "stories": [
-        { "type": "story", "priority": "P0", "points": 5, "title": "Upload and serve content files", "as_a": "teacher", "i_want": "to upload documents, slides and media", "so_that": "students can access course materials", "ac": ["Direct-to-Blob upload with signed URLs", "Virus/type validation; size limits per plan", "Per-tenant storage isolation"] },
-        { "type": "story", "priority": "P1", "points": 8, "title": "Import and play SCORM packages with completion tracking", "as_a": "teacher", "i_want": "to upload a SCORM 1.2/2004 package", "so_that": "third-party courseware tracks completion and score", "ac": ["SCORM runtime serves the package", "Completion/score recorded against the learner", "Results surfaced to the gradebook"] },
-        { "type": "story", "priority": "P2", "points": 5, "title": "Author rich pages in-platform", "as_a": "teacher", "i_want": "a WYSIWYG editor for content pages", "so_that": "I create materials without external tools", "ac": ["Accessible rich-text editor", "Embed media and files", "Versioned drafts"] }
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 5,
+          "title": "Upload and serve content files",
+          "as_a": "teacher",
+          "i_want": "to upload documents, slides and media",
+          "so_that": "students can access course materials",
+          "ac": [
+            "Direct-to-Blob upload with signed URLs",
+            "Virus/type validation; size limits per plan",
+            "Per-tenant storage isolation"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "Import and play SCORM packages with completion tracking",
+          "as_a": "teacher",
+          "i_want": "to upload a SCORM 1.2/2004 package",
+          "so_that": "third-party courseware tracks completion and score",
+          "ac": [
+            "SCORM runtime serves the package",
+            "Completion/score recorded against the learner",
+            "Results surfaced to the gradebook"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "Author rich pages in-platform",
+          "as_a": "teacher",
+          "i_want": "a WYSIWYG editor for content pages",
+          "so_that": "I create materials without external tools",
+          "ac": [
+            "Accessible rich-text editor",
+            "Embed media and files",
+            "Versioned drafts"
+          ]
+        }
       ]
     },
     {
       "key": "E7",
       "title": "EPIC: Enrollment & Registration",
       "milestone": "M2 — Teaching & Learning Core",
-      "labels": ["area/enrollment"],
+      "labels": [
+        "area/enrollment"
+      ],
       "summary": "Place learners and instructors into course offerings/sections — manually, in bulk, via self-registration, or synced from SIS — with roles and dates.",
       "stories": [
-        { "type": "story", "priority": "P0", "points": 5, "title": "Enroll users into a section with a role", "as_a": "administrator", "i_want": "to enroll students and teachers into sections", "so_that": "they get access scoped to that class", "ac": ["Enroll/unenroll with role (student/instructor/TA)", "Start/end dates honored", "Bulk enroll from CSV or org-unit"] },
-        { "type": "story", "priority": "P2", "points": 5, "title": "Student self-registration with approval", "as_a": "student", "i_want": "to self-enroll into open courses", "so_that": "I can pick electives", "ac": ["Self-enroll for courses flagged open", "Optional approval workflow", "Capacity/waitlist enforced"] }
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 5,
+          "title": "Enroll users into a section with a role",
+          "as_a": "administrator",
+          "i_want": "to enroll students and teachers into sections",
+          "so_that": "they get access scoped to that class",
+          "ac": [
+            "Enroll/unenroll with role (student/instructor/TA)",
+            "Start/end dates honored",
+            "Bulk enroll from CSV or org-unit"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "Student self-registration with approval",
+          "as_a": "student",
+          "i_want": "to self-enroll into open courses",
+          "so_that": "I can pick electives",
+          "ac": [
+            "Self-enroll for courses flagged open",
+            "Optional approval workflow",
+            "Capacity/waitlist enforced"
+          ]
+        }
       ]
     },
     {
       "key": "E8",
       "title": "EPIC: Assignments & Submissions",
       "milestone": "M2 — Teaching & Learning Core",
-      "labels": ["area/assignments"],
+      "labels": [
+        "area/assignments"
+      ],
       "summary": "Create assignments, collect submissions (file/text/online), and route them to grading with due dates, late policies and feedback.",
       "stories": [
-        { "type": "story", "priority": "P0", "points": 8, "title": "Create an assignment and collect submissions", "as_a": "teacher", "i_want": "to create an assignment with instructions, due date and submission type", "so_that": "students submit work for grading", "ac": ["Assignment CRUD with due/availability dates", "Submission types: file, text, URL", "Late submissions flagged per policy", "Resubmission rules configurable"] },
-        { "type": "story", "priority": "P1", "points": 5, "title": "Provide inline feedback and annotations", "as_a": "teacher", "i_want": "to annotate and comment on a submission", "so_that": "students get actionable feedback", "ac": ["Inline comments/annotations", "Feedback released with grade", "Student notified"] },
-        { "type": "story", "priority": "P2", "points": 5, "title": "Group assignments", "as_a": "teacher", "i_want": "to assign work to student groups", "so_that": "teams submit once and share the grade", "ac": ["Group sets and membership", "One submission per group", "Optional per-member grade override"] }
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 8,
+          "title": "Create an assignment and collect submissions",
+          "as_a": "teacher",
+          "i_want": "to create an assignment with instructions, due date and submission type",
+          "so_that": "students submit work for grading",
+          "ac": [
+            "Assignment CRUD with due/availability dates",
+            "Submission types: file, text, URL",
+            "Late submissions flagged per policy",
+            "Resubmission rules configurable"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "Provide inline feedback and annotations",
+          "as_a": "teacher",
+          "i_want": "to annotate and comment on a submission",
+          "so_that": "students get actionable feedback",
+          "ac": [
+            "Inline comments/annotations",
+            "Feedback released with grade",
+            "Student notified"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "Group assignments",
+          "as_a": "teacher",
+          "i_want": "to assign work to student groups",
+          "so_that": "teams submit once and share the grade",
+          "ac": [
+            "Group sets and membership",
+            "One submission per group",
+            "Optional per-member grade override"
+          ]
+        }
       ]
     },
     {
       "key": "E9",
       "title": "EPIC: Assessments & Quizzing",
       "milestone": "M3 — Assessment & Outcomes",
-      "labels": ["area/assessments"],
+      "labels": [
+        "area/assessments"
+      ],
       "summary": "Author question banks, build quizzes, deliver timed attempts with shuffling and pooling, and auto-grade objective items.",
       "stories": [
-        { "type": "story", "priority": "P0", "points": 13, "title": "Build a quiz from a question bank", "as_a": "teacher", "i_want": "to create quizzes from reusable questions", "so_that": "I assess learning efficiently and reuse items", "ac": ["Question types: MCQ, multi-select, T/F, short answer, numeric, essay", "Question bank with tagging and random pools", "Per-question points and feedback"] },
-        { "type": "story", "priority": "P0", "points": 8, "title": "Deliver a timed, secured attempt", "as_a": "student", "i_want": "to take a quiz with a timer and saved progress", "so_that": "my attempt is fair and resilient", "ac": ["Attempt timer with auto-submit", "Answer autosave; resume after disconnect", "Shuffle questions/options; one-question-at-a-time option"] },
-        { "type": "story", "priority": "P1", "points": 5, "title": "Auto-grade objective items and route essays", "as_a": "teacher", "i_want": "objective questions graded instantly and essays queued", "so_that": "I only hand-grade what needs judgment", "ac": ["Objective auto-scoring on submit", "Essay items routed to manual grading", "Scores flow to the gradebook"] }
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 13,
+          "title": "Build a quiz from a question bank",
+          "as_a": "teacher",
+          "i_want": "to create quizzes from reusable questions",
+          "so_that": "I assess learning efficiently and reuse items",
+          "ac": [
+            "Question types: MCQ, multi-select, T/F, short answer, numeric, essay",
+            "Question bank with tagging and random pools",
+            "Per-question points and feedback"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 8,
+          "title": "Deliver a timed, secured attempt",
+          "as_a": "student",
+          "i_want": "to take a quiz with a timer and saved progress",
+          "so_that": "my attempt is fair and resilient",
+          "ac": [
+            "Attempt timer with auto-submit",
+            "Answer autosave; resume after disconnect",
+            "Shuffle questions/options; one-question-at-a-time option"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "Auto-grade objective items and route essays",
+          "as_a": "teacher",
+          "i_want": "objective questions graded instantly and essays queued",
+          "so_that": "I only hand-grade what needs judgment",
+          "ac": [
+            "Objective auto-scoring on submit",
+            "Essay items routed to manual grading",
+            "Scores flow to the gradebook"
+          ]
+        }
       ]
     },
     {
       "key": "E10",
       "title": "EPIC: Grading & Gradebook",
       "milestone": "M2 — Teaching & Learning Core",
-      "labels": ["area/grading"],
+      "labels": [
+        "area/grading"
+      ],
       "summary": "A gradebook with schemes, weighted categories, items from all activities, manual and auto grades, and final-grade calculation and release.",
       "stories": [
-        { "type": "story", "priority": "P0", "points": 13, "title": "Configure gradebook with weighted categories", "as_a": "teacher", "i_want": "to define grade categories, weights and a grade scheme", "so_that": "final grades compute the way my course requires", "ac": ["Grade schemes (points/percent/letter)", "Weighted categories that sum to 100%", "Drop-lowest and extra-credit rules"] },
-        { "type": "story", "priority": "P0", "points": 8, "title": "Enter, override and release grades", "as_a": "teacher", "i_want": "to grade items and release grades to students", "so_that": "students see results when I'm ready", "ac": ["Manual entry + auto from quizzes/assignments", "Override with reason; history retained", "Bulk release / per-student release"] },
-        { "type": "story", "priority": "P1", "points": 5, "title": "Student grade view", "as_a": "student", "i_want": "to see my grades and feedback", "so_that": "I track my standing", "ac": ["Per-item and projected final grade", "Feedback visible when released", "What-if calculator (optional)"] }
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 13,
+          "title": "Configure gradebook with weighted categories",
+          "as_a": "teacher",
+          "i_want": "to define grade categories, weights and a grade scheme",
+          "so_that": "final grades compute the way my course requires",
+          "ac": [
+            "Grade schemes (points/percent/letter)",
+            "Weighted categories that sum to 100%",
+            "Drop-lowest and extra-credit rules"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 8,
+          "title": "Enter, override and release grades",
+          "as_a": "teacher",
+          "i_want": "to grade items and release grades to students",
+          "so_that": "students see results when I'm ready",
+          "ac": [
+            "Manual entry + auto from quizzes/assignments",
+            "Override with reason; history retained",
+            "Bulk release / per-student release"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "Student grade view",
+          "as_a": "student",
+          "i_want": "to see my grades and feedback",
+          "so_that": "I track my standing",
+          "ac": [
+            "Per-item and projected final grade",
+            "Feedback visible when released",
+            "What-if calculator (optional)"
+          ]
+        }
       ]
     },
     {
       "key": "E11",
       "title": "EPIC: Rubrics, Competencies & Outcomes",
       "milestone": "M3 — Assessment & Outcomes",
-      "labels": ["area/outcomes"],
+      "labels": [
+        "area/outcomes"
+      ],
       "summary": "Standards-based education: rubrics for consistent grading, competency frameworks, and alignment of activities to learning outcomes with mastery tracking.",
       "stories": [
-        { "type": "story", "priority": "P1", "points": 8, "title": "Create and apply rubrics", "as_a": "teacher", "i_want": "to grade with a criteria/levels rubric", "so_that": "grading is consistent and transparent", "ac": ["Analytic & holistic rubrics", "Attach to assignment/quiz", "Rubric score maps to grade item"] },
-        { "type": "story", "priority": "P2", "points": 8, "title": "Track competency mastery", "as_a": "curriculum lead", "i_want": "to align activities to competencies and track mastery", "so_that": "we report standards-based progress", "ac": ["Competency framework import", "Activity<->outcome alignment", "Mastery roll-up per learner"] }
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "Create and apply rubrics",
+          "as_a": "teacher",
+          "i_want": "to grade with a criteria/levels rubric",
+          "so_that": "grading is consistent and transparent",
+          "ac": [
+            "Analytic & holistic rubrics",
+            "Attach to assignment/quiz",
+            "Rubric score maps to grade item"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 8,
+          "title": "Track competency mastery",
+          "as_a": "curriculum lead",
+          "i_want": "to align activities to competencies and track mastery",
+          "so_that": "we report standards-based progress",
+          "ac": [
+            "Competency framework import",
+            "Activity<->outcome alignment",
+            "Mastery roll-up per learner"
+          ]
+        }
       ]
     },
     {
       "key": "E12",
       "title": "EPIC: Discussions & Collaboration",
       "milestone": "M4 — Engagement & Insight",
-      "labels": ["area/discussions"],
+      "labels": [
+        "area/discussions"
+      ],
       "summary": "Threaded discussions, moderation and participation grading to support social learning.",
       "stories": [
-        { "type": "story", "priority": "P1", "points": 5, "title": "Threaded course discussions", "as_a": "student", "i_want": "to post and reply in course forums", "so_that": "I learn collaboratively", "ac": ["Forums/topics/threads", "Rich text + attachments", "Subscribe & notify on reply"] },
-        { "type": "story", "priority": "P2", "points": 3, "title": "Moderation & graded participation", "as_a": "teacher", "i_want": "to moderate posts and grade participation", "so_that": "discussions stay healthy and count", "ac": ["Pin/lock/hide/report", "Participation rubric to gradebook"] }
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "Threaded course discussions",
+          "as_a": "student",
+          "i_want": "to post and reply in course forums",
+          "so_that": "I learn collaboratively",
+          "ac": [
+            "Forums/topics/threads",
+            "Rich text + attachments",
+            "Subscribe & notify on reply"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 3,
+          "title": "Moderation & graded participation",
+          "as_a": "teacher",
+          "i_want": "to moderate posts and grade participation",
+          "so_that": "discussions stay healthy and count",
+          "ac": [
+            "Pin/lock/hide/report",
+            "Participation rubric to gradebook"
+          ]
+        }
       ]
     },
     {
       "key": "E13",
       "title": "EPIC: Announcements & Notifications",
       "milestone": "M4 — Engagement & Insight",
-      "labels": ["area/notifications"],
+      "labels": [
+        "area/notifications"
+      ],
       "summary": "Targeted announcements and multi-channel notifications (in-app, email, push) with per-user preferences.",
       "stories": [
-        { "type": "story", "priority": "P1", "points": 5, "title": "Post targeted announcements", "as_a": "teacher", "i_want": "to announce to a course/section/role", "so_that": "the right people are informed", "ac": ["Audience targeting by org unit/role", "Scheduling & expiry", "Delivered in-app + email"] },
-        { "type": "story", "priority": "P2", "points": 5, "title": "Notification preferences & digests", "as_a": "user", "i_want": "to control which notifications I get and how", "so_that": "I'm not overwhelmed", "ac": ["Per-category channel prefs", "Daily/weekly digest option", "Respect quiet hours"] }
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "Post targeted announcements",
+          "as_a": "teacher",
+          "i_want": "to announce to a course/section/role",
+          "so_that": "the right people are informed",
+          "ac": [
+            "Audience targeting by org unit/role",
+            "Scheduling & expiry",
+            "Delivered in-app + email"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "Notification preferences & digests",
+          "as_a": "user",
+          "i_want": "to control which notifications I get and how",
+          "so_that": "I'm not overwhelmed",
+          "ac": [
+            "Per-category channel prefs",
+            "Daily/weekly digest option",
+            "Respect quiet hours"
+          ]
+        }
       ]
     },
     {
       "key": "E14",
       "title": "EPIC: Calendar & Scheduling",
       "milestone": "M4 — Engagement & Insight",
-      "labels": ["area/calendar"],
+      "labels": [
+        "area/calendar"
+      ],
       "summary": "A unified calendar aggregating due dates, events and sessions with external calendar feeds.",
       "stories": [
-        { "type": "story", "priority": "P2", "points": 5, "title": "Unified course & personal calendar", "as_a": "student", "i_want": "to see all my due dates and events in one place", "so_that": "I manage my time", "ac": ["Aggregates assignment/quiz due dates + events", "iCal feed subscription", "Timezone-correct"] }
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "Unified course & personal calendar",
+          "as_a": "student",
+          "i_want": "to see all my due dates and events in one place",
+          "so_that": "I manage my time",
+          "ac": [
+            "Aggregates assignment/quiz due dates + events",
+            "iCal feed subscription",
+            "Timezone-correct"
+          ]
+        }
       ]
     },
     {
       "key": "E15",
       "title": "EPIC: Analytics & Reporting (Caliper/LRS)",
       "milestone": "M4 — Engagement & Insight",
-      "labels": ["area/analytics"],
+      "labels": [
+        "area/analytics"
+      ],
       "summary": "Capture Caliper/xAPI events into an LRS, build read-model summaries, and expose dashboards and exports for teachers, admins and districts (including cross-sub-tenant roll-ups).",
       "stories": [
-        { "type": "story", "priority": "P1", "points": 8, "title": "Capture learning events (Caliper/xAPI)", "as_a": "platform", "i_want": "to record standardized learning events", "so_that": "analytics and interoperability are possible", "ac": ["Caliper event ingestion to LRS tables", "Async via outbox->QStash", "De-identified aggregates for cross-tenant analytics"] },
-        { "type": "story", "priority": "P1", "points": 8, "title": "Teacher engagement dashboard", "as_a": "teacher", "i_want": "to see who's at risk and engagement trends", "so_that": "I intervene early", "ac": ["Per-course engagement & at-risk indicators", "Drill to learner", "Backed by precomputed read models"] },
-        { "type": "story", "priority": "P2", "points": 8, "title": "District roll-up reporting across schools", "as_a": "district administrator", "i_want": "to compare schools within my district", "so_that": "I allocate support", "ac": ["Roll-up scoped to district subtree only", "Export CSV/PDF", "Respects sub-tenant isolation for row data"] }
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "Capture learning events (Caliper/xAPI)",
+          "as_a": "platform",
+          "i_want": "to record standardized learning events",
+          "so_that": "analytics and interoperability are possible",
+          "ac": [
+            "Caliper event ingestion to LRS tables",
+            "Async via outbox->QStash",
+            "De-identified aggregates for cross-tenant analytics"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "Teacher engagement dashboard",
+          "as_a": "teacher",
+          "i_want": "to see who's at risk and engagement trends",
+          "so_that": "I intervene early",
+          "ac": [
+            "Per-course engagement & at-risk indicators",
+            "Drill to learner",
+            "Backed by precomputed read models"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 8,
+          "title": "District roll-up reporting across schools",
+          "as_a": "district administrator",
+          "i_want": "to compare schools within my district",
+          "so_that": "I allocate support",
+          "ac": [
+            "Roll-up scoped to district subtree only",
+            "Export CSV/PDF",
+            "Respects sub-tenant isolation for row data"
+          ]
+        }
       ]
     },
     {
       "key": "E16",
       "title": "EPIC: AI & Personalization (Groq)",
       "milestone": "M4 — Engagement & Insight",
-      "labels": ["area/ai"],
+      "labels": [
+        "area/ai"
+      ],
       "summary": "LLM-powered help (Groq) grounded in course content via pgvector RAG: tutoring, question generation, feedback assist, and content search.",
       "stories": [
-        { "type": "story", "priority": "P2", "points": 8, "title": "AI study assistant grounded in course content", "as_a": "student", "i_want": "to ask questions and get answers from my course materials", "so_that": "I get help 24/7 without leaving the LMS", "ac": ["pgvector embeddings of course content", "Groq chat with RAG citations", "Tenant-isolated retrieval; no cross-tenant leakage"] },
-        { "type": "story", "priority": "P3", "points": 5, "title": "AI-assisted quiz question generation", "as_a": "teacher", "i_want": "to generate draft questions from a topic/reading", "so_that": "I build assessments faster", "ac": ["Generate questions for review (human-in-the-loop)", "Map to question bank", "Editable before publish"] }
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 8,
+          "title": "AI study assistant grounded in course content",
+          "as_a": "student",
+          "i_want": "to ask questions and get answers from my course materials",
+          "so_that": "I get help 24/7 without leaving the LMS",
+          "ac": [
+            "pgvector embeddings of course content",
+            "Groq chat with RAG citations",
+            "Tenant-isolated retrieval; no cross-tenant leakage"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P3",
+          "points": 5,
+          "title": "AI-assisted quiz question generation",
+          "as_a": "teacher",
+          "i_want": "to generate draft questions from a topic/reading",
+          "so_that": "I build assessments faster",
+          "ac": [
+            "Generate questions for review (human-in-the-loop)",
+            "Map to question bank",
+            "Editable before publish"
+          ]
+        }
       ]
     },
     {
       "key": "E17",
       "title": "EPIC: Video & Media",
       "milestone": "M5 — Scale & Commercialize",
-      "labels": ["area/video"],
+      "labels": [
+        "area/video"
+      ],
       "summary": "Upload, transcode (FFmpeg workers), caption and stream video with view analytics.",
       "stories": [
-        { "type": "story", "priority": "P2", "points": 8, "title": "Upload and stream lecture video", "as_a": "teacher", "i_want": "to upload video that students can stream", "so_that": "I deliver recorded lessons", "ac": ["Async transcode to adaptive renditions", "Auto-captions; manual edit", "Per-tenant storage & access control"] }
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 8,
+          "title": "Upload and stream lecture video",
+          "as_a": "teacher",
+          "i_want": "to upload video that students can stream",
+          "so_that": "I deliver recorded lessons",
+          "ac": [
+            "Async transcode to adaptive renditions",
+            "Auto-captions; manual edit",
+            "Per-tenant storage & access control"
+          ]
+        }
       ]
     },
     {
       "key": "E18",
       "title": "EPIC: Search",
       "milestone": "M5 — Scale & Commercialize",
-      "labels": ["area/search"],
+      "labels": [
+        "area/search"
+      ],
       "summary": "Fast, tenant-scoped search across courses, content, people and discussions (Postgres FTS/trgm + pgvector semantic).",
       "stories": [
-        { "type": "story", "priority": "P2", "points": 5, "title": "Global tenant-scoped search", "as_a": "user", "i_want": "to search everything I can access", "so_that": "I find content and people quickly", "ac": ["Keyword (pg_trgm/FTS) + semantic (pgvector)", "Results filtered by permission & tenant", "Typeahead under 200ms p95"] }
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "Global tenant-scoped search",
+          "as_a": "user",
+          "i_want": "to search everything I can access",
+          "so_that": "I find content and people quickly",
+          "ac": [
+            "Keyword (pg_trgm/FTS) + semantic (pgvector)",
+            "Results filtered by permission & tenant",
+            "Typeahead under 200ms p95"
+          ]
+        }
       ]
     },
     {
       "key": "E19",
       "title": "EPIC: Billing & Subscriptions",
       "milestone": "M5 — Scale & Commercialize",
-      "labels": ["area/billing"],
+      "labels": [
+        "area/billing"
+      ],
       "summary": "Plans, subscriptions, usage metering (per active user/FTE) and invoicing, with district-level consolidated billing across sub-tenants.",
       "stories": [
-        { "type": "story", "priority": "P1", "points": 8, "title": "Subscribe a tenant to a plan", "as_a": "billing admin", "i_want": "to put a customer on a plan with seats/add-ons", "so_that": "we charge correctly", "ac": ["Plan/subscription lifecycle (trialing->active->past_due->canceled)", "Add-ons (Performance+, Creator+, etc.)", "Seat enforcement"] },
-        { "type": "story", "priority": "P2", "points": 8, "title": "Usage metering & invoicing", "as_a": "billing admin", "i_want": "to meter active users and generate invoices", "so_that": "usage-based plans bill accurately", "ac": ["usage_meter rollups (per_active_user/per_fte)", "Invoice generation", "District-consolidated invoice across sub-tenants"] }
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "Subscribe a tenant to a plan",
+          "as_a": "billing admin",
+          "i_want": "to put a customer on a plan with seats/add-ons",
+          "so_that": "we charge correctly",
+          "ac": [
+            "Plan/subscription lifecycle (trialing->active->past_due->canceled)",
+            "Add-ons (Performance+, Creator+, etc.)",
+            "Seat enforcement"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 8,
+          "title": "Usage metering & invoicing",
+          "as_a": "billing admin",
+          "i_want": "to meter active users and generate invoices",
+          "so_that": "usage-based plans bill accurately",
+          "ac": [
+            "usage_meter rollups (per_active_user/per_fte)",
+            "Invoice generation",
+            "District-consolidated invoice across sub-tenants"
+          ]
+        }
       ]
     },
     {
       "key": "E20",
       "title": "EPIC: Security, Audit & Compliance",
       "milestone": "M5 — Scale & Commercialize",
-      "labels": ["area/security"],
+      "labels": [
+        "area/security"
+      ],
       "summary": "Cross-cutting security: hash-chained audit log, RLS verification, secrets hygiene, rate limiting, and FERPA/GDPR/COPPA controls.",
       "stories": [
-        { "type": "story", "priority": "P0", "points": 5, "title": "Tamper-evident audit log", "as_a": "compliance officer", "i_want": "an immutable, verifiable record of sensitive actions", "so_that": "we can prove what happened", "ac": ["Hash-chained audit_log (prev_hash/row_hash)", "Records actor, tenant, action, target", "Verification job detects tampering"] },
-        { "type": "task", "priority": "P0", "points": 3, "title": "Automated RLS isolation tests in CI", "ac": ["Seed two tenants; assert no cross-tenant reads/writes", "Run against the Postgres service in CI", "Fail the build on any leak"] },
-        { "type": "story", "priority": "P1", "points": 5, "title": "Per-tenant rate limiting at the gateway", "as_a": "platform engineer", "i_want": "to rate-limit by tenant", "so_that": "one tenant can't degrade others", "ac": ["Upstash-backed limits per tenant/route", "429 with retry-after", "Configurable by plan"] },
-        { "type": "story", "priority": "P1", "points": 5, "title": "COPPA/age-appropriate handling for K-12", "as_a": "compliance officer", "i_want": "age-gated data handling and parental consent", "so_that": "we comply with K-12 regulations", "ac": ["Consent capture & storage", "Restricted data collection for minors", "Documented data flows"] }
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 5,
+          "title": "Tamper-evident audit log",
+          "as_a": "compliance officer",
+          "i_want": "an immutable, verifiable record of sensitive actions",
+          "so_that": "we can prove what happened",
+          "ac": [
+            "Hash-chained audit_log (prev_hash/row_hash)",
+            "Records actor, tenant, action, target",
+            "Verification job detects tampering"
+          ]
+        },
+        {
+          "type": "task",
+          "priority": "P0",
+          "points": 3,
+          "title": "Automated RLS isolation tests in CI",
+          "ac": [
+            "Seed two tenants; assert no cross-tenant reads/writes",
+            "Run against the Postgres service in CI",
+            "Fail the build on any leak"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "Per-tenant rate limiting at the gateway",
+          "as_a": "platform engineer",
+          "i_want": "to rate-limit by tenant",
+          "so_that": "one tenant can't degrade others",
+          "ac": [
+            "Upstash-backed limits per tenant/route",
+            "429 with retry-after",
+            "Configurable by plan"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "COPPA/age-appropriate handling for K-12",
+          "as_a": "compliance officer",
+          "i_want": "age-gated data handling and parental consent",
+          "so_that": "we comply with K-12 regulations",
+          "ac": [
+            "Consent capture & storage",
+            "Restricted data collection for minors",
+            "Documented data flows"
+          ]
+        }
       ]
     },
     {
       "key": "E21",
       "title": "EPIC: Mobile (BFF + apps)",
       "milestone": "M5 — Scale & Commercialize",
-      "labels": ["area/mobile"],
+      "labels": [
+        "area/mobile"
+      ],
       "summary": "A mobile backend-for-frontend and apps delivering core learner flows with offline-friendly patterns and push notifications.",
       "stories": [
-        { "type": "story", "priority": "P2", "points": 8, "title": "Mobile learner core flows via BFF", "as_a": "student on mobile", "i_want": "to view courses, submit work and get notifications", "so_that": "I learn on the go", "ac": ["mobile-bff aggregates per screen", "Push notifications", "Auth via the same token model"] }
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 8,
+          "title": "Mobile learner core flows via BFF",
+          "as_a": "student on mobile",
+          "i_want": "to view courses, submit work and get notifications",
+          "so_that": "I learn on the go",
+          "ac": [
+            "mobile-bff aggregates per screen",
+            "Push notifications",
+            "Auth via the same token model"
+          ]
+        }
       ]
     },
     {
       "key": "E22",
       "title": "EPIC: Platform, CI/CD & Observability",
       "milestone": "M0 — Foundation",
-      "labels": ["area/platform"],
+      "labels": [
+        "area/platform"
+      ],
       "summary": "Developer experience and operability: monorepo tooling, pipelines, environments, tracing/logging/metrics, and runbooks.",
       "stories": [
-        { "type": "task", "priority": "P1", "points": 5, "title": "Per-service deploy pipeline to GHCR + container host", "ac": ["paths-filter matrix builds only changed services", "Images pushed to GHCR with SHA + semver tags", "Deploy to Fly/Render/Railway on main", "Smoke test /health post-deploy"] },
-        { "type": "task", "priority": "P1", "points": 5, "title": "Database migration pipeline (Prisma + raw SQL)", "ac": ["db-migrate workflow applies migrations safely", "Schema drift check vs schema.sql", "RLS policies applied & verified"] },
-        { "type": "task", "priority": "P2", "points": 5, "title": "OpenTelemetry tracing across services", "ac": ["Trace context propagated gateway->services", "Export to Axiom/Grafana Cloud", "tenantId tagged on spans (no PII)"] },
-        { "type": "task", "priority": "P2", "points": 3, "title": "Local dev: docker-compose Postgres + Upstash emulation", "ac": ["One command brings up DB + cache", "Seed script loads demo tenant/sub-tenants", "Documented in README"] },
-        { "type": "spike", "priority": "P2", "points": 3, "title": "Choose container host (Fly vs Render vs Railway)", "ac": ["Compare cost, cold start, regions, scaling", "Decision recorded in docs/DEPLOYMENT.md"] }
+        {
+          "type": "task",
+          "priority": "P1",
+          "points": 5,
+          "title": "Per-service deploy pipeline to GHCR + container host",
+          "ac": [
+            "paths-filter matrix builds only changed services",
+            "Images pushed to GHCR with SHA + semver tags",
+            "Deploy to Fly/Render/Railway on main",
+            "Smoke test /health post-deploy"
+          ]
+        },
+        {
+          "type": "task",
+          "priority": "P1",
+          "points": 5,
+          "title": "Database migration pipeline (Prisma + raw SQL)",
+          "ac": [
+            "db-migrate workflow applies migrations safely",
+            "Schema drift check vs schema.sql",
+            "RLS policies applied & verified"
+          ]
+        },
+        {
+          "type": "task",
+          "priority": "P2",
+          "points": 5,
+          "title": "OpenTelemetry tracing across services",
+          "ac": [
+            "Trace context propagated gateway->services",
+            "Export to Axiom/Grafana Cloud",
+            "tenantId tagged on spans (no PII)"
+          ]
+        },
+        {
+          "type": "task",
+          "priority": "P2",
+          "points": 3,
+          "title": "Local dev: docker-compose Postgres + Upstash emulation",
+          "ac": [
+            "One command brings up DB + cache",
+            "Seed script loads demo tenant/sub-tenants",
+            "Documented in README"
+          ]
+        },
+        {
+          "type": "spike",
+          "priority": "P2",
+          "points": 3,
+          "title": "Choose container host (Fly vs Render vs Railway)",
+          "ac": [
+            "Compare cost, cold start, regions, scaling",
+            "Decision recorded in docs/DEPLOYMENT.md"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "AI-agent contribution ruleset (AGENTS.md)",
+          "as_a": "platform engineer",
+          "i_want": "a single ruleset that every AI agent must read and follow before touching the repo",
+          "so_that": "all AI contributions are consistent, safe and traceable",
+          "ac": [
+            "AGENTS.md at repo root defines mandatory rules (user-story-first, RLS for new tenant tables, pglast validation, ASCII-only PS scripts, idempotent seeder, no Copilot co-author trailer)",
+            "Every new feature is captured as a user story in backlog.json (and a GitHub issue) before/with implementation",
+            "Each change links the issue it implements",
+            "The ruleset is referenced from README and CONTRIBUTING"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "Multi-agent delegation protocol",
+          "as_a": "platform engineer",
+          "i_want": "a defined set of agent roles that hand work off to each other and never silently drop a task",
+          "so_that": "complex work is decomposed and delegated reliably with no dead ends",
+          "ac": [
+            "AGENTS.md defines roles (orchestrator, backlog, schema, service, review) and a hand-off protocol",
+            "Every task is either completed or explicitly delegated to a named role - no agent denies/drops it",
+            "Hand-offs are logged (issue comment / commit trailer referencing the role)",
+            "An escalation path exists when no role can accept"
+          ]
+        }
       ]
     },
     {
       "key": "E23",
       "title": "EPIC: Accessibility & Internationalization",
       "milestone": "M4 — Engagement & Insight",
-      "labels": ["area/a11y"],
+      "labels": [
+        "area/a11y"
+      ],
       "summary": "WCAG 2.2 AA accessibility and multi-language support so the platform is usable by all learners and sellable globally.",
       "stories": [
-        { "type": "story", "priority": "P1", "points": 5, "title": "WCAG 2.2 AA across core flows", "as_a": "learner using assistive technology", "i_want": "fully keyboard- and screen-reader-accessible pages", "so_that": "I can learn independently", "ac": ["Automated a11y checks in CI (axe)", "Keyboard nav & focus management", "Color-contrast and ARIA correctness audited"] },
-        { "type": "story", "priority": "P2", "points": 5, "title": "Internationalization & localization", "as_a": "non-English-speaking user", "i_want": "the UI in my language", "so_that": "I can use the platform comfortably", "ac": ["i18n framework with locale resources", "Per-user locale (app_user.locale)", "RTL support"] }
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 5,
+          "title": "WCAG 2.2 AA across core flows",
+          "as_a": "learner using assistive technology",
+          "i_want": "fully keyboard- and screen-reader-accessible pages",
+          "so_that": "I can learn independently",
+          "ac": [
+            "Automated a11y checks in CI (axe)",
+            "Keyboard nav & focus management",
+            "Color-contrast and ARIA correctness audited"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "Internationalization & localization",
+          "as_a": "non-English-speaking user",
+          "i_want": "the UI in my language",
+          "so_that": "I can use the platform comfortably",
+          "ac": [
+            "i18n framework with locale resources",
+            "Per-user locale (app_user.locale)",
+            "RTL support"
+          ]
+        }
       ]
     }
   ]

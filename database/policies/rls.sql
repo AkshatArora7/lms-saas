@@ -29,7 +29,7 @@ DECLARE
     'academic_session','announcement','calendar_event','notification',
     'notification_preference','video_asset','ai_embedding','ai_chat',
     'ai_message','caliper_event','engagement_summary','sis_id_map','invoice',
-    'usage_meter'
+    'usage_meter','tenant_setting','tenant_branding'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
@@ -49,3 +49,23 @@ BEGIN
   END LOOP;
 END
 $$;
+
+-- ----------------------------------------------------------------------------
+-- role_permission has no tenant_id of its own (it hangs off role); isolate it
+-- via its parent role so a tenant can only see/modify mappings for its own
+-- roles. Makes per-tenant permission rules provably isolated end to end.
+-- ----------------------------------------------------------------------------
+ALTER TABLE role_permission ENABLE ROW LEVEL SECURITY;
+ALTER TABLE role_permission FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON role_permission;
+CREATE POLICY tenant_isolation ON role_permission
+  USING (EXISTS (
+    SELECT 1 FROM role r
+    WHERE r.id = role_permission.role_id
+      AND r.tenant_id = current_tenant_id()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM role r
+    WHERE r.id = role_permission.role_id
+      AND r.tenant_id = current_tenant_id()
+  ));

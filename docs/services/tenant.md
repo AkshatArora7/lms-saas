@@ -10,7 +10,7 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 
 ## Owned tables
 
-`tenant`, `plan`, `subscription`
+`tenant`, `plan`, `subscription`, `tenant_setting`, `tenant_branding`
 
 ## Key endpoints
 
@@ -20,6 +20,9 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 | `GET` | `/tenants/{id}/routing` | Resolve pool vs silo + database_ref for connection routing. |
 | `GET` | `/tenants/{id}/subtree` | District roll-up: tenant_subtree() ids for parent reporting/billing. |
 | `PATCH` | `/tenants/{id}/flags` | Toggle feature flags / add-on entitlements. |
+| `PUT` | `/tenants/{id}/branding` | Set white-label branding (logo, colours, theme, custom domain). |
+| `GET` | `/tenants/{id}/branding` | Resolve effective branding (with parent inheritance). |
+| `PUT` | `/tenants/{id}/settings/{key}` | Set a per-tenant governance setting. |
 
 ## Events published
 
@@ -27,6 +30,7 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 - `tenant.activated`
 - `tenant.suspended`
 - `tenant.subtenant.linked`
+- `tenant.branding.updated`
 
 ## Events consumed
 

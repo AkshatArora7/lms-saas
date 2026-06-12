@@ -195,6 +195,76 @@ CREATE TABLE IF NOT EXISTS role_assignment (
 );
 CREATE INDEX IF NOT EXISTS ix_role_assignment_ou ON role_assignment(org_unit_id);
 
+-- Per-tenant governance rules beyond RBAC: each tenant owns its own policy set
+-- (e.g. password rules, quiz lockdown defaults, grading-scheme defaults,
+-- enrollment self-registration on/off). Stored as namespaced key -> JSON value.
+CREATE TABLE IF NOT EXISTS tenant_setting (
+  tenant_id  uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  key        text NOT NULL,          -- e.g. 'password.min_length', 'quiz.lockdown_default'
+  value      jsonb NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, key)
+);
+CREATE TRIGGER trg_tenant_setting_updated BEFORE UPDATE ON tenant_setting
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Per-tenant white-label branding (logo, colours, theme, custom domain, CSS).
+-- Sub-tenants may inherit unset fields from their parent (resolved by the app
+-- or via tenant_effective_branding()).
+CREATE TABLE IF NOT EXISTS tenant_branding (
+  tenant_id       uuid PRIMARY KEY REFERENCES tenant(id) ON DELETE CASCADE,
+  display_name    text,
+  logo_url        text,
+  favicon_url     text,
+  primary_color   text,             -- hex, e.g. '#0B5FFF'
+  secondary_color text,
+  accent_color    text,
+  theme           text NOT NULL DEFAULT 'system'
+                     CHECK (theme IN ('light','dark','system')),
+  custom_domain   citext UNIQUE,    -- e.g. 'lms.school.edu'
+  custom_css      text,
+  support_email   citext,
+  inherit_parent  boolean NOT NULL DEFAULT true,
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE TRIGGER trg_tenant_branding_updated BEFORE UPDATE ON tenant_branding
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Resolve a tenant's effective branding: its own row, with any NULL field
+-- filled from the nearest ancestor that has inherit_parent enabled. Lets a
+-- district set a default look that schools override field-by-field.
+CREATE OR REPLACE FUNCTION tenant_effective_branding(target uuid)
+  RETURNS tenant_branding LANGUAGE plpgsql STABLE AS $$
+  DECLARE
+    cur      uuid := target;
+    acc      tenant_branding;
+    row_b    tenant_branding;
+    guard    int  := 0;
+  BEGIN
+    SELECT * INTO acc FROM tenant_branding WHERE tenant_id = target;
+    IF acc.tenant_id IS NULL THEN
+      acc.tenant_id := target;
+    END IF;
+    -- Walk up the parent chain filling NULLs while inheritance is allowed.
+    LOOP
+      EXIT WHEN cur IS NULL OR guard > 32;
+      guard := guard + 1;
+      SELECT parent_id INTO cur FROM tenant WHERE id = cur;
+      EXIT WHEN cur IS NULL OR NOT COALESCE(acc.inherit_parent, true);
+      SELECT * INTO row_b FROM tenant_branding WHERE tenant_id = cur;
+      CONTINUE WHEN row_b.tenant_id IS NULL;
+      acc.display_name    := COALESCE(acc.display_name, row_b.display_name);
+      acc.logo_url        := COALESCE(acc.logo_url, row_b.logo_url);
+      acc.favicon_url     := COALESCE(acc.favicon_url, row_b.favicon_url);
+      acc.primary_color   := COALESCE(acc.primary_color, row_b.primary_color);
+      acc.secondary_color := COALESCE(acc.secondary_color, row_b.secondary_color);
+      acc.accent_color    := COALESCE(acc.accent_color, row_b.accent_color);
+      acc.support_email   := COALESCE(acc.support_email, row_b.support_email);
+    END LOOP;
+    RETURN acc;
+  END
+$$;
+
 -- ============================================================================
 -- COURSES & CONTENT
 -- ============================================================================

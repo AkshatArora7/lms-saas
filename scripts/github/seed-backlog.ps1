@@ -10,7 +10,7 @@
     - milestones (M0..M5)
     - one "EPIC" issue per epic, plus one issue per story/task/bug/spike
     - epic issues get a task-list linking their child issues
-  Optionally creates a Project (v2) board and adds every issue to it — this
+  Optionally creates a Project (v2) board and adds every issue to it - this
   requires the 'project' + 'read:project' token scopes. If they are missing the
   script skips the board step and prints how to enable it.
 
@@ -35,7 +35,7 @@ if (-not (Test-Path $gh)) { throw "GitHub CLI (gh) not found. Install it first."
 
 $slug = "$Owner/$Repo"
 Write-Host "==> Seeding $slug from $BacklogPath" -ForegroundColor Cyan
-$backlog = Get-Content -Raw -Path $BacklogPath | ConvertFrom-Json
+$backlog = Get-Content -Raw -Encoding UTF8 -Path $BacklogPath | ConvertFrom-Json
 
 function Invoke-Gh {
   param([string[]]$GhArgs, [switch]$IgnoreError)
@@ -104,9 +104,9 @@ function Build-StoryBody {
     foreach ($c in $s.ac) { [void]$sb.AppendLine("- [ ] $c") }
     [void]$sb.AppendLine()
   }
-  [void]$sb.AppendLine("**Epic:** #$EpicNumber — $EpicTitle")
-  $pts = if ($s.points) { "$($s.points) pts" } else { "—" }
-  [void]$sb.AppendLine("**Priority:** $($s.priority) · **Estimate:** $pts")
+  [void]$sb.AppendLine("**Epic:** #$EpicNumber - $EpicTitle")
+  $pts = if ($s.points) { "$($s.points) pts" } else { "-" }
+  [void]$sb.AppendLine("**Priority:** $($s.priority) | **Estimate:** $pts")
   return $sb.ToString()
 }
 

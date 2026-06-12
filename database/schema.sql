@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS tenant (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   slug          citext NOT NULL UNIQUE,
   name          text   NOT NULL,
+  -- Sub-tenant hierarchy: a parent (e.g. a district / university) owns child
+  -- sub-tenants (e.g. schools / colleges). NULL parent_id = a top-level tenant.
+  parent_id     uuid REFERENCES tenant(id) ON DELETE RESTRICT,
+  kind          text   NOT NULL DEFAULT 'standalone'
+                   CHECK (kind IN ('standalone','parent','sub')),
   tier          text   NOT NULL DEFAULT 'pool' CHECK (tier IN ('pool','silo')),
   status        text   NOT NULL DEFAULT 'provisioning'
                    CHECK (status IN ('provisioning','active','suspended','deleted')),
@@ -45,10 +50,30 @@ CREATE TABLE IF NOT EXISTS tenant (
   database_ref  text,
   plan_id       uuid,
   created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  -- A sub-tenant must declare a parent; parents/standalone must not.
+  CONSTRAINT tenant_parent_consistency CHECK (
+    (kind = 'sub' AND parent_id IS NOT NULL) OR
+    (kind <> 'sub' AND parent_id IS NULL)
+  )
 );
+CREATE INDEX IF NOT EXISTS ix_tenant_parent ON tenant(parent_id);
 CREATE TRIGGER trg_tenant_updated BEFORE UPDATE ON tenant
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- All tenant ids in a subtree (the root plus every descendant sub-tenant).
+-- Used for district roll-up reporting/billing while row-level data stays
+-- isolated per sub-tenant via RLS.
+CREATE OR REPLACE FUNCTION tenant_subtree(root uuid) RETURNS TABLE (id uuid)
+  LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE sub AS (
+      SELECT t.id FROM tenant t WHERE t.id = root
+      UNION ALL
+      SELECT c.id FROM tenant c JOIN sub ON c.parent_id = sub.id
+    )
+    SELECT id FROM sub
+$$;
+
 
 -- Billing / packaging (Core + add-ons: Performance+, Creator+, Achievement+, Lumi).
 CREATE TABLE IF NOT EXISTS plan (

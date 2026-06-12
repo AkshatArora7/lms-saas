@@ -1,0 +1,91 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="LMS-Master-Architecture-Vercel" id="master">
+    <mxGraphModel dx="1422" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="clients" value="Clients" style="swimlane;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="360" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="web" value="Web App&#10;(Next.js / Vercel)" style="rounded=1;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="clients">
+          <mxGeometry x="20" y="40" width="150" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="mobile" value="Mobile App&#10;(React Native)" style="rounded=1;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="clients">
+          <mxGeometry x="190" y="40" width="150" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="edge" value="Edge / Gateway Layer" style="swimlane;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="220" width="360" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="afd" value="Vercel Edge Network&#10;(CDN + WAF + DDoS)" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="edge">
+          <mxGeometry x="20" y="40" width="320" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="apim" value="Gateway Service&#10;(JWT validation, per-tenant rate limit)" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="edge">
+          <mxGeometry x="20" y="100" width="320" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="webbff" value="Web BFF&#10;(Next.js Route Handlers)" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="edge">
+          <mxGeometry x="20" y="160" width="150" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="mobbff" value="Mobile BFF" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="edge">
+          <mxGeometry x="190" y="160" width="150" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="idp" value="Identity / Auth&#10;External CIAM (WorkOS / Auth0)&#10;+ Identity Service (OIDC/SAML/LTI)" style="rounded=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="440" y="220" width="280" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="svcs" value="Microservices (Fastify; container images via GHCR; one DB boundary each)" style="swimlane;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="440" y="360" width="1280" height="500" as="geometry" />
+        </mxCell>
+        <mxCell id="s1" value="tenant" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="20" y="40" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s2" value="user-org" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="180" y="40" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s3" value="enrollment" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="340" y="40" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s4" value="course" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="500" y="40" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s5" value="content" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="660" y="40" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s6" value="assignment" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="820" y="40" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s7" value="assessment" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="980" y="40" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s8" value="grading" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="20" y="100" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s9" value="discussion" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="180" y="100" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s10" value="announcement" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="340" y="100" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s11" value="notification" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="500" y="100" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s12" value="calendar" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="660" y="100" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s13" value="rubric" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="820" y="100" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s14" value="analytics" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="980" y="100" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s15" value="reporting" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="20" y="160" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s16" value="ai (Lumi)&#10;Groq + pgvector" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="180" y="160" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s17" value="lti" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="340" y="160" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s18" value="sis (OneRoster)" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="500" y="160" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s19" value="video&#10;FFmpeg workers" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="660" y="160" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s20" value="search" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="820" y="160" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s21" value="billing" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="980" y="160" width="140" height="40" as="geometry"/></mxCell>
+        <mxCell id="s22" value="audit (ledger)" style="rounded=1;fillColor=#ffffff;strokeColor=#666;" vertex="1" parent="svcs"><mxGeometry x="1140" y="160" width="120" height="40" as="geometry"/></mxCell>
+        <mxCell id="bus" value="Transactional Outbox/Inbox (Postgres) -&gt; Upstash QStash (events + schedules)" style="rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="svcs">
+          <mxGeometry x="20" y="230" width="700" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="jobs" value="Background Jobs&#10;QStash schedules + GitHub Actions cron" style="rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="svcs">
+          <mxGeometry x="740" y="230" width="380" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="data" value="Shared Data &amp; Storage" style="swimlane;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="svcs">
+          <mxGeometry x="20" y="310" width="1200" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="blob" value="Vercel Blob&#10;(content, submissions, video)" style="rounded=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="data"><mxGeometry x="20" y="40" width="220" height="60" as="geometry"/></mxCell>
+        <mxCell id="redis" value="Upstash Redis&#10;(t:{tenantId}: keys)" style="rounded=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="data"><mxGeometry x="260" y="40" width="220" height="60" as="geometry"/></mxCell>
+        <mxCell id="sqlpool" value="Neon Postgres&#10;(pool + silo, RLS by tenant_id)" style="rounded=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="data"><mxGeometry x="500" y="40" width="240" height="60" as="geometry"/></mxCell>
+        <mxCell id="pgvec" value="pgvector&#10;(RAG embeddings)" style="rounded=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="data"><mxGeometry x="760" y="40" width="200" height="60" as="geometry"/></mxCell>
+        <mxCell id="lrs" value="Postgres LRS&#10;(Caliper/xAPI + read models)" style="rounded=1;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="data"><mxGeometry x="980" y="40" width="200" height="60" as="geometry"/></mxCell>
+        <mxCell id="ext" value="External Integrations" style="swimlane;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1760" y="360" width="220" height="360" as="geometry" />
+        </mxCell>
+        <mxCell id="lti_tools" value="LTI 1.3 Tools (3rd party)" style="rounded=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="ext"><mxGeometry x="20" y="40" width="180" height="40" as="geometry"/></mxCell>
+        <mxCell id="sis_ext" value="SIS via OneRoster" style="rounded=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="ext"><mxGeometry x="20" y="90" width="180" height="40" as="geometry"/></mxCell>
+        <mxCell id="meet" value="Zoom / Teams / Meet" style="rounded=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="ext"><mxGeometry x="20" y="140" width="180" height="40" as="geometry"/></mxCell>
+        <mxCell id="groq" value="Groq (LLM)" style="rounded=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="ext"><mxGeometry x="20" y="190" width="180" height="40" as="geometry"/></mxCell>
+        <mxCell id="comms" value="Email/SMS + APNs/FCM" style="rounded=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="ext"><mxGeometry x="20" y="240" width="180" height="40" as="geometry"/></mxCell>
+        <mxCell id="obs" value="Observability: OpenTelemetry -&gt; Axiom / Grafana Cloud + structured pino logs (tenant-tagged)" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="440" y="880" width="1280" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="endArrow=block;" edge="1" parent="1" source="clients" target="edge"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" style="endArrow=block;" edge="1" parent="1" source="edge" target="idp"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" style="endArrow=block;" edge="1" parent="1" source="edge" target="svcs"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" style="endArrow=block;dashed=1;" edge="1" parent="1" source="svcs" target="ext"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

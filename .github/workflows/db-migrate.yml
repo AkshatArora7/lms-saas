@@ -1,0 +1,50 @@
+name: Database Migrate
+
+# Applies Prisma migrations to the control-plane / pool database, then runs
+# the raw SQL schema + RLS policies. Silo tenant migrations are fanned out by
+# the tenant service (each silo DB receives the same migration set).
+# Manual trigger or on push to main when DB artifacts change.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Target environment"
+        type: choice
+        options: [staging, production]
+        default: staging
+  push:
+    branches: [main]
+    paths:
+      - "packages/db/prisma/**"
+      - "database/**"
+
+concurrency:
+  group: db-migrate-${{ github.event.inputs.target || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.target || 'production' }}
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Apply Prisma migrations
+        run: pnpm db:migrate
+
+      - name: Apply RLS policies
+        run: psql "$DIRECT_URL" -f database/policies/rls.sql

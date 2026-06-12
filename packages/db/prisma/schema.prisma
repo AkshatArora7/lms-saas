@@ -1,0 +1,153 @@
+// LMS — Prisma schema (application access layer).
+// The canonical, exhaustive DDL (RLS, partitions, indexes) lives in
+// /database/schema.sql. This schema models the stable core; domain-specific
+// modules (assessment internals, analytics marts) are extended as specs land.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ── Tenancy ────────────────────────────────────────────────
+enum TenantTier {
+  pool
+  silo
+}
+
+enum TenantStatus {
+  provisioning
+  active
+  suspended
+  deleted
+}
+
+model Tenant {
+  id          String       @id @default(uuid()) @db.Uuid
+  slug        String       @unique
+  name        String
+  tier        TenantTier   @default(pool)
+  status      TenantStatus @default(provisioning)
+  region      String       @default("us-east")
+  databaseRef String?      @map("database_ref")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  orgUnits OrgUnit[]
+  users    User[]
+  roles    Role[]
+
+  @@map("tenant")
+}
+
+// ── Org-unit hierarchy ─────────────────────────────────────
+enum OrgUnitType {
+  organization
+  department
+  semester
+  course_template
+  course_offering
+  section
+  group
+}
+
+model OrgUnit {
+  id        String      @id @default(uuid()) @db.Uuid
+  tenantId  String      @map("tenant_id") @db.Uuid
+  type      OrgUnitType
+  parentId  String?     @map("parent_id") @db.Uuid
+  name      String
+  code      String?
+  isActive  Boolean     @default(true) @map("is_active")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   OrgUnit?  @relation("OrgUnitTree", fields: [parentId], references: [id])
+  children OrgUnit[] @relation("OrgUnitTree")
+
+  roleAssignments RoleAssignment[]
+
+  @@index([tenantId, type])
+  @@index([tenantId, parentId])
+  @@map("org_unit")
+}
+
+// ── Identity ───────────────────────────────────────────────
+enum UserStatus {
+  invited
+  active
+  inactive
+}
+
+model User {
+  id          String     @id @default(uuid()) @db.Uuid
+  tenantId    String     @map("tenant_id") @db.Uuid
+  email       String
+  displayName String     @map("display_name")
+  status      UserStatus @default(invited)
+  externalId  String?    @map("external_id") // OneRoster sourcedId / SSO subject
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  roleAssignments RoleAssignment[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, externalId])
+  @@map("app_user")
+}
+
+// ── RBAC (granular, org-unit scoped) ───────────────────────
+model Role {
+  id       String  @id @default(uuid()) @db.Uuid
+  tenantId String  @map("tenant_id") @db.Uuid
+  name     String
+  isSystem Boolean @default(false) @map("is_system")
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  assignments RoleAssignment[]
+
+  @@unique([tenantId, name])
+  @@map("role")
+}
+
+model Permission {
+  // e.g. "discussions:posts:manage", "enrollment:orgunit:read"
+  key         String           @id
+  description String?
+  roles       RolePermission[]
+
+  @@map("permission")
+}
+
+model RolePermission {
+  roleId        String @map("role_id") @db.Uuid
+  permissionKey String @map("permission_key")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([roleId, permissionKey])
+  @@map("role_permission")
+}
+
+model RoleAssignment {
+  id        String  @id @default(uuid()) @db.Uuid
+  userId    String  @map("user_id") @db.Uuid
+  roleId    String  @map("role_id") @db.Uuid
+  orgUnitId String  @map("org_unit_id") @db.Uuid
+  cascade   Boolean @default(true)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role    Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  orgUnit OrgUnit @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, orgUnitId])
+  @@index([orgUnitId])
+  @@map("role_assignment")
+}

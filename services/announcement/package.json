@@ -1,0 +1,30 @@
+{
+  "name": "@lms/service-announcement",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@lms/auth": "workspace:*",
+    "@lms/config": "workspace:*",
+    "@lms/db": "workspace:*",
+    "@lms/events": "workspace:*",
+    "@lms/logger": "workspace:*",
+    "@lms/types": "workspace:*",
+    "fastify": "^4.28.1"
+  },
+  "devDependencies": {
+    "@lms/eslint-config": "workspace:*",
+    "@lms/tsconfig": "workspace:*",
+    "tsx": "^4.17.0",
+    "vitest": "^2.0.5"
+  }
+}

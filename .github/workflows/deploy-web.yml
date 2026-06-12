@@ -1,0 +1,50 @@
+name: Deploy Web (Vercel)
+
+# Deploys the Next.js apps (web, admin) to Vercel.
+# Preview on PRs; production on push to main.
+# Required repo secrets:
+#   VERCEL_TOKEN, VERCEL_ORG_ID,
+#   VERCEL_PROJECT_ID_WEB, VERCEL_PROJECT_ID_ADMIN
+
+on:
+  push:
+    branches: [main]
+    paths: ["apps/**", "packages/**", ".github/workflows/deploy-web.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["apps/**", "packages/**"]
+
+jobs:
+  deploy:
+    name: Deploy ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - app: web
+            project_secret: VERCEL_PROJECT_ID_WEB
+          - app: admin
+            project_secret: VERCEL_PROJECT_ID_ADMIN
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets[matrix.project_secret] }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel environment
+        run: |
+          ENVF=${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+          vercel pull --yes --environment=$ENVF --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: |
+          PROD=${{ github.ref == 'refs/heads/main' && '--prod' || '' }}
+          vercel build $PROD --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        run: |
+          PROD=${{ github.ref == 'refs/heads/main' && '--prod' || '' }}
+          vercel deploy --prebuilt $PROD --token=${{ secrets.VERCEL_TOKEN }}

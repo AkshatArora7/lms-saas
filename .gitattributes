@@ -1,0 +1,10 @@
+# Normalize line endings to LF in the repo; let Git handle checkout per-OS.
+* text=auto eol=lf
+
+# Binary / generated artifacts Git should not touch.
+pnpm-lock.yaml -text
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

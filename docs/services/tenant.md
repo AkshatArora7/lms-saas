@@ -16,7 +16,7 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/tenants` | Provision a tenant or sub-tenant (kind=standalone|parent|sub). |
+| `POST` | `/tenants` | Provision a tenant or sub-tenant (kind=standalone\|parent\|sub). |
 | `GET` | `/tenants/{id}/routing` | Resolve pool vs silo + database_ref for connection routing. |
 | `GET` | `/tenants/{id}/subtree` | District roll-up: tenant_subtree() ids for parent reporting/billing. |
 | `PATCH` | `/tenants/{id}/flags` | Toggle feature flags / add-on entitlements. |

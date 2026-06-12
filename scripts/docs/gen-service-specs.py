@@ -373,9 +373,11 @@ CROSS_TABLES = ["event_outbox", "event_inbox", "idempotency_key"]
 
 
 def md_table(rows, headers):
+    def esc(c):
+        return c.replace("|", "\\|")
     out = ["| " + " | ".join(headers) + " |", "| " + " | ".join("---" for _ in headers) + " |"]
     for r in rows:
-        out.append("| " + " | ".join(r) + " |")
+        out.append("| " + " | ".join(esc(c) for c in r) + " |")
     return "\n".join(out)
 
 

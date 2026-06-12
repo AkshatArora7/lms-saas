@@ -1,495 +1,447 @@
 # LMS SaaS — Multi-Tenant Learning Platform
 
-An enterprise, multi-tenant **Learning Management System (LMS) SaaS** — a
-**D2L Brightspace–class** platform — built entirely on a **GitHub + Vercel +
-serverless** stack (no AWS/Azure). It is designed to **plug into a school's
-existing portal or website** rather than replace it: a district onboards as a
-tenant, each of its schools becomes a **sub-tenant** with its own admins,
-branding, single sign-on and rosters, and the district gets consolidated
-reporting and billing across all of them.
+A complete, enterprise **Learning Management System** delivered as multi-tenant
+SaaS — a **D2L Brightspace–class** platform for **K-12 districts, higher
+education, and corporate training**. It runs courses end to end: enroll learners,
+deliver content, run assignments and quizzes, grade, track outcomes, communicate,
+analyze engagement, and assist with AI — all **white-labeled into the
+institution's own portal** and kept in sync with their existing identity and
+student records.
 
-It is built around the **1EdTech** interoperability standards that institutional
-procurement requires — **LTI 1.3 / Advantage**, **OneRoster 1.2**, and
-**Caliper / xAPI** — and a **hybrid pool/silo** tenancy model that scales from a
-free K-12 trial to a physically isolated enterprise contract **without an
-application code change**.
+The platform is **multi-tenant with sub-tenants**: a district onboards once and
+each school becomes its own space with its own admins, branding, sign-on and
+rosters, while the district gets consolidated reporting and billing. It speaks the
+**education interoperability standards** institutions require — **LTI 1.3 /
+Advantage, OneRoster 1.2, Caliper / xAPI, SCORM, QTI** — so it plugs into the
+tools schools already use.
 
-> The reference architecture (see [`/docs`](docs)) was adapted from an
-> Azure + .NET blueprint and **re-platformed onto GitHub + Vercel + serverless
-> equivalents** per project direction. The domain design — ~25 microservices,
-> hybrid tenancy, event-driven analytics, and full 1EdTech standards — is
-> preserved.
+> Built on **GitHub + Vercel + serverless** (no AWS/Azure). The deeper
+> engineering details live in [`/docs`](docs); this README focuses on **what the
+> platform provides**.
+
+---
+
+## What you get at a glance
+
+| For learners | For teachers | For administrators |
+| ------------ | ------------ | ------------------ |
+| One place for courses, content, deadlines and grades | Author courses, assignments and quizzes; grade with rubrics | Onboard districts → schools as sub-tenants |
+| Take quizzes, submit work, join discussions | Gradebook with weighted categories and final grades | White-label branding & custom domain per school |
+| Personal calendar + iCal, mobile app | Standards/outcomes & mastery tracking | Per-tenant roles, permissions and policy rules |
+| AI study assistant grounded in their course | Engagement & at-risk dashboards | SSO + automatic roster sync from the SIS |
+| Accessible (WCAG 2.2 AA), multilingual | Announcements & targeted notifications | Plans, seats, usage metering & consolidated invoicing |
+
+**Headline capabilities:** course & curriculum management · content (incl.
+SCORM/xAPI) · assignments & submissions · quizzes & question banks · gradebook ·
+rubrics, competencies & outcomes · discussions · announcements & multi-channel
+notifications · calendar · analytics & reporting · AI assistant · video ·
+search · billing · audit & compliance · mobile — across **25 services**, each a
+clean bounded context.
 
 ---
 
 ## Table of contents
 
-1. [Features](#features) — **start here**
-2. [Who it's for (use cases)](#who-its-for-use-cases)
-3. [How it all fits together (architecture)](#how-it-all-fits-together-architecture)
-4. [Repository structure](#repository-structure)
-5. [Technology stack](#technology-stack)
-6. [Getting started](#getting-started)
-7. [Deployment & CI/CD](#deployment--cicd)
-8. [Project tracking & documentation](#project-tracking--documentation)
-9. [Roadmap](#roadmap)
+1. [Features — what the LMS provides](#features--what-the-lms-provides) ← **the meat**
+2. [Built-in interoperability](#built-in-interoperability)
+3. [Who it's for (use cases)](#who-its-for-use-cases)
+4. [How it's built (architecture, in brief)](#how-its-built-architecture-in-brief)
+5. [Repository structure](#repository-structure)
+6. [Technology stack](#technology-stack)
+7. [Getting started](#getting-started)
+8. [Deployment & CI/CD](#deployment--cicd)
+9. [Project tracking & documentation](#project-tracking--documentation)
+10. [Roadmap](#roadmap)
 
 ---
 
-## Features
+## Features — what the LMS provides
 
-The platform is decomposed into **23 capability areas** (epics), each backed by
-one or more of the 25 microservices. Below, every feature area is explained:
-**what it does**, **why it matters**, and **how it works** here.
+Each capability area below lists **what you can actually do**, plus a short *why
+it matters* and a one-line *under the hood*. The areas map to the 25 services and
+the 23 product epics tracked on the GitHub board.
 
-### 1. Multi-tenancy, sub-tenants & provisioning
+### 1. Multi-tenancy & sub-tenants
 
-**What.** Every customer is a *tenant*. A **district or university** onboards as
-a **parent tenant**; each of its **schools or colleges** is a **sub-tenant** with
-its own administrators, branding, SSO and rosters. Standalone customers (a single
-school, a company) onboard as a flat tenant.
+Sell to a district once and run every school under it independently.
 
-**Why.** This is the commercial backbone and the project's defining requirement.
-Schools already run a portal; we integrate beneath it. A district can manage many
-schools centrally while each school stays operationally independent, and the
-district still gets **consolidated reporting and billing**.
+**What you can do**
+- Onboard a customer as a **tenant**, and a **district/university** as a *parent*
+  with its **schools/colleges as sub-tenants**.
+- Give each sub-tenant its **own admins, branding, SSO and rosters**, while the
+  parent gets **consolidated reporting and billing** across all of them.
+- Choose an **isolation tier per tenant** — shared (**pool**) for K-12/trials, or
+  a dedicated database (**silo**) for enterprise/data-residency — and **promote
+  pool → silo later with no code change**.
+- Onboard a pool tenant **in minutes**; provision a silo tenant automatically.
 
-**How.**
-- The `tenant` table carries a self-referencing `parent_id` and a `kind`
-  (`standalone` / `parent` / `sub`), enforced by a consistency check so a
-  sub-tenant must declare a parent and a parent/standalone must not.
-- A recursive `tenant_subtree(root)` SQL function returns a parent plus all of
-  its descendants — used for **district-wide roll-up** reporting and billing —
-  while row-level data stays isolated per sub-tenant.
-- A **tenant catalog** (control plane) is the single isolation authority,
-  mapping `tenant_id → tier, region, database_ref, status`.
-- **Provisioning is a saga** (QStash-driven): a *pool* tenant is just a catalog
-  row; a *silo* tenant provisions a dedicated Neon database/branch, runs
-  migrations, registers the mapping, then emits `tenant.provisioned` — with
-  compensation (tear-down) on failure.
+*Why it matters.* This is the commercial backbone: it lets you serve a free
+single school and a multi-school district contract from one platform.
+*Under the hood.* `tenant` hierarchy (`parent_id`, `kind`) + recursive
+`tenant_subtree()` roll-up; saga-based provisioning. See
+[`docs/MULTI_TENANCY.md`](docs/MULTI_TENANCY.md).
 
-#### Per-tenant rules & branding
+### 2. School-portal integration & white-label branding
 
-Each tenant owns its **own rule set and look**, and these are isolated by RLS
-just like every other tenant table:
+Appear **inside** the school's existing website — not as a separate destination.
 
-- **Roles & permissions** — every tenant defines its **own roles** (`role`,
-  unique per tenant) and maps them to capabilities (`role_permission`), then
-  grants them to users **at a specific org-unit** with optional cascade
-  (`role_assignment`). The `permission` catalog is a shared *vocabulary* (fixed
-  capability keys) so enforcement stays consistent across services while each
-  tenant composes its own roles. Isolation is provable end-to-end: `role`,
-  `role_assignment` **and** `role_permission` are all under RLS.
-- **Governance settings** — `tenant_setting` is a namespaced key → JSON store for
-  per-tenant policy beyond RBAC (e.g. password rules, quiz lockdown defaults,
-  grading-scheme defaults, self-registration on/off).
-- **White-label branding** — `tenant_branding` holds each tenant's logo, favicon,
-  colours, theme, **custom domain**, custom CSS and support email. Sub-tenants
-  **inherit** unset fields from their parent (a district sets a default look;
-  schools override field-by-field), resolved by `tenant_effective_branding()`.
+**What you can do**
+- **Embed** the LMS in a school portal/VLE via **LTI 1.3** launches.
+- Let users sign in with the school's own identity (**SAML/OIDC SSO**).
+- **White-label each tenant**: logo, favicon, primary/secondary/accent colours,
+  light/dark theme, **custom domain** (e.g. `lms.school.edu`), custom CSS and
+  support email.
+- Have **sub-tenants inherit** a district's default look and **override
+  field-by-field**.
+- Keep users, classes and enrollments **in sync with the school's SIS**.
 
-#### Hybrid pool / silo isolation
+*Why it matters.* Institutions adopt tools that feel like their own and respect
+their login and rosters. *Under the hood.* `tenant_branding` +
+`tenant_effective_branding()` inheritance; `lti`, `identity` and `sis` services.
 
-| Tier       | Isolation                              | Typical customer            | Cost   |
-| ---------- | -------------------------------------- | --------------------------- | ------ |
-| **pool**   | Shared Postgres + Row-Level Security   | K-12 / SMB / trials         | lowest |
-| **silo**   | Dedicated Neon database/branch         | Enterprise / Higher-Ed      | higher |
-| **hybrid** | pool by default, promote to silo later | the platform default        | mixed  |
+### 3. Identity, roles & per-tenant permission rules
 
-The schema is **identical** in pool and silo — only physical placement differs —
-so a tenant is promoted from pool to silo (noisy-neighbor, data residency,
-customer-managed keys, or an enterprise contract) by copying its rows and
-flipping a catalog flag, **with no code change**.
+Every tenant enforces **its own rules** — provably isolated.
 
-### 2. School-portal integration & embedding
+**What you can do**
+- Sign in securely via an external identity provider; receive **tenant-scoped**
+  access.
+- Define **your own roles** per tenant (e.g. "Teacher", "Dept Head") and choose
+  exactly **which capabilities** each role grants.
+- **Grant roles at a specific level** of the org tree (district / school / dept /
+  section) with **cascade** down the subtree — so a teacher at one school never
+  gains rights at another.
+- Set **per-tenant governance policies** beyond roles (password rules, quiz
+  lockdown defaults, grading-scheme defaults, self-registration on/off).
 
-**What.** The platform embeds into a school's existing website/VLE and federates
-with its identity and roster systems. Features: **LTI 1.3** launches, **SSO**
-(SAML/OIDC), **white-label theming**, embeddable widgets, and **OneRoster/SIS**
-sync.
-
-**Why.** Institutions don't rip-and-replace; they expect new tools to appear
-inside their portal, respect their login, and stay in sync with their student
-records. This is what makes adoption frictionless.
-
-**How.** The `lti` service is both an LTI **Platform** and **Tool**; the
-`identity` service federates to the school's IdP; per-tenant branding
-(`tenant_branding`: logo, colours, theme, custom domain, CSS) drives
-white-labeling; the `sis` service keeps users/orgs/classes/enrollments in sync.
-(See [Interoperability](#interoperability-standards-1edtech) below.)
-
-### 3. Identity, authentication, authorization & RBAC
-
-**What.** Tenant-scoped authentication and **granular, role-based access
-control** that cascades down the org hierarchy.
-
-**Why.** A teacher at one school must never see another school's data; a district
-admin needs read-across; permissions must be auditable.
-
-**How.** Credentials are delegated to an **external CIAM** (WorkOS / Auth0) — no
-home-grown identity store. The `identity` service issues **tenant-scoped JWTs**
-(carrying `tenantId` and `tier`), publishes a **JWKS** for token verification at
-the gateway, and evaluates permissions from `role` / `permission` /
-`role_permission` / `role_assignment` tables, all tenant-isolated by RLS so one
-tenant can never read or apply another's rules.
+*Why it matters.* Education data is sensitive; access must be granular,
+org-scoped, and auditable. *Under the hood.* `role` / `permission` /
+`role_permission` / `role_assignment` + `tenant_setting`, **all under Row-Level
+Security** so one tenant can never read or alter another's rules.
 
 ### 4. Org hierarchy & roster management
 
-**What.** The organizational tree every other feature queries:
-**district → school → department → term → course → section**, plus user profiles
-and academic sessions.
+The structure every other feature hangs off.
 
-**Why.** Rostering is the spine of an LMS — enrollment, grading, analytics and
-permissions all hang off it.
+**What you can do**
+- Model **district → school → department → term → course → section**.
+- Manage **user profiles**, memberships and **academic sessions/terms**.
+- Drive rosters from the SIS or manage them directly.
 
-**How.** The `user-org` service owns `org_unit`, `app_user` and
-`academic_session`, maps cleanly to OneRoster `orgs`/`users`/`academicSessions`,
-and is read-optimized with materialized membership views.
+*Why it matters.* Enrollment, grading, analytics and permissions all query this
+tree. *Under the hood.* `user-org` service; OneRoster `orgs`/`users` mapping.
 
 ### 5. Courses & curriculum
 
-**What.** Reusable **course templates** that become per-term **offerings**;
-sections, modules, and **release conditions** (gated/conditional release).
+Author once, reuse every term.
 
-**Why.** Curriculum is authored once and reused across terms and cohorts; release
-conditions enable structured, prerequisite-driven learning paths.
+**What you can do**
+- Build **course templates** and spin up **per-term offerings** with sections.
+- **Copy/import** an entire course into a new offering.
+- Organize content into **modules** with **release conditions** (gated /
+  prerequisite-driven release).
 
-**How.** The `course` service supports deep **course copy/import**, owns `course`
-and `release_condition`, and exposes endpoints to define gated-release rules that
-content/assessment evaluate at access time.
+*Why it matters.* Curriculum reuse and structured learning paths save staff time.
+*Under the hood.* `course` service; `course`, `release_condition`.
 
 ### 6. Content & materials (SCORM / xAPI)
 
-**What.** Upload and deliver learning content — modules, lessons, topics —
-including **SCORM (1.2 / 2004)** and **xAPI** packages and H5P-style interactive
-content, with **completion tracking**.
+Deliver any learning content and track completion.
 
-**Why.** Institutions have large existing libraries of standards-based content
-that must play and report completion correctly.
+**What you can do**
+- Upload and serve **modules, lessons and topics** (text, files, embeds,
+  interactive/H5P-style).
+- Play **SCORM (1.2 / 2004)** packages and record attempts.
+- Track **completion** per learner; emit **xAPI** activity.
 
-**How.** The `content` service stores structure/metadata in **JSONB** and
-binaries in **Vercel Blob**, records completion, plays SCORM packages, and mirrors
-**xAPI** statements to the analytics LRS.
+*Why it matters.* Schools bring large standards-based content libraries that must
+just work. *Under the hood.* `content` service; JSONB structure + Vercel Blob
+binaries.
 
 ### 7. Enrollment & registration
 
-**What.** Place learners and instructors into sections with roles, manage the
-**lifecycle** (active → completed → dropped), and support self-registration.
+Get the right people into the right sections.
 
-**Why.** Enrollment is a high-frequency, correctness-critical flow that also has
-billing implications (seats).
+**What you can do**
+- Enroll learners and instructors into sections **with roles**.
+- Manage the **lifecycle** (active → completed → dropped) and **self-registration**.
+- Keep enrollments **in sync with the SIS**.
 
-**How.** The `enrollment` service drives the **enroll + billing saga**
-(enroll → reserve seat → confirm; compensate by withdrawing on seat rejection)
-and stays in sync with SIS-driven enrollments.
+*Why it matters.* High-volume, correctness-critical, and tied to billing seats.
+*Under the hood.* `enrollment` service; enroll + seat-reservation saga.
 
 ### 8. Assignments & submissions
 
-**What.** Create assignments with **due dates and late/penalty policies**, collect
-file submissions, and give feedback; **plagiarism** integration hooks.
+Collect and give feedback on student work.
 
-**Why.** Assignments are the core instructional activity in most courses.
+**What you can do**
+- Create assignments with **due dates and late/penalty policies**.
+- Accept **file submissions**; leave feedback and grades.
+- Hook in **plagiarism** checks.
 
-**How.** The `assignment` service stores uploads in **Vercel Blob** with metadata
-in Postgres, creates a gradebook line item, and runs plagiarism checks as an
-asynchronous hook.
+*Why it matters.* The core instructional activity in most courses.
+*Under the hood.* `assignment` service; uploads in Blob, line items in the
+gradebook.
 
 ### 9. Assessments & quizzing
 
-**What.** **Question banks** (QTI import/export), sectioned exams, **timed
-attempts**, and **auto-grading** of objective items.
+Assess at scale, securely.
 
-**Why.** Scalable assessment with secure, time-boxed attempts is table stakes for
-an LMS.
+**What you can do**
+- Build **question banks** (import/export **QTI**) and **section quizzes**.
+- Run **timed attempts** with **auto-grading** of objective items.
+- Route subjective items to the gradebook for manual scoring.
 
-**How.** The write-heavy `assessment` service uses **JSONB** for flexible item
-types; objective grading is synchronous, subjective grading routes to the
-gradebook.
+*Why it matters.* Scalable, secure, time-boxed assessment is table stakes.
+*Under the hood.* `assessment` service; JSONB items, write-heavy attempt path.
 
 ### 10. Grading & gradebook
 
-**What.** A full **gradebook**: schemes, **weighted categories**, line items,
-calculated and final grades, controlled **release**, and a student-facing view.
+The system of record for outcomes.
 
-**Why.** The gradebook is the system of record for outcomes and the most
-politically sensitive surface in any LMS.
+**What you can do**
+- Use **grade schemes**, **weighted categories** and line items.
+- **Calculate and release final grades**; give students a clear grade view.
+- Expose grades via **LTI AGS** and **OneRoster results**.
 
-**How.** The `grading` service is the source of truth for grades and exposes them
-to **LTI AGS** and **OneRoster results**; it consumes submission/quiz events to
-build line items.
+*Why it matters.* The gradebook is the most scrutinized surface in any LMS.
+*Under the hood.* `grading` service is the source of truth for grades.
 
 ### 11. Rubrics, competencies & outcomes
 
-**What.** Authorable **rubrics**, **competencies / learning objectives**,
-activity-to-objective **alignment**, and **mastery** tracking (standards-based
-grading).
+Standards-based grading and mastery.
 
-**Why.** Accreditation and K-12 standards frameworks demand outcomes and mastery
-reporting, not just points.
+**What you can do**
+- Author **rubrics** (criteria × levels) and attach them to activities.
+- Define **competencies / learning objectives** and **align** activities to them.
+- Track **mastery** roll-ups per learner.
 
-**How.** The `rubric` service computes mastery roll-ups across aligned objectives
-and feeds both grading and analytics.
+*Why it matters.* Accreditation and K-12 standards require outcomes, not just
+points. *Under the hood.* `rubric` service feeds grading and analytics.
 
 ### 12. Discussions & collaboration
 
-**What.** Threaded **forums**, topics and replies, **subscriptions**, moderation,
-and **graded participation**.
+Asynchronous engagement that can be graded.
 
-**Why.** Asynchronous discussion is a primary engagement and assessment tool,
-especially online and in higher-ed.
+**What you can do**
+- Run **threaded forums**, topics and replies with **subscriptions** and
+  moderation.
+- **Grade participation** where it counts.
 
-**How.** The `discussion` service stores threaded posts in JSONB and fans out
-notifications to subscribers on new posts.
+*Why it matters.* A primary engagement and assessment tool, especially online.
+*Under the hood.* `discussion` service; notification fanout on new posts.
 
 ### 13. Announcements & notifications
 
-**What.** Targeted course/org **announcements** and **multi-channel
-notifications** (email, SMS, push, in-app) with **per-user preferences** and
-unread counters; **intelligent agents** that act on conditions.
+Reach the right people on the right channel.
 
-**Why.** Timely, preference-respecting communication drives engagement and
-reduces missed deadlines.
+**What you can do**
+- Post **targeted course/org announcements** (schedule ahead).
+- Deliver **multi-channel** notifications (**email / SMS / push / in-app**) with
+  **per-user preferences**, unread counts and quiet hours.
+- Set up **intelligent agents** that act on conditions (e.g. notify on at-risk).
 
-**How.** The `notification` service is the central fanout consumer (announcements,
-discussions, grades, enrollments), respects preferences and quiet hours, and
-evaluates intelligent-agent rules against analytics signals.
+*Why it matters.* Timely, preference-aware communication drives engagement.
+*Under the hood.* `notification` service; central fanout consumer.
 
 ### 14. Calendar & scheduling
 
-**What.** A **unified calendar** of due dates and events aggregated from across
-the platform, with **iCal** feeds.
+One place for everything that's due.
 
-**Why.** Learners want one place to see everything that's due; iCal lets them sync
-to their own calendar apps.
+**What you can do**
+- See a **unified calendar** of deadlines and events aggregated from across the
+  platform.
+- Subscribe via **iCal** in any calendar app.
 
-**How.** The `calendar` service aggregates deadlines from assignments, quizzes and
-announcements and serves a personal `.ics` feed.
+*Why it matters.* Reduces missed deadlines. *Under the hood.* `calendar` service
+aggregates due dates; serves `.ics`.
 
-### 15. Analytics & reporting (Caliper / LRS)
+### 15. Analytics & reporting
 
-**What.** Event capture into a **Learning Record Store**, **engagement** metrics,
-**at-risk** prediction, teacher dashboards, and **district roll-ups**; scheduled
-and ad-hoc **exports** (CSV/PDF/OneRoster).
+Turn activity into insight — and compliance reports.
 
-**Why.** Data-driven instruction and institutional reporting/compliance are major
-buying criteria.
+**What you can do**
+- Capture standardized **learning activity** (Caliper / xAPI) into a Learning
+  Record Store.
+- View **engagement** metrics, **at-risk** learner flags and teacher dashboards.
+- Roll up analytics **across a district's schools**.
+- Run **scheduled and ad-hoc exports** (CSV / PDF / OneRoster) for compliance and
+  accreditation.
 
-**How.** Domain services emit **Caliper** (and legacy **xAPI**) events through the
-outbox → QStash → the `analytics` LRS (append-only), which builds **CQRS read
-models** (`engagement_summary`) that dashboards query — never the raw event store.
-The `reporting` service runs exports off read replicas and writes results to Blob
-with signed URLs.
+*Why it matters.* Data-driven instruction and institutional reporting are major
+buying criteria. *Under the hood.* Event-sourced `analytics` LRS + CQRS read
+models; `reporting` exports off replicas.
 
-### 16. AI & personalization (Groq)
+### 16. AI assistant & personalization
 
-**What.** A **Lumi-equivalent** assistant: a **RAG study assistant** grounded in
-course content (with citations) and **AI-assisted question generation**.
+A safe, tenant-isolated AI helper.
 
-**Why.** AI tutoring and authoring assistance are fast becoming expected
-differentiators — but only if they're safe and tenant-isolated.
+**What you can do**
+- Give learners an **AI study assistant** that answers from **their own course
+  content**, with citations.
+- Help instructors **generate quiz questions** from course material.
 
-**How.** The `ai` service embeds tenant-scoped content into **pgvector** and
-answers via **Groq**; retrieval is constrained by RLS so it **never crosses a
-tenant boundary**.
+*Why it matters.* AI tutoring and authoring are fast becoming expected — if safe.
+*Under the hood.* `ai` service; **RAG over pgvector + Groq**, retrieval bounded by
+RLS so it **never crosses a tenant boundary**.
 
 ### 17. Video & media
 
-**What.** **Upload, transcode (HLS/DASH), caption/transcript**, and stream
-lecture video.
+Lecture video that streams everywhere.
 
-**Why.** Video is heavy and latency-sensitive; it needs adaptive streaming and
-accessibility captions.
+**What you can do**
+- **Upload** video, **transcode** to adaptive **HLS/DASH**, and **stream**.
+- Generate **captions / transcripts** for accessibility.
 
-**How.** The `video` service stores assets in Blob and runs **FFmpeg** transcoding
-on a container worker (not serverless, due to runtime limits), with status in
-JSONB and optional AI transcription.
+*Why it matters.* Video is heavy and must be adaptive and accessible.
+*Under the hood.* `video` service; Blob storage + FFmpeg worker.
 
 ### 18. Search
 
-**What.** **Tenant-scoped** keyword **and** semantic search across content,
-courses and discussions.
+Find anything — safely scoped.
 
-**Why.** Users expect Google-quality discovery, scoped safely to their tenant.
+**What you can do**
+- Search content, courses and discussions with **keyword + semantic** results.
+- Get results **scoped to your tenant** only.
 
-**How.** The `search` service combines Postgres **full-text** and **pgvector**;
-every query is constrained by `app.tenant_id`, and indexes are kept fresh from
-domain events.
+*Why it matters.* Users expect fast, relevant discovery. *Under the hood.*
+`search` service; Postgres full-text + pgvector, filtered by tenant.
 
 ### 19. Billing & subscriptions
 
-**What.** Plans, **seat** management, **usage metering**, invoices, and
-**district-consolidated invoicing**.
+Monetize cleanly, including for districts.
 
-**Why.** It's a SaaS — monetization, seat reservation, and clean district-level
-billing are core.
+**What you can do**
+- Offer **plans**, manage **seats**, and **meter usage**.
+- Issue invoices, including **district-consolidated invoicing** across schools.
 
-**How.** The `billing` service participates in the enroll+billing saga
-(reserve/release seats), meters usage, and can bill a **parent (district)** tenant
-via the `tenant_subtree()` roll-up.
+*Why it matters.* It's a SaaS — seats and clean district billing are core.
+*Under the hood.* `billing` service; seat-reservation saga + `tenant_subtree()`
+roll-up.
 
 ### 20. Security, audit & compliance
 
-**What.** **Tamper-evident, hash-chained audit logs**, **automated RLS isolation
-tests in CI**, per-tenant **rate limiting**, **DSAR** (data-subject access /
-erasure), and **FERPA / GDPR / COPPA** handling (including age-appropriate K-12
-flows).
+Provable isolation and regulatory readiness.
 
-**Why.** Education data is highly regulated; isolation must be provable, not
-assumed.
+**What you can do**
+- Rely on a **tamper-evident, hash-chained audit log**.
+- Trust **enforced tenant isolation** (Row-Level Security) — tested in CI.
+- Apply **per-tenant rate limiting**, **DSAR** (access/erasure), and
+  **FERPA / GDPR / COPPA** handling (including age-appropriate K-12 flows).
 
-**How.** The `audit` service chains each record to the previous hash for
-verifiability; **RLS** (`FORCE ROW LEVEL SECURITY`, app connects as a
-non-superuser without `BYPASSRLS`) is the engine-level safety net behind the
-application's tenant filter, and CI tests assert cross-tenant queries return
-nothing.
+*Why it matters.* Education data is highly regulated; isolation must be provable.
+*Under the hood.* `audit` service + RLS (`FORCE ROW LEVEL SECURITY`, non-superuser
+app role).
 
-### 21. Mobile (BFF + apps)
+### 21. Mobile
 
-**What.** Core learner flows on **mobile**, served by a dedicated
-**Backend-for-Frontend**.
+Core learning on the go.
 
-**Why.** Mobile-shaped, low-round-trip payloads keep the React Native app thin and
-fast.
+**What you can do**
+- Use a **mobile app** for the everyday learner flows (dashboard, course,
+  deadlines, notifications, grades).
 
-**How.** The `mobile-bff` aggregates `course`, `calendar`, `notification`,
-`grading` and `identity` into mobile-optimized responses, holding tokens
-server-side.
+*Why it matters.* Learners live on mobile. *Under the hood.* `mobile-bff`
+aggregates services into mobile-shaped responses.
 
 ### 22. Platform, CI/CD & observability
 
-**What.** Per-service **deploy pipelines** (GHCR → container host), a **database
-migration pipeline**, **OpenTelemetry tracing**, structured logging, and local
-dev tooling.
+Operate 25 services reliably.
 
-**Why.** Operating 25 services reliably requires strong automation and visibility
-from day one.
+**What you get**
+- Per-service **deploy pipelines** (GHCR → container host) and a **DB migration
+  pipeline**.
+- **Tracing** (OpenTelemetry) and structured, PII-scrubbed logs.
+- A documented **AI-agent contribution ruleset** ([`AGENTS.md`](AGENTS.md)) so
+  every contributor (human or AI) follows the same rules.
 
-**How.** **GitHub Actions** build/test/deploy each service image to **GHCR** and
-deploy the Next.js apps to **Vercel**; migrations run through a dedicated workflow;
-**OpenTelemetry** traces and PII-scrubbed `pino` logs flow per service.
+*Why it matters.* Strong automation and visibility from day one.
 
 ### 23. Accessibility & internationalization
 
-**What.** **WCAG 2.2 AA** across core flows and full **i18n/localization**.
+Usable by everyone, in any language.
 
-**Why.** Accessibility is a legal requirement in education, and the platform must
-serve multilingual institutions.
+**What you get**
+- **WCAG 2.2 AA** across core flows.
+- **Internationalization & localization** for multilingual institutions.
 
-**How.** Shared UI primitives enforce accessible patterns; copy is externalized
-for localization.
+---
 
-### Interoperability standards (1EdTech)
+## Built-in interoperability
 
-Standards conformance is how an LMS displaces incumbents in procurement, so it is
-built in from the start:
+Standards conformance is how an LMS wins institutional procurement — it's built in
+from the start:
 
-- **LTI 1.3 / Advantage** — the platform is both an LTI **Platform** and **Tool**:
-  OIDC third-party login with signed RS256 `id_token`, **AGS** (grade passback),
-  **NRPS** (roster), **Deep Linking 2.0**, and **Dynamic Registration**. Handles
-  the third-party-cookie pitfalls (cookieless `postMessage` / new-window launch).
-- **OneRoster 1.2** — the `sis` service is both **consumer** (pull from a school
-  SIS) and **provider** (`/ims/oneroster/rostering/v1p2/*`), with `sourcedId`
-  mapping and **delta sync** watermarks; OAuth2 client-credentials auth.
-- **Caliper / xAPI** — standardized learning-activity events into the LRS.
-- **Content** — **SCORM 1.2/2004**, **xAPI**, and **QTI** import/export.
+- **LTI 1.3 / Advantage** — the platform is both an LTI **Platform** (embed
+  external tools) and **Tool** (be embedded in a school portal): OIDC login, **AGS**
+  grade passback, **NRPS** roster, **Deep Linking 2.0**, **Dynamic Registration**.
+- **OneRoster 1.2** — sync rosters both ways with the school SIS (consumer +
+  provider) with `sourcedId` mapping and delta sync.
+- **Caliper / xAPI** — standardized learning-activity events into the analytics
+  LRS.
+- **Content** — **SCORM 1.2 / 2004**, **xAPI**, and **QTI** import/export.
+
+See [`docs/STANDARDS.md`](docs/STANDARDS.md).
 
 ---
 
 ## Who it's for (use cases)
 
-- **K-12 districts** — onboard the district as a parent tenant and each school as
-  a sub-tenant; integrate into the existing district/school portal via LTI + SSO;
-  keep rosters synced from the SIS via OneRoster; give the district consolidated
-  analytics and billing. Start on the low-cost **pool** tier.
-- **Higher education** — colleges/departments as sub-tenants, standards-based
-  outcomes and competencies, heavy discussions and assessments, LTI tool
-  ecosystem, and a **silo** tier for institutions that demand physical isolation
-  or data residency.
+- **K-12 districts** — district as a parent tenant, each school a sub-tenant;
+  embed into the district/school portal via LTI + SSO; sync rosters from the SIS;
+  district-wide analytics and billing. Start on the low-cost **pool** tier.
+- **Higher education** — colleges/departments as sub-tenants; outcomes,
+  competencies, heavy assessment and discussion; an LTI tool ecosystem; a **silo**
+  tier for isolation or data residency.
 - **Corporate / training** — a standalone tenant for compliance training: SCORM
-  content, completion tracking, certificates, and usage-based billing.
+  content, completion tracking, certificates, usage-based billing.
 
-The unifying thread: **integrate with what the institution already runs**
-(portal, IdP, SIS) instead of replacing it, and **scale isolation with the
-contract** (pool → silo) without re-engineering.
+The throughline: **integrate with what the institution already runs** (portal,
+identity, SIS) and **scale isolation with the contract** (pool → silo) without
+re-engineering.
 
 ---
 
-## How it all fits together (architecture)
-
-### Request path
+## How it's built (architecture, in brief)
 
 ```
 clients (web / mobile)
-  → Vercel Edge Network (CDN + WAF + DDoS)          [was: Azure Front Door]
-  → gateway service (JWT validation, rate limit, tenant resolution)
+  → Vercel Edge (CDN + WAF)
+  → gateway (JWT validation, rate limit, tenant resolution)
   → Next.js Route Handlers (Web BFF) / mobile-bff
-  → domain microservices (Fastify, one DB boundary each)
+  → 25 domain microservices (Fastify, one DB boundary each)
   → Postgres (pool + silo) / Vercel Blob / Upstash / pgvector
-events: domain services → outbox (Postgres) → QStash → consumers (analytics, notification, …)
+events: services → outbox (Postgres) → QStash → consumers (analytics, notification, …)
 ```
 
-### Per-service shape
+- **Per service:** API (Fastify) → application → domain → infrastructure
+  (Prisma + RLS) → Postgres, with a **transactional outbox** + **inbox**
+  (exactly-once via `idempotency_key`).
+- **Tenant isolation (defense in depth):** in-code tenant filter **+** engine-level
+  **RLS** keyed on a request-scoped `app.tenant_id` **+** a non-superuser DB role.
+- **The 25 services:** `gateway` · `identity` · `tenant` · `user-org` ·
+  `enrollment` · `course` · `content` · `assignment` · `assessment` · `grading` ·
+  `discussion` · `announcement` · `notification` · `calendar` · `rubric` ·
+  `analytics` · `reporting` · `ai` · `lti` · `sis` · `video` · `search` ·
+  `billing` · `audit` · `mobile-bff`.
 
-Each service is layered **API (Fastify) → application (commands/queries) → domain
-→ infrastructure (Prisma + RLS) → Postgres**, and writes a **transactional outbox**
-row in the same DB transaction as the business change, relayed to QStash after
-commit. Consumers dedupe via an **inbox** + `idempotency_key` for exactly-once
-processing.
-
-### Tenancy & isolation (defense in depth)
-
-1. **Application filter** — every query is tenant-scoped in code.
-2. **Engine-level RLS** — a `tenant_isolation` policy on every tenant table
-   compares `tenant_id` to a request-scoped `app.tenant_id` GUC set
-   transaction-locally (so it can't leak across reused serverless connections).
-3. **Non-superuser role** — no `BYPASSRLS`, so RLS catches what code misses.
-
-Tenant is resolved from **subdomain → JWT claim → `X-Tenant-Id` header** (the last
-for service-to-service only). See [`docs/MULTI_TENANCY.md`](docs/MULTI_TENANCY.md).
-
-### The 25 services
-
-`gateway` · `identity` · `tenant` · `user-org` · `enrollment` · `course` ·
-`content` · `assignment` · `assessment` · `grading` · `discussion` ·
-`announcement` · `notification` · `calendar` · `rubric` · `analytics` ·
-`reporting` · `ai` · `lti` · `sis` · `video` · `search` · `billing` · `audit` ·
-`mobile-bff`.
-
-Full per-service specs (responsibility, owned tables, endpoints, events,
-dependencies) are in [`docs/services/`](docs/services).
+Full per-service specs (responsibility, tables, endpoints, events, dependencies):
+[`docs/services/`](docs/services). Architecture detail:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
 ## Repository structure
 
 ```
-apps/
-  web/            Next.js learner/instructor app (Vercel) — also the Web BFF
-  admin/          Next.js administration app (Vercel)
-services/         25 domain microservices (Fastify; Dockerfile → GHCR)
-packages/
-  db/             Prisma + tenant routing (pool/silo) + seed
-  types/          Shared domain types
-  auth/           JWT signing/verification, scopes
-  config/         Validated env (zod)
-  events/         Event envelope + contracts (outbox/inbox)
-  logger/         Structured pino logger
-  ui/             Shared UI primitives
-  tsconfig/       Shared TS configs
-  eslint-config/  Shared lint config
-database/
-  schema.sql      Canonical Postgres DDL (source of truth)
-  policies/       Row-Level Security (pool isolation)
-  seed/           Seed data
-docs/
-  ARCHITECTURE.md MULTI_TENANCY.md DEPLOYMENT.md STANDARDS.md
-  services/       Per-service design specs (25) + index
-  backlog/        Product backlog (epics/stories) + GitHub seeder source
-  diagrams/       draw.io diagrams
-scripts/
-  github/         Idempotent backlog → GitHub issues/labels/milestones/board seeder
-  docs/           Service-spec generator
-.github/workflows CI, deploy-web, deploy-services, db-migrate
+apps/        web (learner/instructor + Web BFF), admin            → Vercel
+services/    25 domain microservices (Fastify; Dockerfile → GHCR)
+packages/    db, types, auth, config, events, logger, ui, tsconfig, eslint-config
+database/    schema.sql (canonical DDL), policies/ (RLS), seed/
+docs/        ARCHITECTURE · MULTI_TENANCY · DEPLOYMENT · STANDARDS · services/ · backlog/ · diagrams/
+scripts/     github/ (backlog → issues/board seeder), docs/ (service-spec generator)
+.github/     workflows: CI, deploy-web, deploy-services, db-migrate
+AGENTS.md    rules every contributor/AI agent must follow
 ```
 
 ---
@@ -506,7 +458,7 @@ scripts/
 | Tenancy              | Hybrid **pool** (shared DB + RLS) / **silo** (DB per tenant)  |
 | Object storage       | **Vercel Blob**                                               |
 | Cache / messaging    | **Upstash** Redis + QStash (events, schedules)                |
-| AI (Lumi-equivalent) | **Groq** + pgvector RAG                                       |
+| AI                   | **Groq** + pgvector RAG                                       |
 | Identity (CIAM)      | External provider (WorkOS / Auth0) — never a home-grown IdP   |
 | CI/CD                | **GitHub Actions** (CI, Vercel deploy, container build, DB migrate) |
 
@@ -532,32 +484,31 @@ pnpm dev                        # turbo runs apps + services
 ## Deployment & CI/CD
 
 - **Web / Admin apps** → Vercel (preview per PR, production on `main`).
-- **Microservices** → Docker images built and pushed to **GHCR**, deployed to a
-  container host (Fly / Render / Railway).
-- **Database migrations** → dedicated GitHub Actions workflow (Prisma + raw SQL).
+- **Microservices** → Docker images to **GHCR**, deployed to a container host
+  (Fly / Render / Railway).
+- **Database migrations** → dedicated GitHub Actions workflow.
 - **Scheduled work** → QStash schedules + GitHub Actions cron + Vercel Cron.
-- **Secrets** → GitHub/Vercel encrypted secrets + a secret store (silo DSNs are
-  resolved from `tenant.database_ref`, never hard-coded).
+- **Secrets** → GitHub/Vercel encrypted secrets + a secret store (silo DSNs from
+  `tenant.database_ref`, never hard-coded).
 
-See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full pipeline detail.
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ---
 
 ## Project tracking & documentation
 
 - **GitHub Project board:** **LMS Delivery** — every epic, user story, task and
-  bug (88 seeded issues) lives on the board.
-- **Backlog source of truth:** [`docs/backlog/`](docs/backlog) — machine-readable
-  `backlog.json` (23 epics, 88 items) turned into GitHub issues/labels/milestones
-  by [`scripts/github/seed-backlog.ps1`](scripts/github/seed-backlog.ps1) (idempotent by issue title).
-- **Architecture & design:**
-  - [`AGENTS.md`](AGENTS.md) — **rules every AI agent must follow** (story-first workflow, RLS guardrails, multi-agent delegation model)
-  - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — services, request path, Azure→Vercel mapping
-  - [`docs/MULTI_TENANCY.md`](docs/MULTI_TENANCY.md) — pool/silo/hybrid, RLS, catalog, migration
-  - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — pipelines, Vercel, GHCR, cron, secrets
-  - [`docs/STANDARDS.md`](docs/STANDARDS.md) — LTI 1.3/Advantage, OneRoster 1.2, Caliper/xAPI
-  - [`docs/services/`](docs/services) — per-service specs (responsibility, tables, endpoints, events)
-  - [`docs/diagrams/`](docs/diagrams) — draw.io diagrams (open at app.diagrams.net)
+  bug lives on the board.
+- **Backlog source of truth:** [`docs/backlog/`](docs/backlog) — `backlog.json`
+  (23 epics) → GitHub issues/labels/milestones via
+  [`scripts/github/seed-backlog.ps1`](scripts/github/seed-backlog.ps1) (idempotent).
+- **Rules for contributors / AI agents:** [`AGENTS.md`](AGENTS.md) — story-first
+  workflow, isolation guardrails, and the multi-agent delegation model.
+- **Design docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
+  [`docs/MULTI_TENANCY.md`](docs/MULTI_TENANCY.md) ·
+  [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) ·
+  [`docs/STANDARDS.md`](docs/STANDARDS.md) · [`docs/services/`](docs/services) ·
+  [`docs/diagrams/`](docs/diagrams).
 
 ---
 
@@ -569,5 +520,5 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full pipeline detail.
 2. **Phase 2** — Quiz, Discussion, Notification, Calendar, SIS (OneRoster 1.2),
    Search, Analytics (Caliper LRS); stand up the tenant catalog so the **silo**
    path is ready; reach **SOC 2 Type II** readiness.
-3. **Phase 3** — AI/Lumi (RAG), Video, Billing, Rubric/Competency, Audit;
+3. **Phase 3** — AI assistant (RAG), Video, Billing, Rubric/Competency, Audit;
    introduce the **silo** tier for the first large enterprise / higher-ed tenant.

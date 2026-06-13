@@ -14,9 +14,23 @@ import type { TenantContext } from "@lms/types";
  * tenant registry and (in prod) a secret store — never hard-coded.
  */
 
-const sharedPool = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
+const sharedPoolByUrl = new Map<string, PrismaClient>();
+
+/**
+ * Lazily construct (and cache) the shared pool client. Deferring construction
+ * keeps merely importing this module side-effect free, so services that inject
+ * their own data layer (or run under test) never instantiate a client with an
+ * unset DATABASE_URL.
+ */
+function sharedPool(): PrismaClient {
+  const url = process.env.DATABASE_URL ?? "";
+  let client = sharedPoolByUrl.get(url);
+  if (!client) {
+    client = new PrismaClient({ datasources: { db: { url } } });
+    sharedPoolByUrl.set(url, client);
+  }
+  return client;
+}
 
 const siloClients = new Map<string, PrismaClient>();
 
@@ -42,7 +56,7 @@ export async function withTenant<T>(
     return work(siloClient(ctx.databaseUrl));
   }
 
-  return sharedPool.$transaction(async (tx) => {
+  return sharedPool().$transaction(async (tx) => {
     await tx.$executeRawUnsafe(
       `SELECT set_config('app.tenant_id', $1, true)`,
       ctx.tenantId,

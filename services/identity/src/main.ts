@@ -1,27 +1,68 @@
 /**
  * identity service.
- * Auth orchestration, token issuance, SSO federation (OIDC/SAML), LTI/legacy. Delegates user directory to external CIAM (WorkOS/Auth0); injects tenant+role+entitlement claims.
+ * Auth orchestration and token issuance for the LMS platform: local password
+ * login, rotating refresh tokens (with token-family reuse detection), and an
+ * access-token introspection endpoint. SSO federation (OIDC/SAML) and external
+ * CIAM remain future work; this service owns the first-party auth surface.
  *
  * Lightweight Fastify HTTP service. Each request resolves a TenantContext
  * (pool vs silo) and runs domain work through @lms/db.withTenant so Postgres
  * RLS scopes every query. Deployable as a container image (Dockerfile ->
  * GHCR -> container host) or, for edge/BFF roles, as Vercel Functions.
  */
-import Fastify, { type FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 
-import { loadConfig } from "@lms/config";
+import { loadConfig, type AppConfig } from "@lms/config";
 import { createLogger } from "@lms/logger";
+import type { TenantContext } from "@lms/types";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyRequest,
+} from "fastify";
+
+import { registerAuthRoutes, type IdentityRouteDeps } from "./routes.js";
+import { createPrismaStore } from "./store.prisma.js";
 
 const SERVICE = "identity";
 const log = createLogger(SERVICE);
+
+/** Overridable dependencies — tests inject an in-memory store + fixed clock. */
+export interface BuildAppOptions {
+  config?: AppConfig;
+  store?: IdentityRouteDeps["store"];
+  resolveTenant?: IdentityRouteDeps["resolveTenant"];
+  now?: () => Date;
+  generateId?: () => string;
+}
+
+/**
+ * Default tenant resolution: the API gateway authenticates the tenant and
+ * forwards it as `x-tenant-id`. Pool tenants share DATABASE_URL; silo routing
+ * is resolved upstream and is out of scope for the auth surface.
+ */
+function headerTenantResolver(
+  config: AppConfig,
+): (req: FastifyRequest) => TenantContext {
+  return (req) => {
+    const tenantId = req.headers["x-tenant-id"];
+    if (typeof tenantId !== "string" || tenantId.length === 0) {
+      throw new Error("missing x-tenant-id");
+    }
+    return {
+      tenantId,
+      tier: config.DEFAULT_TENANT_TIER,
+      databaseUrl: config.DATABASE_URL,
+    };
+  };
+}
 
 /**
  * Build the Fastify app without binding a port, so tests can drive it via
  * `app.inject(...)`. Config is resolved lazily here (not at import time) to
  * keep the module import side-effect free.
  */
-export function buildApp(): FastifyInstance {
-  const config = loadConfig();
+export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
+  const config = options.config ?? loadConfig();
   const app = Fastify({ logger: false });
 
   app.get("/health", async () => ({
@@ -31,8 +72,13 @@ export function buildApp(): FastifyInstance {
     uptime: process.uptime(),
   }));
 
-  // TODO: register domain routes (see /docs/ARCHITECTURE.md). Tenant-resolution
-  // middleware and RLS-scoped handlers are added per bounded context.
+  registerAuthRoutes(app, {
+    config,
+    store: options.store ?? createPrismaStore(),
+    resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+    now: options.now ?? (() => new Date()),
+    generateId: options.generateId ?? randomUUID,
+  });
 
   return app;
 }

@@ -6,18 +6,20 @@
 
 ## Responsibility
 
-Auth orchestration and federation (OIDC/SAML/LTI), session/claims issuance, RBAC authorization (roles, permissions, assignments). Delegates credential storage to external CIAM.
+First-party auth and token issuance (local password login, rotating refresh tokens with token-family reuse detection, access-token introspection), plus federation (OIDC/SAML/LTI) and RBAC authorization (roles, permissions, assignments). External CIAM federation is optional/roadmap.
 
 ## Owned tables
 
-`identity_provider`, `user_identity`, `role`, `permission`, `role_permission`, `role_assignment`
+`app_user (credential join)`, `user_credential`, `refresh_token`, `identity_provider`, `user_identity`, `role`, `permission`, `role_permission`, `role_assignment`
 
 ## Key endpoints
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/oauth/token` | Exchange auth-code/PKCE or client-credentials for tokens. |
-| `GET` | `/.well-known/jwks.json` | Publish signing keys for gateway/services. |
+| `POST` | `/auth/login` | Verify email+password; issue an access token and a rotating refresh token. |
+| `POST` | `/auth/refresh` | Rotate a refresh token; reuse of a revoked token revokes the whole family. |
+| `POST` | `/auth/logout` | Revoke the presented token's family (idempotent). |
+| `GET` | `/auth/me` | Introspect the bearer access token -> subject, tenant, roles, scopes. |
 | `POST` | `/sso/{provider}/callback` | Handle OIDC/SAML federated login -> link user_identity. |
 | `GET` | `/authz/check` | Evaluate permission for (subject, action, resource) via role_assignment. |
 
@@ -33,8 +35,8 @@ Auth orchestration and federation (OIDC/SAML/LTI), session/claims issuance, RBAC
 
 ## Dependencies
 
-- External CIAM (WorkOS/Auth0)
 - tenant (provider config)
+- External CIAM (WorkOS/Auth0, optional)
 - Upstash Redis (sessions)
 
 ## Notes

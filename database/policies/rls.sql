@@ -17,6 +17,7 @@ DECLARE
   t text;
   tenant_tables text[] := ARRAY[
     'org_unit','app_user','identity_provider','user_identity','role',
+    'user_credential','refresh_token',
     'role_assignment','course','content_module','content_topic',
     'content_completion','enrollment','question_library','question','quiz',
     'quiz_section','quiz_question','quiz_attempt','quiz_response','assignment',

@@ -163,6 +163,35 @@ CREATE TABLE IF NOT EXISTS user_identity (
   UNIQUE (provider_id, subject)
 );
 
+-- Local password credential for users not federated through an external IdP.
+-- SSO-only users have no row here; auth then flows through identity_provider.
+CREATE TABLE IF NOT EXISTS user_credential (
+  user_id       uuid PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE,
+  tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  password_hash text NOT NULL,
+  algo          text NOT NULL DEFAULT 'scrypt',
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE TRIGGER trg_user_credential_updated BEFORE UPDATE ON user_credential
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Rotating refresh tokens. Each login starts a token "family"; on every refresh
+-- the presented token is revoked and replaced. Re-use of an already-revoked
+-- token (replay/theft) is detected and revokes the whole family.
+CREATE TABLE IF NOT EXISTS refresh_token (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  user_id     uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  family_id   uuid NOT NULL,
+  token_hash  text NOT NULL UNIQUE,   -- sha256(opaque token); raw token never stored
+  issued_at   timestamptz NOT NULL DEFAULT now(),
+  expires_at  timestamptz NOT NULL,
+  revoked_at  timestamptz,
+  replaced_by uuid REFERENCES refresh_token(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS ix_refresh_token_user ON refresh_token(tenant_id, user_id);
+CREATE INDEX IF NOT EXISTS ix_refresh_token_family ON refresh_token(family_id);
+
 CREATE TABLE IF NOT EXISTS role (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id  uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,

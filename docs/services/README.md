@@ -9,7 +9,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | Service | Port | Data shape | Owned tables |
 | --- | --- | --- | --- |
 | [gateway](gateway.md) | 4000 | stateless | - |
-| [identity](identity.md) | 4001 | Postgres | `identity_provider`, `user_identity`, `role`, `permission`, `role_permission`, `role_assignment` |
+| [identity](identity.md) | 4001 | Postgres | `app_user (credential join)`, `user_credential`, `refresh_token`, `identity_provider`, `user_identity`, `role`, `permission`, `role_permission`, `role_assignment` |
 | [tenant](tenant.md) | 4002 | control-plane DB | `tenant`, `plan`, `subscription`, `tenant_setting`, `tenant_branding` |
 | [user-org](user-org.md) | 4003 | Postgres (read-heavy) | `app_user`, `org_unit`, `academic_session` |
 | [enrollment](enrollment.md) | 4004 | Postgres | `enrollment` |

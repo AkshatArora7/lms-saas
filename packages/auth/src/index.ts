@@ -2,6 +2,16 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
 import type { StandardRole, TenantTier } from "@lms/types";
 
+export {
+  hashPassword,
+  verifyPassword,
+} from "./password.js";
+export {
+  generateRefreshToken,
+  hashRefreshToken,
+  type RefreshTokenMaterial,
+} from "./refresh.js";
+
 /**
  * Access-token claims carried on every authenticated request.
  * tenant_id + tier let the gateway route to the correct (pool/silo) database

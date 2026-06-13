@@ -1,29 +1,45 @@
 /**
  * gateway service.
- * Edge API gateway: JWT validation, per-tenant rate limiting, routing to domain services (APIM/YARP equivalent).
+ * Edge API gateway: JWT validation, per-tenant tenant resolution, scope
+ * enforcement and routing to domain services (APIM/YARP equivalent).
  *
- * Lightweight Fastify HTTP service. Each request resolves a TenantContext
- * (pool vs silo) and runs domain work through @lms/db.withTenant so Postgres
- * RLS scopes every query. Deployable as a container image (Dockerfile ->
- * GHCR -> container host) or, for edge/BFF roles, as Vercel Functions.
+ * Lightweight Fastify HTTP service. The gateway authenticates every request,
+ * resolves the TenantContext from the verified token, and forwards `x-tenant-id`
+ * to domain services so each runs its work through @lms/db.withTenant and
+ * Postgres RLS scopes every query. Deployable as a container image (Dockerfile
+ * -> GHCR -> container host) or, for edge/BFF roles, as Vercel Functions.
  */
+import { loadConfig, type AppConfig } from "@lms/config";
+import { createLogger } from "@lms/logger";
 import Fastify, { type FastifyInstance } from "fastify";
 
-import { loadConfig } from "@lms/config";
-import { createLogger } from "@lms/logger";
+import { authGuard, requireScope } from "./auth.js";
+import {
+  createProxyHandler,
+  envUpstreamResolver,
+  type ProxyOptions,
+} from "./proxy.js";
 
 const SERVICE = "gateway";
 const log = createLogger(SERVICE);
+
+/** Overridable dependencies — tests inject config so no real env is needed. */
+export interface BuildAppOptions {
+  config?: AppConfig;
+  /** Override upstream routing (host map + HTTP client) for tests. */
+  proxy?: Partial<ProxyOptions>;
+}
 
 /**
  * Build the Fastify app without binding a port, so tests can drive it via
  * `app.inject(...)`. Config is resolved lazily here (not at import time) to
  * keep the module import side-effect free.
  */
-export function buildApp(): FastifyInstance {
-  const config = loadConfig();
+export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
+  const config = options.config ?? loadConfig();
   const app = Fastify({ logger: false });
 
+  // Public: liveness probe, no auth.
   app.get("/health", async () => ({
     service: SERVICE,
     status: "ok",
@@ -31,8 +47,31 @@ export function buildApp(): FastifyInstance {
     uptime: process.uptime(),
   }));
 
-  // TODO: register domain routes (see /docs/ARCHITECTURE.md). Tenant-resolution
-  // middleware and RLS-scoped handlers are added per bounded context.
+  const authenticate = authGuard(config);
+
+  // Authenticated: echoes the identity the gateway resolved from the token.
+  app.get("/whoami", { preHandler: authenticate }, async (req) => ({
+    userId: req.claims!.sub,
+    tenantId: req.tenant!.tenantId,
+    tier: req.tenant!.tier,
+    roles: req.claims!.roles,
+    scopes: req.claims!.scopes,
+  }));
+
+  // Authenticated + scope-gated example, demonstrating downstream protection.
+  app.get(
+    "/admin/ping",
+    { preHandler: [authenticate, requireScope("users:manage")] },
+    async () => ({ ok: true }),
+  );
+
+  // Reverse proxy: authenticated `/api/:service/*` requests are forwarded to the
+  // owning domain service with the gateway-resolved `x-tenant-id` injected.
+  const proxyHandler = createProxyHandler({
+    resolveUpstream: options.proxy?.resolveUpstream ?? envUpstreamResolver(),
+    fetchImpl: options.proxy?.fetchImpl,
+  });
+  app.all("/api/:service/*", { preHandler: authenticate }, proxyHandler);
 
   return app;
 }

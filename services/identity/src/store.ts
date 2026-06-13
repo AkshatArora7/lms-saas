@@ -36,6 +36,29 @@ export interface RolesAndScopes {
   scopes: string[];
 }
 
+/** A configured external identity provider for a (sub-)tenant. */
+export interface IdentityProviderRecord {
+  id: string;
+  tenantId: string;
+  kind: "saml" | "oidc" | "ldap" | "cas";
+  displayName: string;
+  /** Provider-specific settings (endpoints, client id/secret, etc.). */
+  config: Record<string, unknown>;
+  isEnabled: boolean;
+}
+
+/** Input for just-in-time SSO user provisioning / identity linking. */
+export interface SsoProvisionInput {
+  providerId: string;
+  /** Stable subject/NameID from the IdP. */
+  subject: string;
+  email: string;
+  displayName: string;
+  /** Roles/scopes granted to a brand-new JIT user (existing users keep theirs). */
+  defaultRoles?: StandardRole[];
+  defaultScopes?: string[];
+}
+
 /**
  * Persistence boundary for the identity service. The Fastify routes depend only
  * on this interface, so production uses an RLS-scoped Postgres implementation
@@ -71,4 +94,22 @@ export interface IdentityStore {
 
   /** Revoke every still-active token in a rotation family (reuse/logout). */
   revokeFamily(ctx: TenantContext, familyId: string): Promise<void>;
+
+  /** Load a configured identity provider by id (used for SSO federation). */
+  findIdentityProvider(
+    ctx: TenantContext,
+    providerId: string,
+  ): Promise<IdentityProviderRecord | null>;
+
+  /**
+   * Just-in-time SSO provisioning. Resolves the user behind an IdP subject:
+   *   1. an existing `user_identity` link (provider + subject), else
+   *   2. an existing `app_user` with the same email (links a new identity), else
+   *   3. a brand-new active `app_user` (with `external_id = subject`) + identity.
+   * Always returns the resolved/active user record.
+   */
+  upsertSsoUser(
+    ctx: TenantContext,
+    input: SsoProvisionInput,
+  ): Promise<AuthUserRecord>;
 }

@@ -29,22 +29,37 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets[matrix.project_secret] }}
     steps:
+      - name: Check Vercel credentials
+        id: guard
+        run: |
+          if [ -n "${{ secrets.VERCEL_TOKEN }}" ] && [ -n "${{ secrets.VERCEL_ORG_ID }}" ] && [ -n "${{ secrets[matrix.project_secret] }}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Vercel deploy skipped::Set the VERCEL_TOKEN, VERCEL_ORG_ID and ${{ matrix.project_secret }} repo secrets to enable deploys. See docs/DEPLOYMENT.md."
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.guard.outputs.enabled == 'true'
 
       - name: Install Vercel CLI
+        if: steps.guard.outputs.enabled == 'true'
         run: npm install --global vercel@latest
 
       - name: Pull Vercel environment
+        if: steps.guard.outputs.enabled == 'true'
         run: |
           ENVF=${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
           vercel pull --yes --environment=$ENVF --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build
+        if: steps.guard.outputs.enabled == 'true'
         run: |
           PROD=${{ github.ref == 'refs/heads/main' && '--prod' || '' }}
           vercel build $PROD --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy
+        if: steps.guard.outputs.enabled == 'true'
         run: |
           PROD=${{ github.ref == 'refs/heads/main' && '--prod' || '' }}
           vercel deploy --prebuilt $PROD --token=${{ secrets.VERCEL_TOKEN }}

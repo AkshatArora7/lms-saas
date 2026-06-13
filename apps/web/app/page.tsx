@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { getBranding } from "./lib/branding";
 import { getSession } from "./lib/auth";
 import SignOutButton from "./sign-out-button";
 
@@ -17,6 +18,7 @@ const chip: React.CSSProperties = {
 export default async function Home() {
   const session = await getSession();
   if (!session) redirect("/login");
+  const brand = getBranding(session.tenantId);
 
   return (
     <main
@@ -34,7 +36,21 @@ export default async function Home() {
           alignItems: "center",
         }}
       >
-        <h1 style={{ margin: 0 }}>LMS Learner Experience</h1>
+        <div>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              fontWeight: 700,
+              color: brand.accent,
+              textTransform: "uppercase",
+              letterSpacing: ".04em",
+            }}
+          >
+            {brand.name}
+          </p>
+          <h1 style={{ margin: ".15rem 0 0" }}>Learner Experience</h1>
+        </div>
         <SignOutButton />
       </header>
 

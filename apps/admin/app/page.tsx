@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { getBranding } from "./lib/branding";
 import { getSession, isAdmin } from "./lib/auth";
 import SignOutButton from "./sign-out-button";
 
@@ -24,6 +25,22 @@ const chip: React.CSSProperties = {
 export default async function AdminHome() {
   const session = await getSession();
   if (!session) redirect("/login");
+  const brand = getBranding(session.tenantId);
+
+  const brandLabel = (
+    <p
+      style={{
+        margin: 0,
+        fontSize: 13,
+        fontWeight: 700,
+        color: brand.accent,
+        textTransform: "uppercase",
+        letterSpacing: ".04em",
+      }}
+    >
+      {brand.name}
+    </p>
+  );
 
   if (!isAdmin(session)) {
     return (
@@ -35,7 +52,10 @@ export default async function AdminHome() {
             alignItems: "center",
           }}
         >
-          <h1 style={{ margin: 0 }}>Not authorized</h1>
+          <div>
+            {brandLabel}
+            <h1 style={{ margin: ".15rem 0 0" }}>Not authorized</h1>
+          </div>
           <SignOutButton />
         </header>
         <p style={{ color: "#5b606b" }}>
@@ -57,7 +77,10 @@ export default async function AdminHome() {
           alignItems: "center",
         }}
       >
-        <h1 style={{ margin: 0 }}>LMS Administration</h1>
+        <div>
+          {brandLabel}
+          <h1 style={{ margin: ".15rem 0 0" }}>Administration</h1>
+        </div>
         <SignOutButton />
       </header>
 

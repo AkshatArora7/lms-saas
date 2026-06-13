@@ -5,11 +5,14 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "./main.js";
 import type {
   AuthUserRecord,
+  IdentityProviderRecord,
   IdentityStore,
   NewRefreshRecord,
   RefreshRecord,
   RolesAndScopes,
+  SsoProvisionInput,
 } from "./store.js";
+import type { OidcExchanger } from "./sso.js";
 
 /**
  * In-memory IdentityStore so the auth surface can be tested end-to-end with
@@ -19,7 +22,10 @@ import type {
 class MemoryStore implements IdentityStore {
   private usersByEmail = new Map<string, AuthUserRecord>();
   private roles = new Map<string, RolesAndScopes>();
+  private providers = new Map<string, IdentityProviderRecord>();
+  private identities = new Map<string, string>();
   tokens: RefreshRecord[] = [];
+  private seq = 0;
 
   seedUser(
     email: string,
@@ -28,6 +34,10 @@ class MemoryStore implements IdentityStore {
   ): void {
     this.usersByEmail.set(email, record);
     this.roles.set(record.id, rolesAndScopes);
+  }
+
+  seedProvider(provider: IdentityProviderRecord): void {
+    this.providers.set(provider.id, provider);
   }
 
   async findUserByEmail(
@@ -79,6 +89,46 @@ class MemoryStore implements IdentityStore {
         t.revokedAt = new Date();
       }
     }
+  }
+
+  async findIdentityProvider(
+    _ctx: TenantContext,
+    providerId: string,
+  ): Promise<IdentityProviderRecord | null> {
+    return this.providers.get(providerId) ?? null;
+  }
+
+  async upsertSsoUser(
+    ctx: TenantContext,
+    input: SsoProvisionInput,
+  ): Promise<AuthUserRecord> {
+    const linkKey = `${input.providerId}:${input.subject}`;
+    const linkedId = this.identities.get(linkKey);
+    if (linkedId) {
+      const existing = [...this.usersByEmail.values()].find(
+        (u) => u.id === linkedId,
+      );
+      if (existing) return existing;
+    }
+    const byEmail = this.usersByEmail.get(input.email);
+    if (byEmail) {
+      this.identities.set(linkKey, byEmail.id);
+      return byEmail;
+    }
+    const user: AuthUserRecord = {
+      id: `sso-user-${++this.seq}`,
+      tenantId: ctx.tenantId,
+      displayName: input.displayName,
+      status: "active",
+      passwordHash: null,
+    };
+    this.usersByEmail.set(input.email, user);
+    this.roles.set(user.id, {
+      roles: input.defaultRoles ?? [],
+      scopes: input.defaultScopes ?? [],
+    });
+    this.identities.set(linkKey, user.id);
+    return user;
   }
 }
 
@@ -347,6 +397,218 @@ describe("identity service", () => {
       headers: { authorization: "Bearer not-a-real-token" },
     });
     expect(bad.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+const OIDC_PROVIDER_ID = "33333333-3333-3333-3333-333333333333";
+
+function seedOidcStore(store: MemoryStore): void {
+  store.seedProvider({
+    id: OIDC_PROVIDER_ID,
+    tenantId: TENANT_ID,
+    kind: "oidc",
+    displayName: "Test School IdP",
+    isEnabled: true,
+    config: {
+      issuer: "https://idp.test",
+      authorizationEndpoint: "https://idp.test/authorize",
+      tokenEndpoint: "https://idp.test/token",
+      jwksUri: "https://idp.test/jwks",
+      clientId: "lms-client",
+      redirectUri: "https://lms.test/api/auth/sso/callback",
+    },
+  });
+}
+
+/** Fake exchanger that returns a fixed identity without any network call. */
+const fakeExchanger: OidcExchanger = {
+  async exchange(_config, params) {
+    if (params.code !== "good-code") throw new Error("bad code");
+    return {
+      subject: "idp-subject-123",
+      email: "federated@school.test",
+      displayName: "Federated Student",
+    };
+  },
+};
+
+function buildSsoApp(store: MemoryStore, exchanger = fakeExchanger) {
+  let counter = 0;
+  return buildApp({
+    store,
+    resolveTenant: () => tenant,
+    now: () => new Date("2030-01-01T00:00:00.000Z"),
+    generateId: () => `id-${++counter}`,
+    oidcExchanger: exchanger,
+  });
+}
+
+describe("identity SSO (OIDC)", () => {
+  beforeAll(() => {
+    process.env.DATABASE_URL ??= "postgres://user:pass@localhost:5432/lms_test";
+    process.env.JWT_SECRET ??= "test-secret-at-least-16-chars";
+  });
+
+  it("starts the flow with a PKCE authorization URL and signed state", async () => {
+    const store = await makeStore();
+    seedOidcStore(store);
+    const app = buildSsoApp(store);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/auth/sso/${OIDC_PROVIDER_ID}/start`,
+      headers: { "x-tenant-id": TENANT_ID },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(typeof body.state).toBe("string");
+    const url = new URL(body.authorizationUrl);
+    expect(url.origin + url.pathname).toBe("https://idp.test/authorize");
+    expect(url.searchParams.get("client_id")).toBe("lms-client");
+    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(url.searchParams.get("code_challenge")).toBeTruthy();
+    expect(url.searchParams.get("state")).toBe(body.state);
+    await app.close();
+  });
+
+  it("JIT-provisions a user on callback and issues usable tokens", async () => {
+    const store = await makeStore();
+    seedOidcStore(store);
+    const app = buildSsoApp(store);
+
+    const start = (
+      await app.inject({
+        method: "POST",
+        url: `/auth/sso/${OIDC_PROVIDER_ID}/start`,
+        headers: { "x-tenant-id": TENANT_ID },
+      })
+    ).json();
+
+    const cb = await app.inject({
+      method: "POST",
+      url: `/auth/sso/${OIDC_PROVIDER_ID}/callback`,
+      headers: { "x-tenant-id": TENANT_ID },
+      payload: { code: "good-code", state: start.state },
+    });
+    expect(cb.statusCode).toBe(200);
+    const tokens = cb.json();
+    expect(tokens.tokenType).toBe("Bearer");
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/auth/me",
+      headers: { authorization: `Bearer ${tokens.accessToken}` },
+    });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().roles).toContain("learner");
+    await app.close();
+  });
+
+  it("links the same external subject to one user across logins", async () => {
+    const store = await makeStore();
+    seedOidcStore(store);
+    const app = buildSsoApp(store);
+
+    async function ssoLogin(): Promise<string> {
+      const start = (
+        await app.inject({
+          method: "POST",
+          url: `/auth/sso/${OIDC_PROVIDER_ID}/start`,
+          headers: { "x-tenant-id": TENANT_ID },
+        })
+      ).json();
+      const cb = (
+        await app.inject({
+          method: "POST",
+          url: `/auth/sso/${OIDC_PROVIDER_ID}/callback`,
+          headers: { "x-tenant-id": TENANT_ID },
+          payload: { code: "good-code", state: start.state },
+        })
+      ).json();
+      const me = (
+        await app.inject({
+          method: "GET",
+          url: "/auth/me",
+          headers: { authorization: `Bearer ${cb.accessToken}` },
+        })
+      ).json();
+      return me.userId as string;
+    }
+
+    expect(await ssoLogin()).toBe(await ssoLogin());
+    await app.close();
+  });
+
+  it("fails closed on a tampered/invalid state", async () => {
+    const store = await makeStore();
+    seedOidcStore(store);
+    const app = buildSsoApp(store);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/auth/sso/${OIDC_PROVIDER_ID}/callback`,
+      headers: { "x-tenant-id": TENANT_ID },
+      payload: { code: "good-code", state: "not-a-valid-state-token" },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toBe("invalid_state");
+    await app.close();
+  });
+
+  it("fails closed when the IdP token exchange fails", async () => {
+    const store = await makeStore();
+    seedOidcStore(store);
+    const app = buildSsoApp(store);
+
+    const start = (
+      await app.inject({
+        method: "POST",
+        url: `/auth/sso/${OIDC_PROVIDER_ID}/start`,
+        headers: { "x-tenant-id": TENANT_ID },
+      })
+    ).json();
+    const cb = await app.inject({
+      method: "POST",
+      url: `/auth/sso/${OIDC_PROVIDER_ID}/callback`,
+      headers: { "x-tenant-id": TENANT_ID },
+      payload: { code: "bad-code", state: start.state },
+    });
+    expect(cb.statusCode).toBe(401);
+    expect(cb.json().error).toBe("sso_exchange_failed");
+    await app.close();
+  });
+
+  it("404s an unknown or disabled provider", async () => {
+    const store = await makeStore();
+    const app = buildSsoApp(store);
+    const res = await app.inject({
+      method: "POST",
+      url: `/auth/sso/${OIDC_PROVIDER_ID}/start`,
+      headers: { "x-tenant-id": TENANT_ID },
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("fails closed when the provider config is incomplete", async () => {
+    const store = await makeStore();
+    store.seedProvider({
+      id: OIDC_PROVIDER_ID,
+      tenantId: TENANT_ID,
+      kind: "oidc",
+      displayName: "Broken IdP",
+      isEnabled: true,
+      config: { clientId: "only-client-id" },
+    });
+    const app = buildSsoApp(store);
+    const res = await app.inject({
+      method: "POST",
+      url: `/auth/sso/${OIDC_PROVIDER_ID}/start`,
+      headers: { "x-tenant-id": TENANT_ID },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("provider_misconfigured");
     await app.close();
   });
 });

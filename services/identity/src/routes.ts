@@ -10,6 +10,17 @@ import type { StandardRole, TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { IdentityStore } from "./store.js";
+import {
+  buildAuthorizationUrl,
+  defaultOidcExchanger,
+  generateNonce,
+  generatePkce,
+  parseOidcConfig,
+  ProviderMisconfiguredError,
+  signSsoState,
+  verifySsoState,
+  type OidcExchanger,
+} from "./sso.js";
 
 export interface IdentityRouteDeps {
   config: AppConfig;
@@ -18,6 +29,8 @@ export interface IdentityRouteDeps {
   resolveTenant: (req: FastifyRequest) => TenantContext;
   now: () => Date;
   generateId: () => string;
+  /** OIDC token-exchange strategy (injectable so SSO is testable offline). */
+  oidcExchanger?: OidcExchanger;
 }
 
 interface LoginBody {
@@ -27,6 +40,14 @@ interface LoginBody {
 interface TokenBody {
   refreshToken?: unknown;
 }
+interface SsoCallbackBody {
+  code?: unknown;
+  state?: unknown;
+}
+
+/** Roles/scopes granted to a brand-new user provisioned via SSO. */
+const SSO_DEFAULT_ROLES: StandardRole[] = ["learner"];
+const SSO_DEFAULT_SCOPES = ["courses:read"];
 
 function signerOpts(config: AppConfig) {
   return {
@@ -243,4 +264,165 @@ export function registerAuthRoutes(
       });
     }
   });
+
+  registerSsoRoutes(app, deps);
+}
+
+/**
+ * SSO federation surface (OIDC). Two stateless calls:
+ *   - POST /auth/sso/:providerId/start    -> { authorizationUrl, state }
+ *   - POST /auth/sso/:providerId/callback -> first-party tokens
+ * The caller (BFF) redirects the browser to `authorizationUrl`, holds `state`
+ * in a cookie, and replays `{ code, state }` on the callback. Any
+ * misconfiguration or tampering fails closed with a clear error.
+ */
+function registerSsoRoutes(
+  app: FastifyInstance,
+  deps: IdentityRouteDeps,
+): void {
+  const exchanger = deps.oidcExchanger ?? defaultOidcExchanger;
+
+  app.post<{ Params: { providerId: string } }>(
+    "/auth/sso/:providerId/start",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+
+      const provider = await deps.store.findIdentityProvider(
+        ctx,
+        req.params.providerId,
+      );
+      if (!provider || !provider.isEnabled) {
+        return reply.code(404).send({
+          error: "provider_not_found",
+          message: "No enabled identity provider for this id.",
+        });
+      }
+      if (provider.kind !== "oidc") {
+        return reply.code(400).send({
+          error: "provider_unsupported",
+          message: `SSO kind '${provider.kind}' is not yet supported.`,
+        });
+      }
+
+      let oidc;
+      try {
+        oidc = parseOidcConfig(provider.config);
+      } catch (err) {
+        if (err instanceof ProviderMisconfiguredError) {
+          return reply.code(400).send({
+            error: "provider_misconfigured",
+            message: err.message,
+          });
+        }
+        throw err;
+      }
+
+      const { verifier, challenge } = generatePkce();
+      const nonce = generateNonce();
+      const state = await signSsoState(
+        {
+          providerId: provider.id,
+          tenantId: ctx.tenantId,
+          nonce,
+          codeVerifier: verifier,
+          redirectUri: oidc.redirectUri,
+        },
+        deps.config.JWT_SECRET,
+      );
+      const authorizationUrl = buildAuthorizationUrl(oidc, {
+        state,
+        nonce,
+        codeChallenge: challenge,
+      });
+      return reply.code(200).send({ authorizationUrl, state });
+    },
+  );
+
+  app.post<{ Params: { providerId: string } }>(
+    "/auth/sso/:providerId/callback",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+
+      const body = (req.body ?? {}) as SsoCallbackBody;
+      if (typeof body.code !== "string" || typeof body.state !== "string") {
+        return reply.code(400).send({
+          error: "invalid_request",
+          message: "code and state are required.",
+        });
+      }
+
+      // Verify the signed state first: tampering/expiry fails closed here.
+      let state;
+      try {
+        state = await verifySsoState(body.state, deps.config.JWT_SECRET);
+      } catch {
+        return reply.code(401).send({
+          error: "invalid_state",
+          message: "SSO state is invalid or expired.",
+        });
+      }
+      if (
+        state.providerId !== req.params.providerId ||
+        state.tenantId !== ctx.tenantId
+      ) {
+        return reply.code(401).send({
+          error: "invalid_state",
+          message: "SSO state does not match this request.",
+        });
+      }
+
+      const provider = await deps.store.findIdentityProvider(
+        ctx,
+        state.providerId,
+      );
+      if (!provider || !provider.isEnabled || provider.kind !== "oidc") {
+        return reply.code(400).send({
+          error: "provider_unavailable",
+          message: "Identity provider is unavailable.",
+        });
+      }
+
+      let oidc;
+      try {
+        oidc = parseOidcConfig(provider.config);
+      } catch (err) {
+        if (err instanceof ProviderMisconfiguredError) {
+          return reply.code(400).send({
+            error: "provider_misconfigured",
+            message: err.message,
+          });
+        }
+        throw err;
+      }
+
+      let identity;
+      try {
+        identity = await exchanger.exchange(oidc, {
+          code: body.code,
+          codeVerifier: state.codeVerifier,
+          nonce: state.nonce,
+        });
+      } catch (err) {
+        req.log.warn({ err }, "sso token exchange failed");
+        return reply.code(401).send({
+          error: "sso_exchange_failed",
+          message: "Could not complete sign-in with the identity provider.",
+        });
+      }
+
+      const user = await deps.store.upsertSsoUser(ctx, {
+        providerId: provider.id,
+        subject: identity.subject,
+        email: identity.email ?? `${identity.subject}@${provider.id}.sso`,
+        displayName: identity.displayName ?? identity.email ?? identity.subject,
+        defaultRoles: SSO_DEFAULT_ROLES,
+        defaultScopes: SSO_DEFAULT_SCOPES,
+      });
+
+      const tokens = await issueTokens(deps, ctx, user.id, deps.generateId());
+      return reply.code(200).send({ tokenType: "Bearer", ...tokens });
+    },
+  );
 }

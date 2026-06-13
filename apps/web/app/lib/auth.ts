@@ -18,6 +18,15 @@ export const TENANT_ID =
 
 export const ACCESS_COOKIE = "lms_at";
 export const REFRESH_COOKIE = "lms_rt";
+/** Holds the signed OIDC state between the SSO redirect and the callback. */
+export const SSO_STATE_COOKIE = "lms_sso_state";
+
+/**
+ * The identity provider to federate against for this surface. In production
+ * this is resolved per tenant; for local dev we pin the seeded demo provider.
+ */
+export const SSO_PROVIDER_ID =
+  process.env.SSO_PROVIDER_ID ?? "22222222-2222-2222-2222-222222222222";
 
 export const cookieBase = {
   httpOnly: true,

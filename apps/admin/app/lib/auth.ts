@@ -14,6 +14,15 @@ export const TENANT_ID =
 
 export const ACCESS_COOKIE = "lms_admin_at";
 export const REFRESH_COOKIE = "lms_admin_rt";
+/** Holds the signed OIDC state between the SSO redirect and the callback. */
+export const SSO_STATE_COOKIE = "lms_admin_sso_state";
+
+/**
+ * The identity provider to federate against for this surface. In production
+ * this is resolved per tenant; for local dev we pin the seeded demo provider.
+ */
+export const SSO_PROVIDER_ID =
+  process.env.SSO_PROVIDER_ID ?? "22222222-2222-2222-2222-222222222222";
 
 /** Roles permitted to use the admin console. */
 export const ADMIN_ROLES = ["org_admin", "super_admin"];

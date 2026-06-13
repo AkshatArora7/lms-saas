@@ -30,13 +30,14 @@ tools schools already use.
 | Personal calendar + iCal, mobile app | Standards/outcomes & mastery tracking | Per-tenant roles, permissions and policy rules |
 | AI study assistant grounded in their course | Engagement & at-risk dashboards | SSO + automatic roster sync from the SIS |
 | Accessible (WCAG 2.2 AA), multilingual | Announcements & targeted notifications | Plans, seats, usage metering & consolidated invoicing |
+| Class timetable + attendance record | Take attendance with your school's codes | Timetables (conflict-checked) & attendance oversight |
 
 **Headline capabilities:** course & curriculum management · content (incl.
 SCORM/xAPI) · assignments & submissions · quizzes & question banks · gradebook ·
 rubrics, competencies & outcomes · discussions · announcements & multi-channel
-notifications · calendar · analytics & reporting · AI assistant · video ·
-search · billing · audit & compliance · mobile — across **25 services**, each a
-clean bounded context.
+notifications · calendar · timetable scheduling · attendance · analytics &
+reporting · AI assistant · video · search · billing · audit & compliance ·
+mobile — across **26 services**, each a clean bounded context.
 
 > **Looking for features by user type?** See
 > [`docs/FEATURES.md`](docs/FEATURES.md) — a plain-language guide to what we
@@ -62,8 +63,8 @@ clean bounded context.
 ## Features — what the LMS provides
 
 Each capability area below lists **what you can actually do**, plus a short *why
-it matters* and a one-line *under the hood*. The areas map to the 25 services and
-the 23 product epics tracked on the GitHub board.
+it matters* and a one-line *under the hood*. The areas map to the 26 services and
+the 24 product epics tracked on the GitHub board.
 
 ### 1. Multi-tenancy & sub-tenants
 
@@ -248,17 +249,26 @@ Reach the right people on the right channel.
 *Why it matters.* Timely, preference-aware communication drives engagement.
 *Under the hood.* `notification` service; central fanout consumer.
 
-### 14. Calendar & scheduling
+### 14. Calendar, timetable & scheduling
 
-One place for everything that's due.
+One place for everything that's due — and where to be, when.
 
 **What you can do**
 - See a **unified calendar** of deadlines and events aggregated from across the
   platform.
 - Subscribe via **iCal** in any calendar app.
+- Define **bell schedules** (named periods + times, incl. A/B-day or weekday
+  patterns) per school.
+- Build the **class timetable** — assign each section to a **period, room and
+  teacher** within a term, with **conflict detection** (no double-booked rooms or
+  teachers).
+- Give every student and teacher a **personal weekly timetable** that merges into
+  their calendar/iCal feed.
 
-*Why it matters.* Reduces missed deadlines. *Under the hood.* `calendar` service
-aggregates due dates; serves `.ics`.
+*Why it matters.* Reduces missed deadlines and gives K-12 schools the daily
+scheduling backbone other LMSs lack. *Under the hood.* `calendar` service
+aggregates due dates and timetable meetings; serves `.ics`; owns
+`bell_schedule` / `schedule_period` / `timetable_entry`.
 
 ### 15. Analytics & reporting
 
@@ -350,7 +360,7 @@ aggregates services into mobile-shaped responses.
 
 ### 22. Platform, CI/CD & observability
 
-Operate 25 services reliably.
+Operate 26 services reliably.
 
 **What you get**
 - Per-service **deploy pipelines** (GHCR → container host) and a **DB migration
@@ -368,6 +378,25 @@ Usable by everyone, in any language.
 **What you get**
 - **WCAG 2.2 AA** across core flows.
 - **Internationalization & localization** for multilingual institutions.
+
+### 24. Attendance & participation
+
+Take attendance fast, track it accurately, report it confidently.
+
+**What you can do**
+- Define **per-tenant attendance codes** and map each to a reporting category
+  (present / absent / tardy / excused) — every school owns its own vocabulary.
+- **Take attendance per class meeting** with the **roster pre-filled** from the
+  section's enrolment and timetable; mark, annotate, then **finalize** to lock.
+- Track **attendance rates** and **chronic-absence flags** per student and
+  section, and **export** for compliance and SIS sync.
+- Keep **students and parents informed** — attendance history in their views and
+  **absence/tardy notifications** on their preferred channel.
+
+*Why it matters.* Attendance is a core K-12 compliance and early-warning
+requirement that generic LMSs lack. *Under the hood.* `attendance` service owns
+`attendance_code` / `attendance_session` / `attendance_record`; codes are
+tenant-isolated via RLS; marking emits events to `notification` and `analytics`.
 
 ---
 
@@ -413,7 +442,7 @@ clients (web / mobile)
   → Vercel Edge (CDN + WAF)
   → gateway (JWT validation, rate limit, tenant resolution)
   → Next.js Route Handlers (Web BFF) / mobile-bff
-  → 25 domain microservices (Fastify, one DB boundary each)
+  → 26 domain microservices (Fastify, one DB boundary each)
   → Postgres (pool + silo) / Vercel Blob / Upstash / pgvector
 events: services → outbox (Postgres) → QStash → consumers (analytics, notification, …)
 ```
@@ -423,11 +452,11 @@ events: services → outbox (Postgres) → QStash → consumers (analytics, noti
   (exactly-once via `idempotency_key`).
 - **Tenant isolation (defense in depth):** in-code tenant filter **+** engine-level
   **RLS** keyed on a request-scoped `app.tenant_id` **+** a non-superuser DB role.
-- **The 25 services:** `gateway` · `identity` · `tenant` · `user-org` ·
+- **The 26 services:** `gateway` · `identity` · `tenant` · `user-org` ·
   `enrollment` · `course` · `content` · `assignment` · `assessment` · `grading` ·
   `discussion` · `announcement` · `notification` · `calendar` · `rubric` ·
   `analytics` · `reporting` · `ai` · `lti` · `sis` · `video` · `search` ·
-  `billing` · `audit` · `mobile-bff`.
+  `billing` · `audit` · `mobile-bff` · `attendance`.
 
 Full per-service specs (responsibility, tables, endpoints, events, dependencies):
 [`docs/services/`](docs/services). Architecture detail:
@@ -439,7 +468,7 @@ Full per-service specs (responsibility, tables, endpoints, events, dependencies)
 
 ```
 apps/        web (learner/instructor + Web BFF), admin            → Vercel
-services/    25 domain microservices (Fastify; Dockerfile → GHCR)
+services/    26 domain microservices (Fastify; Dockerfile → GHCR)
 packages/    db, types, auth, config, events, logger, ui, tsconfig, eslint-config
 database/    schema.sql (canonical DDL), policies/ (RLS), seed/
 docs/        ARCHITECTURE · MULTI_TENANCY · DEPLOYMENT · STANDARDS · services/ · backlog/ · diagrams/
@@ -507,7 +536,7 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 - **GitHub Project board:** **LMS Delivery** — every epic, user story, task and
   bug lives on the board.
 - **Backlog source of truth:** [`docs/backlog/`](docs/backlog) — `backlog.json`
-  (23 epics) → GitHub issues/labels/milestones via
+  (24 epics) → GitHub issues/labels/milestones via
   [`scripts/github/seed-backlog.ps1`](scripts/github/seed-backlog.ps1) (idempotent).
 - **Rules for contributors / AI agents:** [`AGENTS.md`](AGENTS.md) — story-first
   workflow, isolation guardrails, and the multi-agent delegation model.

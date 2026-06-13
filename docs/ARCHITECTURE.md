@@ -1,7 +1,7 @@
 # Architecture
 
 A multi-tenant SaaS LMS competing with D2L Brightspace. The domain design follows
-a microservices decomposition (~25 services, database-per-service boundaries) with
+a microservices decomposition (~26 services, database-per-service boundaries) with
 an event-driven analytics pipeline. The original blueprint targeted Azure + .NET;
 this repository **re-platforms it onto GitHub + Vercel + serverless** per project
 direction (no AWS/Azure).

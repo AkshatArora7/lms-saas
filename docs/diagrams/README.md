@@ -5,7 +5,7 @@ Open) or with the Draw.io VS Code extension.
 
 - **master-architecture.drawio** — the re-platformed (GitHub + Vercel +
   serverless) master architecture: clients → Vercel Edge → gateway/BFF →
-  25 microservices → Postgres (pool/silo) / Vercel Blob / Upstash / pgvector,
+  26 microservices → Postgres (pool/silo) / Vercel Blob / Upstash / pgvector,
   with the outbox→QStash event pipeline and external integrations.
 
 The source blueprint (`/docs` references) also contains sequence diagrams

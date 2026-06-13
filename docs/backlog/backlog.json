@@ -186,6 +186,11 @@
       "name": "area/a11y",
       "color": "bfdadc",
       "description": "Accessibility & internationalization"
+    },
+    {
+      "name": "area/attendance",
+      "color": "fef2c0",
+      "description": "Attendance & participation"
     }
   ],
   "epics": [
@@ -1005,6 +1010,48 @@
             "iCal feed subscription",
             "Timezone-correct"
           ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 8,
+          "title": "Define bell schedules and class periods",
+          "as_a": "school administrator",
+          "i_want": "to configure the daily bell schedule and named periods for my school",
+          "so_that": "classes, rooms and teachers can be slotted into a consistent timetable",
+          "ac": [
+            "Create one or more bell schedules per school (org unit)",
+            "Each schedule has ordered periods with start/end times and a day pattern (e.g. A/B day, Mon-Fri)",
+            "Periods are tenant-isolated and reusable across sections"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 8,
+          "title": "Build the class timetable (section x period x room x teacher)",
+          "as_a": "school administrator",
+          "i_want": "to assign each section to periods, a room and an instructor within an academic session",
+          "so_that": "students and teachers have a clear recurring class schedule",
+          "ac": [
+            "A timetable entry links a section (org unit) to a period, room, instructor and day(s)",
+            "Conflicts (same room/teacher/period overlap) are detected and flagged",
+            "Entries are scoped to an academic session and respect timezone"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "See my personal timetable",
+          "as_a": "student or teacher",
+          "i_want": "to view my recurring weekly timetable and have it merge into my calendar/iCal feed",
+          "so_that": "I always know where and when my classes are",
+          "ac": [
+            "Personal timetable derived from enrollments/teaching assignments",
+            "Merged into the unified calendar and iCal subscription feed",
+            "Reflects room, period times and day pattern"
+          ]
         }
       ]
     },
@@ -1409,6 +1456,73 @@
             "i18n framework with locale resources",
             "Per-user locale (app_user.locale)",
             "RTL support"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "E24",
+      "title": "EPIC: Attendance & Participation",
+      "milestone": "M4 — Engagement & Insight",
+      "labels": [
+        "area/attendance"
+      ],
+      "summary": "Take, track and report class attendance with per-tenant attendance codes, timetable-driven rosters and exports for compliance/SIS.",
+      "stories": [
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "Configure per-tenant attendance codes",
+          "as_a": "school administrator",
+          "i_want": "to define my own attendance codes and how each maps to present/absent/tardy/excused",
+          "so_that": "attendance reflects our school's policy and reporting categories",
+          "ac": [
+            "Each tenant owns its set of attendance codes (label + category + flags)",
+            "Sensible defaults seeded; codes are tenant-isolated via RLS",
+            "Codes drive the options teachers see when taking attendance"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "Take attendance for a class meeting",
+          "as_a": "teacher",
+          "i_want": "to open a class meeting and mark each student present/absent/tardy/excused",
+          "so_that": "attendance is recorded accurately for every session",
+          "ac": [
+            "Roster is derived from the section enrollment (and timetable entry when present)",
+            "One record per student per meeting; teacher can edit until the session is finalized",
+            "Marking emits an event so notifications/analytics can react"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 5,
+          "title": "View attendance summaries and flags",
+          "as_a": "teacher or administrator",
+          "i_want": "to see attendance rates and chronic-absence flags by student, section and date range",
+          "so_that": "I can intervene early and meet reporting duties",
+          "ac": [
+            "Per-student and per-section attendance percentages",
+            "Configurable chronic-absence threshold raises a flag",
+            "Exportable (CSV/OneRoster) for compliance and SIS sync"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 3,
+          "title": "Parents and students see attendance",
+          "as_a": "parent or student",
+          "i_want": "to see attendance history and be notified of absences/tardies",
+          "so_that": "we stay informed and can resolve errors quickly",
+          "ac": [
+            "Attendance history visible in the learner/guardian view",
+            "Absence/tardy notifications respect notification preferences",
+            "Only the guardian's linked children are visible (tenant + relationship scoped)"
           ]
         }
       ]

@@ -808,6 +808,107 @@ CREATE TABLE IF NOT EXISTS calendar_event (
 CREATE INDEX IF NOT EXISTS ix_calendar_ou_time ON calendar_event(org_unit_id, starts_at);
 
 -- ============================================================================
+-- TIMETABLE & CLASS SCHEDULING
+-- ============================================================================
+-- A bell schedule defines the rhythm of a school day (named periods + times);
+-- timetable entries slot sections into periods with a room and instructor.
+CREATE TABLE IF NOT EXISTS bell_schedule (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  org_unit_id uuid NOT NULL REFERENCES org_unit(id) ON DELETE CASCADE,
+  name        text NOT NULL,
+  timezone    text NOT NULL DEFAULT 'UTC',
+  is_default  boolean NOT NULL DEFAULT false,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (org_unit_id, name)
+);
+CREATE INDEX IF NOT EXISTS ix_bell_schedule_ou ON bell_schedule(org_unit_id);
+
+-- Ordered named periods within a bell schedule (e.g. 'Period 1', 'Homeroom').
+CREATE TABLE IF NOT EXISTS schedule_period (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id        uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  bell_schedule_id uuid NOT NULL REFERENCES bell_schedule(id) ON DELETE CASCADE,
+  name             text NOT NULL,
+  sort_order       int  NOT NULL DEFAULT 0,
+  start_time       time NOT NULL,
+  end_time         time NOT NULL,
+  day_pattern      text NOT NULL DEFAULT 'daily',  -- 'daily','A','B','MWF','TR', etc.
+  UNIQUE (bell_schedule_id, name, day_pattern)
+);
+CREATE INDEX IF NOT EXISTS ix_schedule_period_bs ON schedule_period(bell_schedule_id, sort_order);
+
+-- A recurring class meeting: a section meets in a period, room and (optionally)
+-- on a specific weekday, taught by an instructor, within an academic session.
+CREATE TABLE IF NOT EXISTS timetable_entry (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id           uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  org_unit_id         uuid NOT NULL REFERENCES org_unit(id) ON DELETE CASCADE,
+  period_id           uuid NOT NULL REFERENCES schedule_period(id) ON DELETE CASCADE,
+  academic_session_id uuid REFERENCES academic_session(id) ON DELETE SET NULL,
+  instructor_id       uuid REFERENCES app_user(id) ON DELETE SET NULL,
+  room                text,
+  day_of_week         int CHECK (day_of_week BETWEEN 0 AND 6),  -- 0=Sunday; null => use period day_pattern
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (org_unit_id, period_id, day_of_week)
+);
+CREATE INDEX IF NOT EXISTS ix_timetable_entry_ou ON timetable_entry(org_unit_id);
+CREATE INDEX IF NOT EXISTS ix_timetable_entry_period ON timetable_entry(period_id);
+CREATE INDEX IF NOT EXISTS ix_timetable_entry_instructor ON timetable_entry(instructor_id);
+
+-- ============================================================================
+-- ATTENDANCE & PARTICIPATION
+-- ============================================================================
+-- Per-tenant attendance vocabulary; each code maps to a reporting category.
+CREATE TABLE IF NOT EXISTS attendance_code (
+  tenant_id   uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  code        text NOT NULL,             -- e.g. 'P','A','T','EX','RL'
+  label       text NOT NULL,
+  category    text NOT NULL CHECK (category IN ('present','absent','tardy','excused')),
+  is_default  boolean NOT NULL DEFAULT false,
+  PRIMARY KEY (tenant_id, code)
+);
+
+-- One attendance-taking event for a section on a date/period.
+CREATE TABLE IF NOT EXISTS attendance_session (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id          uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  org_unit_id        uuid NOT NULL REFERENCES org_unit(id) ON DELETE CASCADE,
+  timetable_entry_id uuid REFERENCES timetable_entry(id) ON DELETE SET NULL,
+  meeting_date       date NOT NULL,
+  period_label       text,
+  status             text NOT NULL DEFAULT 'open'
+                        CHECK (status IN ('open','finalized')),
+  taken_by           uuid REFERENCES app_user(id) ON DELETE SET NULL,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  updated_at         timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (org_unit_id, meeting_date, period_label)
+);
+CREATE INDEX IF NOT EXISTS ix_attendance_session_ou
+  ON attendance_session(org_unit_id, meeting_date);
+CREATE TRIGGER trg_attendance_session_updated BEFORE UPDATE ON attendance_session
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Per-student status within an attendance session (one row per student).
+CREATE TABLE IF NOT EXISTS attendance_record (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id    uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  session_id   uuid NOT NULL REFERENCES attendance_session(id) ON DELETE CASCADE,
+  user_id      uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  code         text NOT NULL,
+  minutes_late int,
+  comment      text,
+  recorded_by  uuid REFERENCES app_user(id) ON DELETE SET NULL,
+  recorded_at  timestamptz NOT NULL DEFAULT now(),
+  FOREIGN KEY (tenant_id, code) REFERENCES attendance_code(tenant_id, code),
+  UNIQUE (session_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS ix_attendance_record_user
+  ON attendance_record(tenant_id, user_id);
+CREATE INDEX IF NOT EXISTS ix_attendance_record_session
+  ON attendance_record(session_id);
+
+-- ============================================================================
 -- NOTIFICATIONS  (multi-channel)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS notification_preference (

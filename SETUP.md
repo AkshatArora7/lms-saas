@@ -107,7 +107,7 @@ build/test you can leave most blank. The ones that matter to actually run things
 | `CONTROL_PLANE_DATABASE_URL` | Tenant registry / silo routing | can equal `DATABASE_URL` locally |
 | `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE` | Token signing/verification | any dev values |
 | `TENANT_MODE`, `DEFAULT_TENANT_TIER` | Tenancy behaviour | leave defaults (`hybrid` / `pool`) |
-| `*_URL` (service ports 4000-4024) | Gateway routing between services | leave defaults |
+| `*_URL` (service ports 4000-4025) | Gateway routing between services | leave defaults |
 
 Feature-specific (only when working on those areas): `NEON_API_KEY`,
 `BLOB_READ_WRITE_TOKEN`, `UPSTASH_*`, `QSTASH_*`, `CIAM_*`, `GROQ_API_KEY`.
@@ -159,7 +159,7 @@ pnpm db:migrate       # apply migrations (deploy/CI)
 pnpm dev        # Turborepo runs the apps + services together
 ```
 
-Services listen on ports **4000–4024** (see the `*_URL` entries in `.env`); the
+Services listen on ports **4000–4025** (see the `*_URL` entries in `.env`); the
 `gateway` is the front door at `4000`. Each service exposes `GET /health`.
 
 Run a single workspace instead of everything:

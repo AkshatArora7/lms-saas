@@ -6,22 +6,26 @@
 
 ## Responsibility
 
-Calendar events, deadlines, and iCal feed generation.
+Calendar events, deadlines, iCal feeds, and timetable/class scheduling (bell schedules, periods, section-period-room-teacher assignments).
 
 ## Owned tables
 
-`calendar_event`
+`calendar_event`, `bell_schedule`, `schedule_period`, `timetable_entry`
 
 ## Key endpoints
 
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/events` | Create an event/deadline. |
-| `GET` | `/users/{id}/calendar.ics` | Personal iCal feed. |
+| `GET` | `/users/{id}/calendar.ics` | Personal iCal feed (events + timetable). |
+| `POST` | `/schedules` | Create a bell schedule with named periods/times. |
+| `POST` | `/timetable` | Assign a section to a period, room and instructor; detects conflicts. |
+| `GET` | `/users/{id}/timetable` | Personal recurring weekly timetable. |
 
 ## Events published
 
 - `calendar.event.created`
+- `timetable.entry.scheduled`
 
 ## Events consumed
 
@@ -32,10 +36,11 @@ Calendar events, deadlines, and iCal feed generation.
 ## Dependencies
 
 - notification (reminders)
+- user-org (sections/instructors)
 
 ## Notes
 
-Aggregates deadlines from other contexts into a unified calendar/iCal feed.
+Aggregates deadlines and timetable meetings into a unified calendar/iCal feed. Room/teacher/period conflicts are validated on write.
 
 ## Cross-cutting
 

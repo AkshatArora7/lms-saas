@@ -30,7 +30,9 @@ DECLARE
     'academic_session','announcement','calendar_event','notification',
     'notification_preference','video_asset','ai_embedding','ai_chat',
     'ai_message','caliper_event','engagement_summary','sis_id_map','invoice',
-    'usage_meter','tenant_setting','tenant_branding'
+    'usage_meter','tenant_setting','tenant_branding',
+    'bell_schedule','schedule_period','timetable_entry',
+    'attendance_code','attendance_session','attendance_record'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

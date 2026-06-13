@@ -22,7 +22,7 @@ Milestone (M0…M5)         when — a release/phase
        └─ Story/Task/Bug  a shippable increment with acceptance criteria
 ```
 
-- **Epics** (23) map to the product's bounded contexts and the 25 microservices.
+- **Epics** (24) map to the product's bounded contexts and the 26 microservices.
 - **User stories** use the canonical form: _As a `<role>`, I want `<goal>`, so that
   `<benefit>`_, each with a checklist of **acceptance criteria** (definition of done).
 - **Tasks** are technical work with no direct user story; **bugs** are defects;

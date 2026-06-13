@@ -21,7 +21,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [discussion](discussion.md) | 4010 | JSONB | `discussion_forum`, `discussion_topic`, `discussion_post` |
 | [announcement](announcement.md) | 4011 | Postgres | `announcement` |
 | [notification](notification.md) | 4012 | Postgres + Redis | `notification`, `notification_preference`, `intelligent_agent` |
-| [calendar](calendar.md) | 4013 | Postgres | `calendar_event` |
+| [calendar](calendar.md) | 4013 | Postgres | `calendar_event`, `bell_schedule`, `schedule_period`, `timetable_entry` |
 | [rubric](rubric.md) | 4014 | Postgres | `rubric`, `rubric_criterion`, `rubric_level`, `competency`, `learning_objective`, `objective_alignment` |
 | [analytics](analytics.md) | 4015 | Postgres | `caliper_event`, `engagement_summary`, `xapi_statement` |
 | [reporting](reporting.md) | 4016 | read replicas | - |
@@ -33,6 +33,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [billing](billing.md) | 4022 | Postgres | `invoice`, `usage_meter` |
 | [audit](audit.md) | 4023 | Postgres (ledger) | `audit_log` |
 | [mobile-bff](mobile-bff.md) | 4024 | stateless | - |
+| [attendance](attendance.md) | 4025 | Postgres | `attendance_code`, `attendance_session`, `attendance_record` |
 
 ## Event catalogue
 
@@ -46,6 +47,8 @@ Domain events flow producer -> `event_outbox` -> QStash -> consumer `event_inbox
 | `announcement.published` | announcement | notification, calendar |
 | `assignment.created` | assignment | notification, calendar |
 | `assignment.created (create line item)` | - | grading |
+| `attendance.marked` | attendance | - |
+| `attendance.session.finalized` | attendance | - |
 | `audit.dsar.completed` | audit | - |
 | `billing.seat.rejected` | billing | enrollment |
 | `billing.seat.reserved` | billing | enrollment |
@@ -66,7 +69,7 @@ Domain events flow producer -> `event_outbox` -> QStash -> consumer `event_inbox
 | `discussion.topic.created` | discussion | - |
 | `engagement.summary.updated` | analytics | - |
 | `enrollment.completed` | enrollment | - |
-| `enrollment.created` | enrollment | notification |
+| `enrollment.created` | enrollment | notification, attendance |
 | `enrollment.created (reserve)` | - | billing |
 | `enrollment.dropped` | enrollment | - |
 | `enrollment.dropped (release)` | - | billing |
@@ -107,6 +110,7 @@ Domain events flow producer -> `event_outbox` -> QStash -> consumer `event_inbox
 | `tenant.subtenant.linked` | tenant | - |
 | `tenant.suspended` | tenant | - |
 | `term.created` | - | course |
+| `timetable.entry.scheduled` | calendar | attendance |
 | `user.created` | user-org | - |
 | `user.created (auto-provision identity link)` | - | identity |
 | `user.deactivated` | user-org | - |
@@ -134,7 +138,7 @@ Domain events flow producer -> `event_outbox` -> QStash -> consumer `event_inbox
 | discussion | ai, notification |
 | announcement | calendar, notification |
 | notification | analytics |
-| calendar | notification |
+| calendar | notification, user-org |
 | rubric | analytics, grading |
 | analytics | notification, reporting |
 | reporting | - |
@@ -146,6 +150,7 @@ Domain events flow producer -> `event_outbox` -> QStash -> consumer `event_inbox
 | billing | tenant |
 | audit | - |
 | mobile-bff | calendar, course, grading, identity, notification |
+| attendance | calendar, enrollment, notification, reporting |
 
 ## Cross-cutting tables
 

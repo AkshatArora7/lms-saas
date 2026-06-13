@@ -89,6 +89,16 @@ everything up and keep it running. Each admin only ever manages their own scope.
 - **Delegate safely.** A district admin can grant a **school admin** rights
   limited to **their school only** — they can't see sibling schools.
 
+### Timetables and bell schedules
+
+- **Define your bell schedule** — the named periods (e.g. "Period 1",
+  "Homeroom") and their times, including A/B-day or weekday patterns.
+- **Build the class timetable** — assign each section to a **period, room and
+  teacher** within an academic term, with **conflict detection** so the same
+  room or teacher is never double-booked.
+- **Feeds everywhere it's needed** — timetables flow into everyone's calendar
+  and iCal feed, and seed the rosters teachers use to take attendance.
+
 ### Control who can do what — with *your own* rules
 
 - **Define your own roles** (e.g. "Teacher", "Department Head", "Exam Officer")
@@ -112,6 +122,9 @@ everything up and keep it running. Each admin only ever manages their own scope.
   schools** in one place (while each school's row-level data stays isolated).
 - **Compliance & accreditation exports** — scheduled or on-demand (CSV / PDF /
   OneRoster).
+- **Attendance policy & oversight** — define your school's **attendance codes**
+  (and how each maps to present/absent/tardy/excused), and monitor attendance
+  rates and **chronic-absence flags** across sections.
 - **Plans, seats and usage** — manage subscriptions, see seat usage, and get
   **district-consolidated invoicing**.
 - **Audit & data requests** — review the audit trail and fulfil data
@@ -162,9 +175,18 @@ students are doing.*
 - **Engagement & at-risk dashboards** show who's active, who's falling behind, and
   where to intervene.
 - A **unified calendar** keeps all your course's deadlines in one place (with an
-  iCal feed).
+  iCal feed), alongside your **weekly teaching timetable** (periods, rooms).
 - An **AI teaching helper** can **generate quiz questions** from your course
   material.
+
+### Take attendance
+
+- **Take attendance in seconds** — open the class meeting and the **roster is
+  ready** from the section's enrolment and timetable.
+- **Mark each student** present, absent, tardy or excused using your school's own
+  **attendance codes**, add a note, then **finalize** to lock the session.
+- **Spot patterns early** — per-student and per-section rates with
+  **chronic-absence flags**; marks flow into reports and notify families.
 
 ---
 
@@ -193,6 +215,9 @@ students are doing.*
 
 - A **personal calendar** gathers every deadline across your courses, and you can
   **subscribe via iCal** in your own calendar app.
+- Your **class timetable** shows where you need to be — periods, rooms and times —
+  for every day of the week.
+- **See your own attendance** record across courses, so there are no surprises.
 - **Notifications** keep you informed on the channel you prefer, with **unread
   counts** and quiet hours you control.
 - **Search** across your content, courses and discussions — fast and scoped only
@@ -224,6 +249,8 @@ own child only.*
   enables it), with the same clear gradebook view.
 - **See upcoming deadlines** for assignments and quizzes through the shared
   calendar, so you can help your child plan.
+- **Follow your child's attendance** — absences and tardies, with notifications
+  when they happen so issues can be resolved quickly.
 - **View course announcements** that keep you in the loop on what's happening.
 
 ### Stay informed, your way
@@ -245,7 +272,7 @@ own child only.*
 
 ## Where this maps in the product
 
-Every capability above is delivered by one of the platform's 25 services and is
+Every capability above is delivered by one of the platform's 26 services and is
 tracked as a user story on the **LMS Delivery** GitHub board. For the engineering
 view see [`services/`](services), [`ARCHITECTURE.md`](ARCHITECTURE.md), and the
 [backlog](backlog/). The complete, mixed-audience feature catalogue also lives in

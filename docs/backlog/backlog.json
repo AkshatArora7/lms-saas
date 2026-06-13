@@ -191,6 +191,11 @@
       "name": "area/attendance",
       "color": "fef2c0",
       "description": "Attendance & participation"
+    },
+    {
+      "name": "area/web",
+      "color": "0e8a16",
+      "description": "Learner & admin web frontends (Next.js)"
     }
   ],
   "epics": [
@@ -1523,6 +1528,62 @@
             "Attendance history visible in the learner/guardian view",
             "Absence/tardy notifications respect notification preferences",
             "Only the guardian's linked children are visible (tenant + relationship scoped)"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "E25",
+      "title": "EPIC: Web & Admin Frontends",
+      "milestone": "M1 — Tenant + Identity MVP",
+      "labels": [
+        "area/web"
+      ],
+      "summary": "The learner/instructor web app and the admin console: tenant-branded Next.js surfaces that authenticate against the identity service and render role-aware, session-protected experiences.",
+      "stories": [
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 5,
+          "title": "Learner web sign-in and session",
+          "as_a": "student or teacher",
+          "i_want": "to sign in to the learner web app with my email and password",
+          "so_that": "I land on a session-protected home that knows who I am",
+          "ac": [
+            "/login posts credentials to a server-side BFF route that proxies the identity service",
+            "Access and refresh tokens are stored in httpOnly, secure, sameSite cookies (never exposed to client JS)",
+            "Unauthenticated visits to protected pages redirect to /login",
+            "Home shows the signed-in user's identity, roles and tenant from /auth/me",
+            "Sign out revokes the refresh-token family and clears cookies"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P0",
+          "points": 5,
+          "title": "Admin console sign-in with role gating",
+          "as_a": "tenant administrator",
+          "i_want": "to sign in to the admin console and be blocked unless I hold an admin role",
+          "so_that": "only authorized staff reach tenant administration tooling",
+          "ac": [
+            "Same secure BFF cookie pattern as the learner app",
+            "After login, a user lacking an admin role sees an explicit 'not authorized' state, not the console",
+            "The console home greets the admin and lists their effective roles/scopes",
+            "Sign out clears the session and returns to /login"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 3,
+          "title": "Per-tenant branding on the web surfaces",
+          "as_a": "school",
+          "i_want": "the web app and admin console to carry our name and theme",
+          "so_that": "the experience feels like our own product, not a generic LMS",
+          "ac": [
+            "Tenant context resolves a display name and theme colour at the edge",
+            "Login and home reflect the tenant's brand name",
+            "Defaults apply cleanly when a tenant has no custom branding"
           ]
         }
       ]

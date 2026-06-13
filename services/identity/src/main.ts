@@ -21,6 +21,7 @@ import Fastify, {
 } from "fastify";
 
 import { registerAuthRoutes, type IdentityRouteDeps } from "./routes.js";
+import { createSeededMemoryStore } from "./store.memory.js";
 import { createPrismaStore } from "./store.prisma.js";
 
 const SERVICE = "identity";
@@ -85,11 +86,28 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
 const port = Number(process.env.PORT ?? 4001);
 
+/**
+ * Local dev convenience: `IDENTITY_STORE=memory` runs the auth surface against
+ * an in-memory store seeded with demo accounts so the web/admin sign-in flow
+ * works end-to-end without a Postgres database. Production leaves this unset and
+ * uses the RLS-backed Prisma store.
+ */
+const useMemoryStore = process.env.IDENTITY_STORE === "memory";
+
 async function start(): Promise<void> {
   try {
-    const app = buildApp();
+    if (useMemoryStore) {
+      // Supply throwaway defaults so loadConfig() succeeds without real infra.
+      process.env.DATABASE_URL ??= "postgres://demo:demo@localhost:5432/demo";
+      process.env.JWT_SECRET ??= "local-dev-secret-not-for-production";
+    }
+    const store = useMemoryStore ? await createSeededMemoryStore() : undefined;
+    const app = buildApp(store ? { store } : {});
     await app.listen({ port, host: "0.0.0.0" });
-    log.info({ port }, `${SERVICE} service listening`);
+    log.info(
+      { port, store: useMemoryStore ? "memory(demo)" : "prisma" },
+      `${SERVICE} service listening`,
+    );
   } catch (err) {
     log.error({ err }, `failed to start ${SERVICE} service`);
     process.exit(1);

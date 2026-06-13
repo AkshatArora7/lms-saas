@@ -169,6 +169,31 @@ pnpm --filter @lms/identity dev      # one service
 pnpm --filter web dev                # the web app
 ```
 
+### Try the demo sign-in (no database required)
+
+The identity service ships a local dev mode that runs against an in-memory
+store seeded with demo accounts, so you can exercise the full sign-in flow
+without standing up Postgres:
+
+```bash
+# 1. Identity in demo mode (seeds admin@demo.school / student@demo.school)
+IDENTITY_STORE=memory pnpm --filter @lms/service-identity build
+IDENTITY_STORE=memory PORT=4001 node services/identity/dist/main.js
+
+# 2. The learner web app (http://localhost:3000) and admin console (http://localhost:3001)
+pnpm --filter @lms/web dev
+pnpm --filter @lms/admin dev
+```
+
+Sign in at `/login` with **admin@demo.school** or **student@demo.school**
+(password `password123`). The apps proxy the identity service from their own
+server (a thin BFF) and keep tokens in httpOnly cookies — the browser never
+sees a raw token. The admin console additionally requires an admin role, so the
+student account lands on a "not authorized" screen.
+
+> On Windows PowerShell, set the env var separately:
+> `$env:IDENTITY_STORE="memory"; $env:PORT="4001"; node services/identity/dist/main.js`
+
 ---
 
 ## 7. Everyday commands

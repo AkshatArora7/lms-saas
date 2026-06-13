@@ -470,6 +470,9 @@ AGENTS.md    rules every contributor/AI agent must follow
 
 ## Getting started
 
+> **New collaborator?** Start with [`SETUP.md`](SETUP.md) — a step-by-step guide
+> from a fresh clone to a running, understood project.
+
 ```bash
 pnpm install
 cp .env.example .env            # fill in DATABASE_URL, JWT_SECRET, etc.

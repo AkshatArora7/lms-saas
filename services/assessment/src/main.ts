@@ -1,27 +1,68 @@
 /**
  * assessment service.
- * Quizzes, question banks, QTI import/export, attempts, auto-grading, timed/proctored assessments. Write-heavy during exams; emits Caliper AssessmentEvent.
+ * Quizzes, question banks, sectioned exams with random draw, timed/secured
+ * attempts, and synchronous auto-grading of objective items (subjective items
+ * route to the gradebook). Sits behind the gateway, which authenticates requests
+ * and forwards the resolved tenant as `x-tenant-id`.
  *
  * Lightweight Fastify HTTP service. Each request resolves a TenantContext
  * (pool vs silo) and runs domain work through @lms/db.withTenant so Postgres
  * RLS scopes every query. Deployable as a container image (Dockerfile ->
  * GHCR -> container host) or, for edge/BFF roles, as Vercel Functions.
  */
-import Fastify, { type FastifyInstance } from "fastify";
-
-import { loadConfig } from "@lms/config";
+import { loadConfig, type AppConfig } from "@lms/config";
 import { createLogger } from "@lms/logger";
+import type { TenantContext } from "@lms/types";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyRequest,
+} from "fastify";
+
+import {
+  registerAssessmentRoutes,
+  type AssessmentRouteDeps,
+} from "./routes.js";
+import { createSeededMemoryStore } from "./store.memory.js";
+import { createPrismaStore } from "./store.prisma.js";
 
 const SERVICE = "assessment";
 const log = createLogger(SERVICE);
+
+/** Overridable dependencies — tests inject an in-memory store. */
+export interface BuildAppOptions {
+  config?: AppConfig;
+  store?: AssessmentRouteDeps["store"];
+  resolveTenant?: AssessmentRouteDeps["resolveTenant"];
+}
+
+/**
+ * Default tenant resolution: the gateway authenticates the request and forwards
+ * the verified tenant as `x-tenant-id`. Pool tenants share DATABASE_URL; silo
+ * routing is resolved upstream and is out of scope for a domain service.
+ */
+function headerTenantResolver(
+  config: AppConfig,
+): (req: FastifyRequest) => TenantContext {
+  return (req) => {
+    const tenantId = req.headers["x-tenant-id"];
+    if (typeof tenantId !== "string" || tenantId.length === 0) {
+      throw new Error("missing x-tenant-id");
+    }
+    return {
+      tenantId,
+      tier: config.DEFAULT_TENANT_TIER,
+      databaseUrl: config.DATABASE_URL,
+    };
+  };
+}
 
 /**
  * Build the Fastify app without binding a port, so tests can drive it via
  * `app.inject(...)`. Config is resolved lazily here (not at import time) to
  * keep the module import side-effect free.
  */
-export function buildApp(): FastifyInstance {
-  const config = loadConfig();
+export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
+  const config = options.config ?? loadConfig();
   const app = Fastify({ logger: false });
 
   app.get("/health", async () => ({
@@ -31,19 +72,37 @@ export function buildApp(): FastifyInstance {
     uptime: process.uptime(),
   }));
 
-  // TODO: register domain routes (see /docs/ARCHITECTURE.md). Tenant-resolution
-  // middleware and RLS-scoped handlers are added per bounded context.
+  registerAssessmentRoutes(app, {
+    config,
+    store: options.store ?? createPrismaStore(),
+    resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+  });
 
   return app;
 }
 
 const port = Number(process.env.PORT ?? 4008);
 
+/**
+ * Local dev convenience: `ASSESSMENT_STORE=memory` runs the service against an
+ * in-memory store so the gateway -> assessment path works end-to-end without a
+ * Postgres database. Production leaves this unset.
+ */
+const useMemoryStore = process.env.ASSESSMENT_STORE === "memory";
+
 async function start(): Promise<void> {
   try {
-    const app = buildApp();
+    if (useMemoryStore) {
+      process.env.DATABASE_URL ??= "postgres://demo:demo@localhost:5432/demo";
+      process.env.JWT_SECRET ??= "local-dev-secret-not-for-production";
+    }
+    const store = useMemoryStore ? createSeededMemoryStore() : undefined;
+    const app = buildApp(store ? { store } : {});
     await app.listen({ port, host: "0.0.0.0" });
-    log.info({ port }, `${SERVICE} service listening`);
+    log.info(
+      { port, store: useMemoryStore ? "memory(demo)" : "prisma" },
+      `${SERVICE} service listening`,
+    );
   } catch (err) {
     log.error({ err }, `failed to start ${SERVICE} service`);
     process.exit(1);

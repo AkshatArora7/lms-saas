@@ -15,9 +15,27 @@ microservices build to container images on **GHCR** and run on a container host
 
 ## Vercel setup
 
-Two Vercel projects (one per app). Each is a Vercel project rooted at
-`apps/web` / `apps/admin` with **Root Directory** set accordingly and the build
-command using Turbo. Required GitHub secrets:
+The **Deploy Web (Vercel)** job **skips cleanly** (green, not failed) until the
+Vercel secrets below are present — so PRs are not blocked before deploy is
+configured. To enable real preview/production deploys:
+
+**1. Create two Vercel projects** (one per app) by importing this repo twice,
+each with **Root Directory** set to `apps/web` / `apps/admin` (Next.js framework
+preset; Vercel detects the pnpm/Turbo workspace).
+
+**2. Collect the values:** a token from
+<https://vercel.com/account/tokens>, the **Org/Account ID** (Vercel → Settings →
+General), and each **Project ID** (project → Settings → General).
+
+**3. Set the GitHub repo secrets** with the helper (uses the GitHub CLI):
+
+```powershell
+pwsh ./scripts/vercel/set-secrets.ps1 `
+  -VercelToken <token> -OrgId <team_or_account_id> `
+  -ProjectIdWeb <prj_web_id> -ProjectIdAdmin <prj_admin_id>
+```
+
+This sets the four required secrets:
 
 ```
 VERCEL_TOKEN
@@ -25,6 +43,9 @@ VERCEL_ORG_ID
 VERCEL_PROJECT_ID_WEB
 VERCEL_PROJECT_ID_ADMIN
 ```
+
+**4.** Open/update a PR (preview) or merge to `main` (production) to trigger a
+deploy.
 
 Set runtime env (DATABASE_URL, JWT_SECRET, BLOB_READ_WRITE_TOKEN, UPSTASH_*,
 GROQ_API_KEY, CIAM_*) in each Vercel project's Environment Variables.

@@ -38,6 +38,10 @@ notifications · calendar · analytics & reporting · AI assistant · video ·
 search · billing · audit & compliance · mobile — across **25 services**, each a
 clean bounded context.
 
+> **Looking for features by user type?** See
+> [`docs/FEATURES.md`](docs/FEATURES.md) — a plain-language guide to what we
+> provide for **schools, admins, teachers, students, and parents**.
+
 ---
 
 ## Table of contents
@@ -504,6 +508,8 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
   [`scripts/github/seed-backlog.ps1`](scripts/github/seed-backlog.ps1) (idempotent).
 - **Rules for contributors / AI agents:** [`AGENTS.md`](AGENTS.md) — story-first
   workflow, isolation guardrails, and the multi-agent delegation model.
+- **Features by audience:** [`docs/FEATURES.md`](docs/FEATURES.md) — what the
+  platform provides for schools, admins, teachers, students, and parents.
 - **Design docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
   [`docs/MULTI_TENANCY.md`](docs/MULTI_TENANCY.md) ·
   [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) ·

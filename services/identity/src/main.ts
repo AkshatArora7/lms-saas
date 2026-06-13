@@ -34,6 +34,7 @@ export interface BuildAppOptions {
   resolveTenant?: IdentityRouteDeps["resolveTenant"];
   now?: () => Date;
   generateId?: () => string;
+  oidcExchanger?: IdentityRouteDeps["oidcExchanger"];
 }
 
 /**
@@ -79,6 +80,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
     now: options.now ?? (() => new Date()),
     generateId: options.generateId ?? randomUUID,
+    oidcExchanger: options.oidcExchanger,
   });
 
   return app;

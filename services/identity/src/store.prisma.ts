@@ -3,10 +3,12 @@ import type { StandardRole, TenantContext } from "@lms/types";
 
 import type {
   AuthUserRecord,
+  IdentityProviderRecord,
   IdentityStore,
   NewRefreshRecord,
   RefreshRecord,
   RolesAndScopes,
+  SsoProvisionInput,
 } from "./store.js";
 
 /**
@@ -144,6 +146,157 @@ export function createPrismaStore(): IdentityStore {
             WHERE family_id = $1 AND revoked_at IS NULL`,
           familyId,
         );
+      });
+    },
+
+    async findIdentityProvider(
+      ctx,
+      providerId,
+    ): Promise<IdentityProviderRecord | null> {
+      return withTenant(ctx, async (db) => {
+        const rows = await db.$queryRawUnsafe<
+          Array<{
+            id: string;
+            tenant_id: string;
+            kind: IdentityProviderRecord["kind"];
+            display_name: string;
+            config: Record<string, unknown> | null;
+            is_enabled: boolean;
+          }>
+        >(
+          `SELECT id, tenant_id, kind, display_name, config, is_enabled
+             FROM identity_provider
+            WHERE id = $1
+            LIMIT 1`,
+          providerId,
+        );
+        const row = rows[0];
+        if (!row) return null;
+        return {
+          id: row.id,
+          tenantId: row.tenant_id,
+          kind: row.kind,
+          displayName: row.display_name,
+          config: row.config ?? {},
+          isEnabled: row.is_enabled,
+        } satisfies IdentityProviderRecord;
+      });
+    },
+
+    async upsertSsoUser(
+      ctx: TenantContext,
+      input: SsoProvisionInput,
+    ): Promise<AuthUserRecord> {
+      return withTenant(ctx, async (db) => {
+        // 1. Already linked via user_identity.
+        const linked = await db.$queryRawUnsafe<
+          Array<{
+            id: string;
+            tenant_id: string;
+            display_name: string;
+            status: AuthUserRecord["status"];
+          }>
+        >(
+          `SELECT u.id, u.tenant_id, u.display_name, u.status
+             FROM user_identity ui
+             JOIN app_user u ON u.id = ui.user_id
+            WHERE ui.provider_id = $1 AND ui.subject = $2
+            LIMIT 1`,
+          input.providerId,
+          input.subject,
+        );
+        if (linked[0]) {
+          const r = linked[0];
+          return {
+            id: r.id,
+            tenantId: r.tenant_id,
+            displayName: r.display_name,
+            status: r.status,
+            passwordHash: null,
+          } satisfies AuthUserRecord;
+        }
+
+        // 2. Existing local user with the same email — link a new identity.
+        const existing = await db.$queryRawUnsafe<
+          Array<{
+            id: string;
+            tenant_id: string;
+            display_name: string;
+            status: AuthUserRecord["status"];
+          }>
+        >(
+          `SELECT id, tenant_id, display_name, status
+             FROM app_user
+            WHERE email = $1
+            LIMIT 1`,
+          input.email,
+        );
+        let userId: string;
+        let record: AuthUserRecord;
+        if (existing[0]) {
+          const r = existing[0];
+          userId = r.id;
+          record = {
+            id: r.id,
+            tenantId: r.tenant_id,
+            displayName: r.display_name,
+            status: r.status,
+            passwordHash: null,
+          };
+        } else {
+          // 3. Brand-new JIT user (active, external_id = subject, no password).
+          const inserted = await db.$queryRawUnsafe<Array<{ id: string }>>(
+            `INSERT INTO app_user (tenant_id, email, display_name, status, external_id)
+             VALUES ($1, $2, $3, 'active', $4)
+             RETURNING id`,
+            ctx.tenantId,
+            input.email,
+            input.displayName,
+            input.subject,
+          );
+          const row = inserted[0];
+          if (!row) {
+            throw new Error("failed to provision SSO user");
+          }
+          userId = row.id;
+          record = {
+            id: userId,
+            tenantId: ctx.tenantId,
+            displayName: input.displayName,
+            status: "active",
+            passwordHash: null,
+          };
+
+          // Grant the default JIT roles at the tenant's root org unit.
+          // Best-effort: only inserts when both the role and a root unit exist.
+          for (const roleName of input.defaultRoles ?? []) {
+            await db.$executeRawUnsafe(
+              `INSERT INTO role_assignment (tenant_id, user_id, role_id, org_unit_id)
+               SELECT $1, $2, r.id, ou.id
+                 FROM role r
+                 JOIN org_unit ou
+                   ON ou.tenant_id = $1 AND ou.parent_id IS NULL
+                WHERE r.tenant_id = $1 AND r.name = $3
+                LIMIT 1
+               ON CONFLICT DO NOTHING`,
+              ctx.tenantId,
+              userId,
+              roleName,
+            );
+          }
+        }
+
+        await db.$executeRawUnsafe(
+          `INSERT INTO user_identity (tenant_id, user_id, provider_id, subject)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (provider_id, subject) DO NOTHING`,
+          ctx.tenantId,
+          userId,
+          input.providerId,
+          input.subject,
+        );
+
+        return record;
       });
     },
   };

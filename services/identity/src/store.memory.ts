@@ -3,10 +3,12 @@ import type { TenantContext } from "@lms/types";
 
 import type {
   AuthUserRecord,
+  IdentityProviderRecord,
   IdentityStore,
   NewRefreshRecord,
   RefreshRecord,
   RolesAndScopes,
+  SsoProvisionInput,
 } from "./store.js";
 
 /**
@@ -17,7 +19,10 @@ import type {
 export class MemoryStore implements IdentityStore {
   private usersByEmail = new Map<string, AuthUserRecord>();
   private roles = new Map<string, RolesAndScopes>();
+  private providers = new Map<string, IdentityProviderRecord>();
+  private identities = new Map<string, string>(); // `${providerId}:${subject}` -> userId
   tokens: RefreshRecord[] = [];
+  private seq = 0;
 
   seedUser(
     email: string,
@@ -26,6 +31,10 @@ export class MemoryStore implements IdentityStore {
   ): void {
     this.usersByEmail.set(email, record);
     this.roles.set(record.id, rolesAndScopes);
+  }
+
+  seedProvider(provider: IdentityProviderRecord): void {
+    this.providers.set(provider.id, provider);
   }
 
   async findUserByEmail(
@@ -75,6 +84,52 @@ export class MemoryStore implements IdentityStore {
       }
     }
   }
+
+  async findIdentityProvider(
+    _ctx: TenantContext,
+    providerId: string,
+  ): Promise<IdentityProviderRecord | null> {
+    return this.providers.get(providerId) ?? null;
+  }
+
+  async upsertSsoUser(
+    _ctx: TenantContext,
+    input: SsoProvisionInput,
+  ): Promise<AuthUserRecord> {
+    const linkKey = `${input.providerId}:${input.subject}`;
+
+    // 1. Already linked via user_identity.
+    const linkedId = this.identities.get(linkKey);
+    if (linkedId) {
+      const existing = [...this.usersByEmail.values()].find(
+        (u) => u.id === linkedId,
+      );
+      if (existing) return existing;
+    }
+
+    // 2. An existing local user with the same email — link a new identity.
+    const byEmail = this.usersByEmail.get(input.email);
+    if (byEmail) {
+      this.identities.set(linkKey, byEmail.id);
+      return byEmail;
+    }
+
+    // 3. Brand-new JIT user (no local password; external_id = subject).
+    const user: AuthUserRecord = {
+      id: `sso-user-${++this.seq}`,
+      tenantId: _ctx.tenantId,
+      displayName: input.displayName,
+      status: "active",
+      passwordHash: null,
+    };
+    this.usersByEmail.set(input.email, user);
+    this.roles.set(user.id, {
+      roles: input.defaultRoles ?? [],
+      scopes: input.defaultScopes ?? [],
+    });
+    this.identities.set(linkKey, user.id);
+    return user;
+  }
 }
 
 /** The demo tenant the local dev seed and the web BFFs agree on. */
@@ -120,11 +175,30 @@ export async function demoAccounts(): Promise<DemoAccount[]> {
   ];
 }
 
-/** Build a MemoryStore pre-seeded with the demo accounts. */
+/** A demo OIDC provider for `IDENTITY_STORE=memory` local dev. */
+export const DEMO_OIDC_PROVIDER_ID = "22222222-2222-2222-2222-222222222222";
+
+/** Build a MemoryStore pre-seeded with the demo accounts and SSO provider. */
 export async function createSeededMemoryStore(): Promise<MemoryStore> {
   const store = new MemoryStore();
   for (const acct of await demoAccounts()) {
     store.seedUser(acct.email, acct.user, acct.roles);
   }
+  store.seedProvider({
+    id: DEMO_OIDC_PROVIDER_ID,
+    tenantId: DEMO_TENANT_ID,
+    kind: "oidc",
+    displayName: "Demo School SSO",
+    isEnabled: true,
+    config: {
+      issuer: "https://demo-idp.example.com",
+      authorizationEndpoint: "https://demo-idp.example.com/authorize",
+      tokenEndpoint: "https://demo-idp.example.com/token",
+      jwksUri: "https://demo-idp.example.com/.well-known/jwks.json",
+      clientId: "demo-lms-client",
+      redirectUri: "http://localhost:3000/api/auth/sso/callback",
+      scopes: ["openid", "email", "profile"],
+    },
+  });
   return store;
 }

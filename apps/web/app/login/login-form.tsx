@@ -118,6 +118,40 @@ export default function LoginForm({ brand }: { brand: Branding }) {
           {busy ? "Signing in…" : "Sign in"}
         </button>
 
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: ".75rem",
+            margin: "1.25rem 0",
+            color: "#9aa0aa",
+            fontSize: 12,
+          }}
+        >
+          <span style={{ flex: 1, height: 1, background: "#e3e5e9" }} />
+          or
+          <span style={{ flex: 1, height: 1, background: "#e3e5e9" }} />
+        </div>
+
+        <a
+          href="/api/auth/sso/start"
+          style={{
+            display: "block",
+            width: "100%",
+            padding: ".7rem",
+            border: `1px solid ${brand.accent}`,
+            borderRadius: 8,
+            background: "#fff",
+            color: brand.accent,
+            fontWeight: 600,
+            textAlign: "center",
+            textDecoration: "none",
+            boxSizing: "border-box",
+          }}
+        >
+          Sign in with your school account
+        </a>
+
         <p style={{ marginTop: "1.25rem", fontSize: 12, color: "#8a8f99" }}>
           Demo: admin@demo.school / student@demo.school · password123
         </p>

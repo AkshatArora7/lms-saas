@@ -23,6 +23,9 @@ Spawn these with the Agent tool (pass complete, self-contained context each time
 | `backlog-agent` | Turn an idea into a user story + seed the GitHub issue (story-first). |
 | `schema-agent` | `database/schema.sql`, RLS policies, tenancy; pglast validation. |
 | `service-builder` | Implement/extend a service under `services/*` (store-abstraction pattern). |
+| `ux-designer` | Decide what a screen should be; emit a structured JSON design prompt (tokens, layout, components, breakpoints, a11y). Designs; does not write app code. |
+| `frontend-dev` | Implement a screen in `apps/web`/`apps/admin` for phone+tablet+desktop in one pass, no overflow, WCAG 2.2 AA. |
+| `rca-agent` | Root-cause any bug/failing build/CI failure, then delegate the fix to the owning specialist. Engage it BEFORE fixing. |
 | `review-agent` | Verify a change against the Definition of Done (read-only). |
 | `docs-agent` | `README`/`docs/*` and regenerating service specs. |
 | `verify` | Run typecheck/lint/test/build (and pglast) and report pass/fail. |
@@ -42,13 +45,19 @@ Spawn these with the Agent tool (pass complete, self-contained context each time
    resulting table shapes to the service work.
 3. **Implement.** Delegate the bounded context to `service-builder` with the
    issue link, acceptance criteria, table shapes, and the constraints from
-   `AGENTS.md`.
+   `AGENTS.md`. For UI work, delegate design to `ux-designer` first (it emits a
+   JSON design prompt), then hand that prompt to `frontend-dev` to build all
+   breakpoints in one pass.
 4. **Docs.** If specs/docs are affected, delegate to `docs-agent` (specs are
    generated — never hand-edited).
 5. **Verify.** Delegate to `verify` for the full suite, then to `review-agent`
    for the Definition-of-Done review.
 6. **Close the loop.** Hand any "changes requested" items back to the owning
    subagent and re-verify. Only report done when review passes.
+
+**Bug / failing build / CI failure?** Before delegating a fix, route to
+`rca-agent` to find the true root cause; it then delegates the actual fix to the
+owning specialist and confirms the once-failing signal is green via `verify`.
 
 ## Rules you enforce on every delegation
 - **Never deny, never drop.** Every task is either completed or explicitly

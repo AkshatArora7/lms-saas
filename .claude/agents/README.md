@@ -18,6 +18,9 @@ the team** via the `Agent` tool instead of working around a rule.
 | `backlog-agent` | Senior product owner / BA | Turn an idea into a user story + seed the GitHub issue (story-first). | opus | backlog | schema-agent, service-builder, docs-agent, orchestrator |
 | `schema-agent` | Senior database architect | `database/schema.sql` + RLS policies + tenancy; pglast-validate. | opus | yes | backlog-agent, verify, service-builder, review-agent |
 | `service-builder` | Senior backend engineer | Implement/extend a service under `services/*` (store-abstraction pattern). | opus | yes | schema-agent, backlog-agent, verify, review-agent |
+| `ux-designer` | Senior UX / creative designer | Decide what a screen should be; emit a structured JSON design prompt (tokens, layout, components, breakpoints, a11y). | opus | no | frontend-dev, backlog-agent, review-agent |
+| `frontend-dev` | Senior frontend engineer | Build a screen in `apps/web`/`apps/admin` for phone+tablet+desktop in one pass, no overflow, WCAG 2.2 AA. | opus | yes | ux-designer, backlog-agent, service-builder, verify, review-agent |
+| `rca-agent` | Senior debugging / reliability specialist | Root-cause a bug/failing build/CI failure, then delegate the fix to the owning specialist. | opus | no (investigates) | service-builder, schema-agent, frontend-dev, docs-agent, verify, review-agent |
 | `review-agent` | Principal code reviewer | Review a change against the Definition of Done. | opus | no (read-only) | verify + hands fixes back to owners |
 | `docs-agent` | Senior tech writer / DX | `README`/`docs/*`; regenerate (never hand-edit) service specs. | opus | docs | backlog-agent, verify, review-agent |
 | `verify` | Senior build/release SDET | Run typecheck/lint/test/build (+ pglast) and report pass/fail. | opus | no | — (leaf) |
@@ -31,9 +34,15 @@ request
        ├─ backlog-agent      → user story + GitHub issue
        ├─ schema-agent       → tables + RLS (pglast)          ┐ delegates verify
        ├─ service-builder    → store/routes/tests             ┤ delegates schema-agent, verify
+       ├─ ux-designer        → JSON design prompt             ┐ UI work
+       ├─ frontend-dev       → responsive UI (phone/tab/desk) ┤ delegates ux-designer, verify
        ├─ docs-agent         → README/docs + generated specs  │
        ├─ verify             → typecheck/lint/test/build       │
        └─ review-agent       → Definition-of-Done sign-off    ┘ delegates verify
+
+  bug / failing build / CI failure
+  └─ rca-agent (reproduce → evidence → isolate root cause → diagnose)
+       └─ delegates the fix to the owning specialist → verify → review-agent
 ```
 
 Before starting any ticket the orchestrator (the first agent) **syncs the default
@@ -61,6 +70,9 @@ You can still steer it explicitly when you want a specific specialist:
 Use the orchestrator to build the rubric service end-to-end.
 Use the schema-agent to add the rubric tables with RLS.
 Use the service-builder to implement the rubric service.
+Use the ux-designer to design the analytics dashboard (JSON design prompt).
+Use the frontend-dev to build that dashboard for phone, tablet, and desktop.
+Use the rca-agent to find the root cause of the failing build, then delegate the fix.
 Use the review-agent to check my branch against the Definition of Done.
 Use verify to run the repo checks.
 ```

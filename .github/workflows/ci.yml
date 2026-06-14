@@ -39,6 +39,21 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate SQL schema (pglast)
+        run: |
+          python -m pip install --quiet pglast
+          python - <<'PY'
+          import pglast
+          for path in ("database/schema.sql", "database/policies/rls.sql"):
+              with open(path, encoding="utf-8") as fh:
+                  pglast.parse_sql(fh.read())
+              print(f"OK  {path}")
+          PY
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

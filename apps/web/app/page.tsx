@@ -1,108 +1,119 @@
 import { redirect } from "next/navigation";
 
+import { dashboardCss } from "./dashboard-styles";
 import { getBranding } from "./lib/branding";
 import { getSession } from "./lib/auth";
+import { getDashboardCourses } from "./lib/dashboard";
 import SignOutButton from "./sign-out-button";
-
-const chip: React.CSSProperties = {
-  display: "inline-block",
-  padding: ".2rem .6rem",
-  margin: "0 .35rem .35rem 0",
-  borderRadius: 999,
-  background: "#eef1f8",
-  color: "#2952cc",
-  fontSize: 12,
-  fontWeight: 600,
-};
 
 export default async function Home() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const courses = getDashboardCourses(session.tenantId);
 
   return (
-    <main
-      style={{
-        fontFamily: "system-ui",
-        padding: "3rem",
-        maxWidth: 760,
-        margin: "0 auto",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 13,
-              fontWeight: 700,
-              color: brand.accent,
-              textTransform: "uppercase",
-              letterSpacing: ".04em",
-            }}
-          >
-            {brand.name}
-          </p>
-          <h1 style={{ margin: ".15rem 0 0" }}>Learner Experience</h1>
-        </div>
-        <SignOutButton />
-      </header>
+    <>
+      <style>{dashboardCss(brand)}</style>
+      <div className="lms-dash">
+        <header className="lms-dash-topbar">
+          <p className="lms-dash-brand">{brand.name}</p>
+          <div className="lms-dash-userwrap">
+            <span className="lms-dash-user" title={session.userId}>
+              {session.userId}
+            </span>
+            <SignOutButton />
+          </div>
+        </header>
 
-      <p style={{ color: "#5b606b" }}>
-        You are signed in. This learner/instructor surface talks to the domain
-        microservices via the API gateway.
-      </p>
+        <div className="lms-dash-greeting">
+          <h1>Welcome back</h1>
+          <p>Here&apos;s your learning at a glance.</p>
+        </div>
 
-      <section
-        style={{
-          marginTop: "1.5rem",
-          padding: "1.25rem 1.5rem",
-          border: "1px solid #e6e8ec",
-          borderRadius: 12,
-        }}
-      >
-        <h2 style={{ marginTop: 0, fontSize: 16 }}>Your session</h2>
-        <p style={{ margin: ".25rem 0" }}>
-          <strong>User:</strong> {session.userId}
-        </p>
-        <p style={{ margin: ".25rem 0" }}>
-          <strong>Tenant:</strong> {session.tenantId} ({session.tier})
-        </p>
-        <p style={{ margin: ".75rem 0 .35rem" }}>
-          <strong>Roles</strong>
-        </p>
-        <div>
-          {session.roles.length ? (
-            session.roles.map((r) => (
-              <span key={r} style={chip}>
-                {r}
-              </span>
-            ))
-          ) : (
-            <span style={{ color: "#8a8f99" }}>none</span>
-          )}
+        <div className="lms-dash-body">
+          <main className="lms-dash-main">
+            <h2 className="lms-dash-section-title">My courses</h2>
+            {courses.length ? (
+              <div className="lms-dash-courses">
+                {courses.map((c) => (
+                  <a
+                    key={c.id}
+                    href="#"
+                    className="lms-dash-card"
+                    aria-label={`Open ${c.title}`}
+                  >
+                    <p className="lms-dash-card-title">{c.title}</p>
+                    <p className="lms-dash-card-meta">
+                      {c.code} · {c.term}
+                    </p>
+                    <div
+                      className="lms-dash-progress"
+                      role="progressbar"
+                      aria-valuenow={c.progress}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`${c.title} progress`}
+                    >
+                      <span style={{ width: `${c.progress}%` }} />
+                    </div>
+                    <div className="lms-dash-card-foot">
+                      <span>{c.progress}% complete</span>
+                      <span className="lms-dash-chip">{c.role}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div className="lms-dash-empty" role="status">
+                <div aria-hidden="true" style={{ fontSize: 28 }}>
+                  📚
+                </div>
+                <h3>No courses yet</h3>
+                <p>Once you&apos;re enrolled, your courses will appear here.</p>
+              </div>
+            )}
+          </main>
+
+          <aside className="lms-dash-aside" aria-label="Account details">
+            <h2>Your account</h2>
+            <p className="lms-dash-kv">
+              <strong>User:</strong> {session.userId}
+            </p>
+            <p className="lms-dash-kv">
+              <strong>Tenant:</strong> {session.tenantId} ({session.tier})
+            </p>
+            <p className="lms-dash-kv">
+              <strong>Roles</strong>
+            </p>
+            <div className="lms-dash-chips">
+              {session.roles.length ? (
+                session.roles.map((r) => (
+                  <span key={r} className="lms-dash-chip">
+                    {r}
+                  </span>
+                ))
+              ) : (
+                <span className="lms-dash-muted">none</span>
+              )}
+            </div>
+            <p className="lms-dash-kv">
+              <strong>Scopes</strong>
+            </p>
+            <div className="lms-dash-chips">
+              {session.scopes.length ? (
+                session.scopes.map((s) => (
+                  <span key={s} className="lms-dash-chip">
+                    {s}
+                  </span>
+                ))
+              ) : (
+                <span className="lms-dash-muted">none</span>
+              )}
+            </div>
+          </aside>
         </div>
-        <p style={{ margin: ".75rem 0 .35rem" }}>
-          <strong>Scopes</strong>
-        </p>
-        <div>
-          {session.scopes.length ? (
-            session.scopes.map((s) => (
-              <span key={s} style={chip}>
-                {s}
-              </span>
-            ))
-          ) : (
-            <span style={{ color: "#8a8f99" }}>none</span>
-          )}
-        </div>
-      </section>
-    </main>
+      </div>
+    </>
   );
 }

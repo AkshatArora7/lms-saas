@@ -16,16 +16,10 @@ export default function SignOutButton() {
 
   return (
     <button
+      className="lms-dash-signout"
       onClick={signOut}
       disabled={busy}
-      style={{
-        padding: ".5rem .9rem",
-        border: "1px solid #d0d3d9",
-        borderRadius: 8,
-        background: "#fff",
-        cursor: "pointer",
-        fontWeight: 600,
-      }}
+      aria-label="Sign out"
     >
       {busy ? "Signing out…" : "Sign out"}
     </button>

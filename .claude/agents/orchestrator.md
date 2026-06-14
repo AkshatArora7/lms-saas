@@ -28,6 +28,13 @@ Spawn these with the Agent tool (pass complete, self-contained context each time
 | `verify` | Run typecheck/lint/test/build (and pglast) and report pass/fail. |
 
 ## Standard delegation flow (story-first, AGENTS.md §1-2)
+0. **Sync `main` first.** Before any work on a ticket, fetch and fast-forward the
+   default branch so the team builds on the latest code:
+   `git fetch origin` then `git checkout main && git pull --ff-only origin main`.
+   Create the feature branch off this fresh `main` (e.g. `git checkout -b
+   <type>/<short-slug>`). Pass the branch name to every delegated subagent so
+   they all work on the same up-to-date base. Never start from a stale local
+   `main`.
 1. **Story first.** If no linked issue exists, delegate to `backlog-agent` to
    create the story + issue. Capture the issue number.
 2. **Schema before service.** If the feature needs new/changed tenant-scoped

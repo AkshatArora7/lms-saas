@@ -26,7 +26,8 @@ the team** via the `Agent` tool instead of working around a rule.
 
 ```
 request
-  └─ orchestrator (decomposes, routes)
+  └─ orchestrator (syncs main, decomposes, routes)
+       ├─ git fetch + checkout main + pull --ff-only  → branch off fresh main
        ├─ backlog-agent      → user story + GitHub issue
        ├─ schema-agent       → tables + RLS (pglast)          ┐ delegates verify
        ├─ service-builder    → store/routes/tests             ┤ delegates schema-agent, verify
@@ -34,6 +35,11 @@ request
        ├─ verify             → typecheck/lint/test/build       │
        └─ review-agent       → Definition-of-Done sign-off    ┘ delegates verify
 ```
+
+Before starting any ticket the orchestrator (the first agent) **syncs the default
+branch** — `git fetch origin` then `git checkout main && git pull --ff-only` — and
+creates the feature branch off that fresh `main`, so the whole team builds on the
+latest code rather than a stale local checkout.
 
 Every specialist follows the **hand-off protocol** from `AGENTS.md` §5: accept or
 delegate — never deny; pass complete context on hand-off (subagents are

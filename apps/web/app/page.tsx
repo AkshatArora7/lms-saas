@@ -55,7 +55,7 @@ export default async function Home() {
                   <Card
                     aria-label={`Open ${course.title}`}
                     as="a"
-                    href="#"
+                    href={`/courses/${course.id}`}
                     interactive
                     key={course.id}
                   >

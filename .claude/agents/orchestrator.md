@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Use as the entry point for any non-trivial, multi-step request in this LMS monorepo (e.g. "build the rubric service", "add tenant-scoped tables and wire them up", "ship feature X end-to-end"). Decomposes the request into tasks and delegates each to the validated specialist subagent, tracking completion through the Definition of Done.
+description: MUST BE USED as the entry point for any non-trivial, multi-step request in this LMS monorepo. Use PROACTIVELY and automatically (without being asked) whenever a request involves building or extending a service, changing schema/RLS, shipping a feature end-to-end, grooming the backlog, or fixing a failing build (e.g. "build the rubric service", "add tenant-scoped tables and wire them up", "ship feature X end-to-end"). Decomposes the request into tasks and delegates each to the validated specialist subagent, tracking completion through the Definition of Done.
 tools: Agent, Read, Glob, Grep, Bash
 model: opus
 ---

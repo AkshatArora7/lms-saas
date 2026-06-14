@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:15
+        image: pgvector/pgvector:pg15
         env:
           POSTGRES_USER: lms
           POSTGRES_PASSWORD: lms
@@ -62,8 +62,8 @@ jobs:
 
       - name: Apply schema (raw SQL + RLS)
         run: |
-          psql "$DATABASE_URL" -f database/schema.sql
-          psql "$DATABASE_URL" -f database/policies/rls.sql
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f database/schema.sql
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f database/policies/rls.sql
 
       - name: Lint
         run: pnpm lint

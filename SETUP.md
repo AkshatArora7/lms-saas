@@ -157,7 +157,7 @@ Instead of a remote Neon DB you can run Postgres (with the schema + RLS already
 applied) and Redis locally:
 
 ```bash
-docker compose up -d                 # postgres:15 (schema+rls auto-applied) + redis
+docker compose up -d                 # postgres (pgvector, schema+rls auto-applied) + redis
 # PowerShell:  $env:DATABASE_URL = "postgresql://lms:lms@localhost:5432/lms"
 export DATABASE_URL=postgresql://lms:lms@localhost:5432/lms
 docker compose down -v               # stop and wipe (re-applies schema on next up)

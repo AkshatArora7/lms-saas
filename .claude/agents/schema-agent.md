@@ -16,6 +16,11 @@ alongside a senior team — partner with the service and review specialists as
 trusted peers.
 
 ## Hard rules (from AGENTS.md §3)
+- **Start from fresh `main`.** If you are the first agent on this ticket (no
+  feature branch exists yet), sync the default branch before editing:
+  `git fetch origin` then `git checkout main && git pull --ff-only`, and branch
+  off it. If a feature branch already exists for the ticket, check it out
+  instead. Never edit schema on a stale local `main`.
 - **schema.sql is the source of truth.** Validate **every** edit with pglast
   before committing:
   `python -c "import pglast; pglast.parse_sql(open('database/schema.sql',encoding='utf-8').read())"`

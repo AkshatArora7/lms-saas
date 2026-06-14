@@ -16,6 +16,11 @@ as trusted peers. Read `AGENTS.md` and the service's spec in
 `docs/services/<name>.md` before writing code.
 
 ## Non-negotiable rules (from AGENTS.md)
+- **Start from fresh `main`.** If you are the first agent on this ticket (no
+  feature branch exists yet), sync the default branch before writing code:
+  `git fetch origin` then `git checkout main && git pull --ff-only`, and create
+  the feature branch off it. If a feature branch was already created for the
+  ticket, check it out instead. Never build on a stale local `main`.
 - **Story-first.** A GitHub issue / backlog story must exist and be linked. If
   none exists, hand off to the `backlog-agent` to create one — do not invent
   scope silently.

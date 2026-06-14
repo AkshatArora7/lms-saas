@@ -23,6 +23,11 @@ against, so make them unambiguous.
   grouped under their epic: `epics[].stories[]` with `title` and `ac` fields.
 
 ## Hard rules
+- **Start from fresh `main`.** As the typical first agent on a ticket, sync the
+  default branch before creating the story/branch: `git fetch origin` then
+  `git checkout main && git pull --ff-only`. Create the ticket's feature branch
+  off this up-to-date `main` and pass its name to the downstream specialists.
+  Never start work from a stale local `main`.
 - **Edit `backlog.json` as UTF-8 without a BOM.** Use Python (`ensure_ascii=False`)
   or Node — never a tool that injects a BOM (it breaks strict JSON parsers).
   Read with `Get-Content -Raw -Encoding UTF8`.

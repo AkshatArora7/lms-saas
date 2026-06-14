@@ -47,8 +47,15 @@ stateless); single owner per scope; the review agent closes the loop.
 
 ## How collaborators use them
 
-In Claude Code, Claude delegates automatically based on each agent's
-`description`, or ask explicitly:
+You normally **don't invoke anything manually**. The repo's root
+[`CLAUDE.md`](../../CLAUDE.md) is loaded into every Claude Code session and tells
+Claude to route each non-trivial request to the `orchestrator`, which then
+delegates across the team — so the team starts working as soon as a collaborator
+sends a query. The `orchestrator`'s `description` also marks it **"use
+proactively / MUST BE USED"**, which is what drives Claude's automatic
+delegation.
+
+You can still steer it explicitly when you want a specific specialist:
 
 ```text
 Use the orchestrator to build the rubric service end-to-end.

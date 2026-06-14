@@ -38,6 +38,9 @@ importers:
       '@lms/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@lms/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       next:
         specifier: ^14.2.5
         version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -66,6 +69,9 @@ importers:
       '@lms/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@lms/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       next:
         specifier: ^14.2.5
         version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -210,6 +216,9 @@ importers:
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.7(@types/react@18.3.31)
       react:
         specifier: ^18.3.1
         version: 18.3.1

@@ -1,10 +1,34 @@
 import { redirect } from "next/navigation";
+import type { CSSProperties } from "react";
+import {
+  AppShell,
+  Badge,
+  Card,
+  Chip,
+  EmptyState,
+  Grid,
+  Inline,
+  PageHeader,
+  ProgressBar,
+  Stack,
+} from "@lms/ui";
 
-import { dashboardCss } from "./dashboard-styles";
 import { getBranding } from "./lib/branding";
 import { getSession } from "./lib/auth";
 import { getDashboardCourses } from "./lib/dashboard";
 import SignOutButton from "./sign-out-button";
+
+const headingStyle: CSSProperties = {
+  fontSize: "1rem",
+  lineHeight: 1.3,
+  margin: 0,
+  overflowWrap: "anywhere",
+};
+
+const bodyTextStyle: CSSProperties = {
+  margin: 0,
+  overflowWrap: "anywhere",
+};
 
 export default async function Home() {
   const session = await getSession();
@@ -13,107 +37,104 @@ export default async function Home() {
   const courses = getDashboardCourses(session.tenantId);
 
   return (
-    <>
-      <style>{dashboardCss(brand)}</style>
-      <div className="lms-dash">
-        <header className="lms-dash-topbar">
-          <p className="lms-dash-brand">{brand.name}</p>
-          <div className="lms-dash-userwrap">
-            <span className="lms-dash-user" title={session.userId}>
-              {session.userId}
-            </span>
-            <SignOutButton />
-          </div>
-        </header>
+    <AppShell brand={brand} actions={<SignOutButton />}>
+      <PageHeader
+        title="Welcome back"
+        subtitle="Here's your learning at a glance."
+      />
 
-        <div className="lms-dash-greeting">
-          <h1>Welcome back</h1>
-          <p>Here&apos;s your learning at a glance.</p>
-        </div>
-
-        <div className="lms-dash-body">
-          <main className="lms-dash-main">
-            <h2 className="lms-dash-section-title">My courses</h2>
+      <Grid gap={5} min="280px">
+        <section aria-labelledby="courses-heading">
+          <Stack gap={3}>
+            <h2 id="courses-heading" style={headingStyle}>
+              My courses
+            </h2>
             {courses.length ? (
-              <div className="lms-dash-courses">
-                {courses.map((c) => (
-                  <a
-                    key={c.id}
+              <Grid min="240px">
+                {courses.map((course) => (
+                  <Card
+                    aria-label={`Open ${course.title}`}
+                    as="a"
                     href="#"
-                    className="lms-dash-card"
-                    aria-label={`Open ${c.title}`}
+                    interactive
+                    key={course.id}
                   >
-                    <p className="lms-dash-card-title">{c.title}</p>
-                    <p className="lms-dash-card-meta">
-                      {c.code} · {c.term}
-                    </p>
-                    <div
-                      className="lms-dash-progress"
-                      role="progressbar"
-                      aria-valuenow={c.progress}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-label={`${c.title} progress`}
-                    >
-                      <span style={{ width: `${c.progress}%` }} />
-                    </div>
-                    <div className="lms-dash-card-foot">
-                      <span>{c.progress}% complete</span>
-                      <span className="lms-dash-chip">{c.role}</span>
-                    </div>
-                  </a>
+                    <Stack gap={3}>
+                      <div>
+                        <h3 style={headingStyle}>{course.title}</h3>
+                        <Inline gap={2}>
+                          <Badge tone="neutral">{course.code}</Badge>
+                          <Badge tone="neutral">{course.term}</Badge>
+                        </Inline>
+                      </div>
+                      <ProgressBar
+                        label={`${course.title} progress`}
+                        value={course.progress}
+                      />
+                      <Inline gap={2} justify="space-between">
+                        <Badge tone="neutral">{course.progress}% complete</Badge>
+                        <Chip tone="accent">{course.role}</Chip>
+                      </Inline>
+                    </Stack>
+                  </Card>
                 ))}
-              </div>
+              </Grid>
             ) : (
-              <div className="lms-dash-empty" role="status">
-                <div aria-hidden="true" style={{ fontSize: 28 }}>
-                  📚
-                </div>
-                <h3>No courses yet</h3>
-                <p>Once you&apos;re enrolled, your courses will appear here.</p>
-              </div>
+              <EmptyState
+                description="Once you're enrolled, your courses will appear here."
+                icon="📚"
+                title="No courses yet"
+              />
             )}
-          </main>
+          </Stack>
+        </section>
 
-          <aside className="lms-dash-aside" aria-label="Account details">
-            <h2>Your account</h2>
-            <p className="lms-dash-kv">
-              <strong>User:</strong> {session.userId}
-            </p>
-            <p className="lms-dash-kv">
-              <strong>Tenant:</strong> {session.tenantId} ({session.tier})
-            </p>
-            <p className="lms-dash-kv">
-              <strong>Roles</strong>
-            </p>
-            <div className="lms-dash-chips">
-              {session.roles.length ? (
-                session.roles.map((r) => (
-                  <span key={r} className="lms-dash-chip">
-                    {r}
-                  </span>
-                ))
-              ) : (
-                <span className="lms-dash-muted">none</span>
-              )}
-            </div>
-            <p className="lms-dash-kv">
-              <strong>Scopes</strong>
-            </p>
-            <div className="lms-dash-chips">
-              {session.scopes.length ? (
-                session.scopes.map((s) => (
-                  <span key={s} className="lms-dash-chip">
-                    {s}
-                  </span>
-                ))
-              ) : (
-                <span className="lms-dash-muted">none</span>
-              )}
-            </div>
-          </aside>
-        </div>
-      </div>
-    </>
+        <aside aria-labelledby="account-heading">
+          <Card>
+            <Stack gap={3}>
+              <h2 id="account-heading" style={headingStyle}>
+                Your account
+              </h2>
+              <Stack gap={1}>
+                <p style={bodyTextStyle}>
+                  <strong>User:</strong> {session.userId}
+                </p>
+                <p style={bodyTextStyle}>
+                  <strong>Tenant:</strong> {session.tenantId} ({session.tier})
+                </p>
+              </Stack>
+              <Stack gap={2}>
+                <strong>Roles</strong>
+                <Inline gap={2}>
+                  {session.roles.length ? (
+                    session.roles.map((role) => (
+                      <Badge key={role} tone="accent">
+                        {role}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span style={bodyTextStyle}>none</span>
+                  )}
+                </Inline>
+              </Stack>
+              <Stack gap={2}>
+                <strong>Scopes</strong>
+                <Inline gap={2}>
+                  {session.scopes.length ? (
+                    session.scopes.map((scope) => (
+                      <Badge key={scope} tone="neutral">
+                        {scope}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span style={bodyTextStyle}>none</span>
+                  )}
+                </Inline>
+              </Stack>
+            </Stack>
+          </Card>
+        </aside>
+      </Grid>
+    </AppShell>
   );
 }

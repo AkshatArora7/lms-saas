@@ -16,10 +16,10 @@ export default function SignOutButton() {
 
   return (
     <button
-      className="lms-dash-signout"
+      aria-label="Sign out"
+      className="lms-btn lms-btn--secondary lms-btn--sm"
       onClick={signOut}
       disabled={busy}
-      aria-label="Sign out"
     >
       {busy ? "Signing out…" : "Sign out"}
     </button>

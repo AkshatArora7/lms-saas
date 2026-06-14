@@ -1,0 +1,23 @@
+{
+  "name": "@lms/integration-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cross-cutting integration tests that run against a real Postgres (RLS isolation + golden path). Skipped when DATABASE_URL is unset.",
+  "scripts": {
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rimraf .turbo"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@lms/eslint-config": "workspace:*",
+    "@lms/tsconfig": "workspace:*",
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.11.0",
+    "vitest": "^2.0.5"
+  }
+}

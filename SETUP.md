@@ -151,9 +151,37 @@ pnpm db:migrate       # apply migrations (deploy/CI)
 > python -c "import pglast; pglast.parse_sql(open('database/schema.sql',encoding='utf-8').read()); print('ok')"
 > ```
 
----
+### Option B — local stack with docker-compose (recommended)
 
-## 6. Running the project
+Instead of a remote Neon DB you can run Postgres (with the schema + RLS already
+applied) and Redis locally:
+
+```bash
+docker compose up -d                 # postgres (pgvector, schema+rls auto-applied) + redis
+# PowerShell:  $env:DATABASE_URL = "postgresql://lms:lms@localhost:5432/lms"
+export DATABASE_URL=postgresql://lms:lms@localhost:5432/lms
+docker compose down -v               # stop and wipe (re-applies schema on next up)
+```
+
+The `schema.sql` and `rls.sql` are mounted as init scripts, so a fresh volume is
+seeded automatically. This mirrors the Postgres used in CI.
+
+### Integration tests (RLS isolation + golden path)
+
+[`tests/integration`](tests/integration) holds cross-cutting tests that run
+against a **real** Postgres: one proves tenant **RLS isolation** (connecting as a
+non-superuser role, since superusers bypass RLS), the other walks the
+**golden path** (provision a course → enrol a student → read the roster) under
+RLS and asserts a second tenant sees none of it. They run automatically in CI and
+**skip** when `DATABASE_URL` is unset.
+
+```bash
+docker compose up -d
+export DATABASE_URL=postgresql://lms:lms@localhost:5432/lms
+pnpm --filter @lms/integration-tests test
+```
+
+
 
 ```bash
 pnpm dev        # Turborepo runs the apps + services together

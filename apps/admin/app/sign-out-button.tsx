@@ -16,17 +16,10 @@ export default function SignOutButton() {
 
   return (
     <button
+      aria-label="Sign out"
+      className="lms-btn lms-btn--secondary lms-btn--sm"
       onClick={signOut}
       disabled={busy}
-      style={{
-        padding: ".5rem .9rem",
-        border: "1px solid #353b4d",
-        borderRadius: 8,
-        background: "#1b2030",
-        color: "#e8eaf0",
-        cursor: "pointer",
-        fontWeight: 600,
-      }}
     >
       {busy ? "Signing out…" : "Sign out"}
     </button>

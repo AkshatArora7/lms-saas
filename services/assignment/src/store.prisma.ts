@@ -9,6 +9,7 @@ import type {
   SubmissionStatus,
   SubmissionType,
   SubmitResult,
+  UpdateAssignmentInput,
 } from "./store.js";
 
 interface AssignmentRow {
@@ -126,6 +127,53 @@ export function createPrismaStore(): AssignmentStore {
           courseId,
         );
         return rows.map(toAssignment);
+      });
+    },
+
+    async updateAssignment(ctx, id, input: UpdateAssignmentInput) {
+      return withTenant(ctx, async (db) => {
+        const sets: string[] = [];
+        const params: unknown[] = [];
+        const push = (column: string, value: unknown): void => {
+          params.push(value);
+          sets.push(`${column} = $${params.length}`);
+        };
+        if (input.title !== undefined) push("title", input.title);
+        if (input.instructions !== undefined)
+          push("instructions", input.instructions);
+        if (input.dueAt !== undefined) push("due_at", input.dueAt);
+        if (input.points !== undefined) push("points", input.points);
+        if (input.submissionType !== undefined)
+          push("submission_type", input.submissionType);
+        if (input.allowLate !== undefined) push("allow_late", input.allowLate);
+
+        if (sets.length === 0) {
+          const rows = await db.$queryRawUnsafe<AssignmentRow[]>(
+            `${SELECT_ASSIGNMENT} WHERE id = $1 LIMIT 1`,
+            id,
+          );
+          return rows[0] ? toAssignment(rows[0]) : null;
+        }
+
+        params.push(id);
+        const rows = await db.$queryRawUnsafe<AssignmentRow[]>(
+          `UPDATE assignment SET ${sets.join(", ")}
+            WHERE id = $${params.length}
+          RETURNING id, tenant_id, course_id, title, instructions, due_at,
+                    points, submission_type, allow_late, created_at`,
+          ...params,
+        );
+        return rows[0] ? toAssignment(rows[0]) : null;
+      });
+    },
+
+    async deleteAssignment(ctx, id) {
+      return withTenant(ctx, async (db) => {
+        const affected = await db.$executeRawUnsafe(
+          `DELETE FROM assignment WHERE id = $1`,
+          id,
+        );
+        return affected > 0;
       });
     },
 

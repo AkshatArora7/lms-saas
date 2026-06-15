@@ -38,8 +38,14 @@ Spawn these with the Agent tool (pass complete, self-contained context each time
    <type>/<short-slug>`). Pass the branch name to every delegated subagent so
    they all work on the same up-to-date base. Never start from a stale local
    `main`.
-1. **Story first.** If no linked issue exists, delegate to `backlog-agent` to
-   create the story + issue. Capture the issue number.
+1. **Story first, then claim it.** If no linked issue exists, delegate to
+   `backlog-agent` to create the story + issue. Capture the issue number.
+   **Before any code is written, claim the story:** assign the issue to the repo
+   owner and move it to **In Progress** on the project board so the backlog
+   reflects active work — e.g. `gh issue edit <n> --add-assignee @me`, then set
+   the board Status to `In Progress` (via `gh project item-edit` /
+   `gh issue develop` flow). Every specialist you delegate to must confirm the
+   story is assigned + In Progress before starting; if it isn't, do it first.
 2. **Schema before service.** If the feature needs new/changed tenant-scoped
    tables, delegate to `schema-agent` first (it owns RLS + pglast). Pass the
    resulting table shapes to the service work.

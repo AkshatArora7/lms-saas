@@ -28,7 +28,9 @@ The team and how work flows are documented in
 
 1. **Sync `main` first.** The first agent on a ticket runs `git fetch origin`
    then `git checkout main && git pull --ff-only` and branches off fresh `main`.
-2. **Story-first.** No feature without a user story + linked GitHub issue.
+2. **Story-first, and claim it.** No feature without a user story + linked GitHub
+   issue; **assign it to the repo owner and move it to In Progress** on the
+   project board before starting (`gh issue edit <n> --add-assignee @me`).
 3. **Isolation is sacred.** New tenant-scoped tables ship their RLS policy in the
    same change; never weaken tenant scoping.
 4. **Prove it.** Not done until pglast + lint + typecheck + test + build pass and

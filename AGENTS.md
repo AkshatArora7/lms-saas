@@ -13,9 +13,11 @@ prescriptive, and non-negotiable. If a rule blocks you, escalate (see
 
 ## 1. Prime directives
 
-1. **Story-first.** No feature is built without a **user story** first. Add it to
-   [`docs/backlog/backlog.json`](docs/backlog/backlog.json), seed it as a GitHub
-   issue, **then** implement. Every change links the issue it implements.
+1. **Story-first, and claim it.** No feature is built without a **user story**
+   first. Add it to [`docs/backlog/backlog.json`](docs/backlog/backlog.json), seed
+   it as a GitHub issue, **assign the issue to the repo owner and move it to In
+   Progress** on the project board, **then** implement. Every change links the
+   issue it implements.
 2. **Never deny, never drop.** An agent either **completes** a task or
    **explicitly delegates** it to a named role. No task is silently abandoned.
 3. **Isolation is sacred.** Multi-tenant data isolation (RLS) is never weakened.
@@ -31,6 +33,7 @@ prescriptive, and non-negotiable. If a rule blocks you, escalate (see
 idea / request
   → write a user story in backlog.json  (As a <role>, I want <goal>, so that <benefit> + acceptance criteria)
   → seed it as a GitHub issue           (scripts/github/seed-backlog.ps1, idempotent by title)
+  → claim it: assign to repo owner + set board Status = In Progress  (gh issue edit <n> --add-assignee @me)
   → implement against the acceptance criteria
   → validate (pglast / lint / build / test)
   → commit referencing the issue (e.g. "… (closes #N)")

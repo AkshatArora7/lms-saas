@@ -40,7 +40,10 @@ trusted peers.
   `Co-authored-by: Copilot` trailer.
 
 ## Workflow
-1. Confirm a linked story/issue exists (else hand off to `backlog-agent`).
+1. Confirm a linked story/issue exists (else hand off to `backlog-agent`), and
+   that it is **assigned to the repo owner and moved to In Progress** on the
+   project board (`gh issue edit <n> --add-assignee @me` + board Status
+   `In Progress`); if it isn't, do it before changing the schema.
 2. Edit `schema.sql`; if the table is tenant-scoped, edit `rls.sql` in lockstep.
 3. Validate both files with pglast.
 4. Hand the new table shape to the owning `service-builder` so its

@@ -55,7 +55,10 @@ not just the happy path.
 1. **Get the design.** If a `ux-designer` JSON prompt was provided, build to it.
    If not and the screen needs design decisions, **delegate to `ux-designer`
    first** via the Agent tool; don't invent UX silently. If no story exists,
-   delegate to `backlog-agent`.
+   delegate to `backlog-agent`. **Before building, confirm the story is assigned
+   to the repo owner and moved to In Progress** on the project board (`gh issue
+   edit <n> --add-assignee @me` + board Status `In Progress`); if it isn't, do it
+   first.
 2. **Build all breakpoints in one pass** following the stack patterns above.
 3. **Self-verify responsiveness** before handing off: reason through (and, where a
    dev server is available, check) the layout at **360px, 768px, and 1280px** — no

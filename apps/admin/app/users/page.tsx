@@ -39,9 +39,11 @@ const usersCss = `
   margin: 0;
 }
 .admin-user-name {
+  color: var(--lms-accent);
   font-weight: 600;
   margin: 0;
   overflow-wrap: anywhere;
+  text-decoration: none;
 }
 .admin-user-email {
   color: var(--lms-text-muted);
@@ -148,7 +150,12 @@ export default async function AdminUsers() {
                       <Card>
                         <div className="admin-user-row">
                           <Stack gap={1}>
-                            <p className="admin-user-name">{user.name}</p>
+                            <a
+                              className="admin-user-name"
+                              href={`/users/${user.id}`}
+                            >
+                              {user.name}
+                            </a>
                             <p className="admin-user-email">{user.email}</p>
                           </Stack>
                           <Inline gap={2}>

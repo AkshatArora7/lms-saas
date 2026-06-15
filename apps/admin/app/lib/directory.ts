@@ -119,3 +119,15 @@ export function summarizeDirectory(users: DirectoryUser[]): DirectorySummary {
     pendingInvites: users.filter((u) => u.status === "invited").length,
   };
 }
+
+/**
+ * Resolve a single user for the given tenant. Returns null for unknown tenants
+ * or user ids, driving the not-found path.
+ */
+export function getDirectoryUser(
+  userId: string,
+  tenantId: string = TENANT_ID,
+): DirectoryUser | null {
+  if (tenantId !== DEMO_TENANT_ID) return null;
+  return DEMO_USERS.find((u) => u.id === userId) ?? null;
+}

@@ -158,6 +158,9 @@ export default async function Home() {
                   )}
                 </Inline>
               </Stack>
+              <Button fullWidth href="/profile" variant="secondary">
+                View profile
+              </Button>
             </Stack>
           </Card>
         </aside>

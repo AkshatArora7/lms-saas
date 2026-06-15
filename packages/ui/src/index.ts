@@ -1,6 +1,6 @@
 // Theme
 export type { Brand, Theme } from "./theme.js";
-export { defaultBrand, brandRegistry, resolveBrand, themeToCssVars, darken, softRgba } from "./theme.js";
+export { defaultBrand, brandRegistry, demoSchoolBrands, resolveBrand, themeToCssVars, darken, softRgba } from "./theme.js";
 
 // Styles
 export { UIStyles, ThemeStyle, componentCss } from "./styles.js";

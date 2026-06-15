@@ -92,6 +92,9 @@ export default async function AdminHome() {
               <Button href="/reports" variant="secondary">
                 District reports
               </Button>
+              <Button href="/branding" variant="secondary">
+                White-label branding
+              </Button>
             </Inline>
           </Stack>
         </Card>

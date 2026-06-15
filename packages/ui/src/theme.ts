@@ -63,13 +63,61 @@ export const defaultBrand: Brand = {
   accent: fallbackAccent,
 };
 
+/**
+ * Build a self-contained SVG logo mark as a data URI so demo brands can
+ * exercise `logoUrl` without any external network dependency.
+ */
+function svgLogo(accent: string, letter: string): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">` +
+    `<rect width="64" height="64" rx="14" fill="${accent}"/>` +
+    `<text x="32" y="43" font-family="Georgia, serif" font-size="34" font-weight="700" ` +
+    `text-anchor="middle" fill="#ffffff">${letter}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 export const brandRegistry: Record<string, Brand> = {
+  // Demo tenant seeded by the identity dev store — fully realised so the live
+  // app proves accent + typography + radius + logo all flow end-to-end.
   "11111111-1111-1111-1111-111111111111": {
     name: "Northwind Academy",
     tagline: "Welcome back to Northwind Academy.",
     accent: "#0f7b6c",
+    fontFamily: 'Georgia, "Times New Roman", serif',
+    radius: "soft",
+    logoUrl: svgLogo("#0f7b6c", "N"),
+  },
+  "22222222-2222-2222-2222-222222222222": {
+    name: "Crimson Charter School",
+    tagline: "Bold learning, every day.",
+    accent: "#b3261e",
+    fontFamily: '"Trebuchet MS", Verdana, sans-serif',
+    radius: "sharp",
+    logoUrl: svgLogo("#b3261e", "C"),
+  },
+  "33333333-3333-3333-3333-333333333333": {
+    name: "Lakeside Online",
+    tagline: "Learn from anywhere.",
+    accent: "#2952cc",
+    fontFamily: '"Segoe UI", system-ui, sans-serif',
+    radius: "round",
+    logoUrl: svgLogo("#2952cc", "L"),
+  },
+  "44444444-4444-4444-4444-444444444444": {
+    name: "Sunrise Montessori",
+    tagline: "Where curiosity grows.",
+    accent: "#9a6700",
+    fontFamily: 'Palatino, "Palatino Linotype", serif',
+    radius: "round",
+    logoUrl: svgLogo("#9a6700", "S"),
   },
 };
+
+/** Ordered list of demo school brands for white-label showcase surfaces. */
+export const demoSchoolBrands: Array<{ tenantId: string; brand: Brand }> = Object.entries(
+  brandRegistry,
+).map(([tenantId, brand]) => ({ tenantId, brand }));
 
 export function resolveBrand(tenantId?: string): Brand {
   return (tenantId ? brandRegistry[tenantId] : undefined) ?? defaultBrand;

@@ -6,6 +6,7 @@ import type {
   CourseRecord,
   CourseStore,
   NewCourseInput,
+  UpdateCourseInput,
 } from "./store.js";
 
 interface CourseRow {
@@ -100,6 +101,53 @@ export function createPrismaStore(
         );
         const row = rows[0];
         return row ? toRecord(row) : null;
+      });
+    },
+
+    async updateCourse(ctx, id, input: UpdateCourseInput) {
+      return withTenant(ctx, async (db) => {
+        // Build a partial SET clause from only the provided fields so callers
+        // can rename a course without resending unrelated columns.
+        const sets: string[] = [];
+        const params: unknown[] = [];
+        const push = (column: string, value: unknown): void => {
+          params.push(value);
+          sets.push(`${column} = $${params.length}`);
+        };
+        if (input.title !== undefined) push("title", input.title);
+        if (input.description !== undefined)
+          push("description", input.description);
+        if (input.startDate !== undefined) push("start_date", input.startDate);
+        if (input.endDate !== undefined) push("end_date", input.endDate);
+
+        if (sets.length === 0) {
+          const rows = await db.$queryRawUnsafe<CourseRow[]>(
+            `SELECT ${SELECT_COLUMNS} FROM course WHERE id = $1 LIMIT 1`,
+            id,
+          );
+          const row = rows[0];
+          return row ? toRecord(row) : null;
+        }
+
+        params.push(id);
+        const rows = await db.$queryRawUnsafe<CourseRow[]>(
+          `UPDATE course SET ${sets.join(", ")}
+            WHERE id = $${params.length}
+          RETURNING ${SELECT_COLUMNS}`,
+          ...params,
+        );
+        const row = rows[0];
+        return row ? toRecord(row) : null;
+      });
+    },
+
+    async deleteCourse(ctx, id) {
+      return withTenant(ctx, async (db) => {
+        const affected = await db.$executeRawUnsafe(
+          `DELETE FROM course WHERE id = $1`,
+          id,
+        );
+        return affected > 0;
       });
     },
   };

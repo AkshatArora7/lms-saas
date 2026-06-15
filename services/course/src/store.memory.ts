@@ -6,6 +6,7 @@ import type {
   CourseRecord,
   CourseStore,
   NewCourseInput,
+  UpdateCourseInput,
 } from "./store.js";
 
 /**
@@ -64,6 +65,31 @@ export class MemoryCourseStore implements CourseStore {
     if (!course) return null;
     course.isPublished = true;
     return course;
+  }
+
+  async updateCourse(
+    ctx: TenantContext,
+    id: string,
+    input: UpdateCourseInput,
+  ): Promise<CourseRecord | null> {
+    const course = this.courses.find(
+      (c) => c.id === id && c.tenantId === ctx.tenantId,
+    );
+    if (!course) return null;
+    if (input.title !== undefined) course.title = input.title;
+    if (input.description !== undefined) course.description = input.description;
+    if (input.startDate !== undefined) course.startDate = input.startDate;
+    if (input.endDate !== undefined) course.endDate = input.endDate;
+    return course;
+  }
+
+  async deleteCourse(ctx: TenantContext, id: string): Promise<boolean> {
+    const index = this.courses.findIndex(
+      (c) => c.id === id && c.tenantId === ctx.tenantId,
+    );
+    if (index === -1) return false;
+    this.courses.splice(index, 1);
+    return true;
   }
 }
 

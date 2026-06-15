@@ -3,6 +3,7 @@ import {
   Alert,
   AppShell,
   Badge,
+  Button,
   Card,
   Inline,
   PageHeader,
@@ -77,7 +78,19 @@ export default async function AdminHome() {
         subtitle="Org-unit hierarchy, users & roles, enrollment, SIS sync, and tenant settings. Super-admin tooling for pool/silo tenant management lives behind the tenant service."
       />
 
-      <Card className="admin-session-card">
+      <Stack gap={4}>
+        <Card>
+          <Stack gap={3}>
+            <h2 className="admin-section-title">Manage</h2>
+            <Inline gap={2}>
+              <Button href="/users" variant="secondary">
+                Users &amp; roles
+              </Button>
+            </Inline>
+          </Stack>
+        </Card>
+
+        <Card className="admin-session-card">
         <Stack gap={3}>
           <h2 className="admin-section-title">Administrator session</h2>
           <Stack gap={1}>
@@ -114,6 +127,7 @@ export default async function AdminHome() {
           </Stack>
         </Stack>
       </Card>
+      </Stack>
     </AppShell>
   );
 }

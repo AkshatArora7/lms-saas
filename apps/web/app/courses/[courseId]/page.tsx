@@ -82,6 +82,9 @@ export default async function CoursePage({
               <Badge tone="neutral">{course.code}</Badge>
               <Badge tone="neutral">{course.term}</Badge>
               <Chip tone="accent">{course.role}</Chip>
+              <Button href={`/courses/${course.id}/discussions`} size="sm" variant="secondary">
+                Discussions
+              </Button>
             </Inline>
           }
         />

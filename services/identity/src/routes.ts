@@ -64,11 +64,13 @@ async function issueTokens(
   familyId: string,
 ): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
   const { roles, scopes } = await deps.store.getRolesAndScopes(ctx, userId);
+  const parentTenantId = await deps.store.getParentTenantId(ctx);
 
   const accessToken = await signAccessToken(
     {
       sub: userId,
       tenantId: ctx.tenantId,
+      parentTenantId,
       tier: ctx.tier,
       roles: roles as StandardRole[],
       scopes,
@@ -191,10 +193,12 @@ export function registerAuthRoutes(
       ctx,
       rec.userId,
     );
+    const parentTenantId = await deps.store.getParentTenantId(ctx);
     const accessToken = await signAccessToken(
       {
         sub: rec.userId,
         tenantId: ctx.tenantId,
+        parentTenantId,
         tier: ctx.tier,
         roles: roles as StandardRole[],
         scopes,
@@ -253,6 +257,7 @@ export function registerAuthRoutes(
       return reply.code(200).send({
         userId: claims.sub,
         tenantId: claims.tenantId,
+        parentTenantId: claims.parentTenantId ?? null,
         tier: claims.tier,
         roles: claims.roles,
         scopes: claims.scopes,

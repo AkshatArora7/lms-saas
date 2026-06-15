@@ -74,6 +74,21 @@ export function createPrismaStore(): IdentityStore {
       });
     },
 
+    async getParentTenantId(ctx): Promise<string | null> {
+      if (ctx.parentTenantId !== undefined) return ctx.parentTenantId;
+      return withTenant(ctx, async (db) => {
+        // `tenant` is the control-plane registry (not RLS-scoped): a direct
+        // lookup of this tenant's parent is safe and the query is keyed by id.
+        const rows = await db.$queryRawUnsafe<
+          Array<{ parent_id: string | null }>
+        >(
+          `SELECT parent_id FROM tenant WHERE id = $1 LIMIT 1`,
+          ctx.tenantId,
+        );
+        return rows[0]?.parent_id ?? null;
+      });
+    },
+
     async insertRefreshToken(ctx, rec: NewRefreshRecord) {
       await withTenant(ctx, async (db) => {
         await db.$executeRawUnsafe(

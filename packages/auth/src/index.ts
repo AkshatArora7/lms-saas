@@ -20,6 +20,12 @@ export {
 export interface AccessTokenClaims extends JWTPayload {
   sub: string; // user id
   tenantId: string;
+  /**
+   * The owning parent tenant for a sub-tenant, or null for a top-level tenant.
+   * Carried in the token so downstream services authorize across the tenant
+   * hierarchy without a control-plane round-trip.
+   */
+  parentTenantId: string | null;
   tier: TenantTier;
   roles: StandardRole[];
   /** Granular permission strings, e.g. "discussions:posts:manage". */

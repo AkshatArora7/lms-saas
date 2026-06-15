@@ -75,6 +75,14 @@ export interface IdentityStore {
     userId: string,
   ): Promise<RolesAndScopes>;
 
+  /**
+   * The owning parent tenant id for a sub-tenant, or null for a top-level
+   * tenant. Read from the control-plane `tenant` registry so the access token
+   * can carry the hierarchy. Falls back to `ctx.parentTenantId` when the
+   * gateway already resolved it.
+   */
+  getParentTenantId(ctx: TenantContext): Promise<string | null>;
+
   insertRefreshToken(
     ctx: TenantContext,
     rec: NewRefreshRecord,

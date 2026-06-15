@@ -125,5 +125,29 @@ export function createSeededMemoryStore(
     expiresAt: null,
     createdAt: new Date(0).toISOString(),
   });
+  // Seeded under a teacher demo course (alg-101) so the instructor announcement
+  // console renders a real published + scheduled happy path in local dev.
+  store.seed({
+    id: "demo-alg-ann-1",
+    tenantId: DEMO_TENANT_ID,
+    orgUnitId: "alg-101",
+    authorId: "demo-instructor",
+    title: "Unit 1 quiz is live",
+    body: "The Unit 1 quiz is now open. You have until Friday to complete it.",
+    publishAt: new Date(0).toISOString(),
+    expiresAt: null,
+    createdAt: new Date(0).toISOString(),
+  });
+  store.seed({
+    id: "demo-alg-ann-2",
+    tenantId: DEMO_TENANT_ID,
+    orgUnitId: "alg-101",
+    authorId: "demo-instructor",
+    title: "Office hours moved to Thursday",
+    body: "Starting next week, office hours move to Thursday 3-4pm.",
+    publishAt: new Date("2999-01-01T00:00:00.000Z").toISOString(),
+    expiresAt: null,
+    createdAt: new Date(0).toISOString(),
+  });
   return store;
 }

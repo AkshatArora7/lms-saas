@@ -139,6 +139,17 @@ export default async function Teach() {
                           </div>
                           <Inline gap={2}>
                             <a
+                              href={`/teach/${course.id}/announcements`}
+                              style={{
+                                color: "var(--lms-accent)",
+                                fontWeight: 600,
+                                textDecoration: "none",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Announcements
+                            </a>
+                            <a
                               href={`/teach/${course.id}/assignments`}
                               style={{
                                 color: "var(--lms-accent)",

@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import {
   AppShell,
   Badge,
+  Button,
   Card,
   Chip,
   EmptyState,
@@ -41,6 +42,11 @@ export default async function Home() {
       <PageHeader
         title="Welcome back"
         subtitle="Here's your learning at a glance."
+        actions={
+          <Button href="/grades" variant="secondary">
+            View grades
+          </Button>
+        }
       />
 
       <Grid gap={5} min="280px">

@@ -2,7 +2,11 @@ import type { AppConfig } from "@lms/config";
 import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import type { AssignmentStore, SubmissionType } from "./store.js";
+import type {
+  AssignmentStore,
+  SubmissionType,
+  UpdateAssignmentInput,
+} from "./store.js";
 
 export interface AssignmentRouteDeps {
   config: AppConfig;
@@ -61,6 +65,29 @@ interface SubmissionBody {
   blobUrl?: unknown;
 }
 
+/** Validate the shared assignment fields on a create/update body. Returns an
+ * error message, or null when every provided field is valid. */
+function validateAssignmentFields(body: AssignmentBody): string | null {
+  if (body.points !== undefined && !isFiniteNumber(body.points)) {
+    return "points must be a number.";
+  }
+  if (
+    body.submissionType !== undefined &&
+    !SUBMISSION_TYPES.includes(body.submissionType as SubmissionType)
+  ) {
+    return `submissionType must be one of ${SUBMISSION_TYPES.join(", ")}.`;
+  }
+  if (body.dueAt !== undefined && body.dueAt !== null) {
+    if (typeof body.dueAt !== "string" || Number.isNaN(Date.parse(body.dueAt))) {
+      return "dueAt must be an ISO timestamp.";
+    }
+  }
+  if (body.allowLate !== undefined && typeof body.allowLate !== "boolean") {
+    return "allowLate must be a boolean.";
+  }
+  return null;
+}
+
 /** Register the assignment domain surface: assignment CRUD + submissions. */
 export function registerAssignmentRoutes(
   app: FastifyInstance,
@@ -77,28 +104,9 @@ export function registerAssignmentRoutes(
     if (!isNonEmptyString(body.title)) {
       return badRequest(reply, "title is required.");
     }
-    if (body.points !== undefined && !isFiniteNumber(body.points)) {
-      return badRequest(reply, "points must be a number.");
-    }
-    if (
-      body.submissionType !== undefined &&
-      !SUBMISSION_TYPES.includes(body.submissionType as SubmissionType)
-    ) {
-      return badRequest(
-        reply,
-        `submissionType must be one of ${SUBMISSION_TYPES.join(", ")}.`,
-      );
-    }
-    if (body.dueAt !== undefined && body.dueAt !== null) {
-      if (
-        typeof body.dueAt !== "string" ||
-        Number.isNaN(Date.parse(body.dueAt))
-      ) {
-        return badRequest(reply, "dueAt must be an ISO timestamp.");
-      }
-    }
-    if (body.allowLate !== undefined && typeof body.allowLate !== "boolean") {
-      return badRequest(reply, "allowLate must be a boolean.");
+    const fieldError = validateAssignmentFields(body);
+    if (fieldError) {
+      return badRequest(reply, fieldError);
     }
 
     const assignment = await deps.store.createAssignment(ctx, {
@@ -143,6 +151,68 @@ export function registerAssignmentRoutes(
         req.query.courseId.trim(),
       );
       return reply.code(200).send({ assignments });
+    },
+  );
+
+  app.patch<{ Params: { id: string } }>(
+    "/assignments/:id",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+
+      const body = (req.body ?? {}) as AssignmentBody;
+      if (body.title !== undefined && !isNonEmptyString(body.title)) {
+        return badRequest(reply, "title, when provided, must be non-empty.");
+      }
+      const fieldError = validateAssignmentFields(body);
+      if (fieldError) {
+        return badRequest(reply, fieldError);
+      }
+
+      const input: UpdateAssignmentInput = {};
+      if (body.title !== undefined) input.title = (body.title as string).trim();
+      if (body.instructions !== undefined) {
+        input.instructions = isNonEmptyString(body.instructions)
+          ? body.instructions.trim()
+          : null;
+      }
+      if (body.dueAt !== undefined) {
+        input.dueAt = (body.dueAt as string | null) ?? null;
+      }
+      if (body.points !== undefined) input.points = body.points as number;
+      if (body.submissionType !== undefined) {
+        input.submissionType = body.submissionType as SubmissionType;
+      }
+      if (body.allowLate !== undefined) {
+        input.allowLate = body.allowLate as boolean;
+      }
+
+      const assignment = await deps.store.updateAssignment(
+        ctx,
+        req.params.id,
+        input,
+      );
+      if (!assignment) {
+        return reply
+          .code(404)
+          .send({ error: "not_found", message: "Assignment not found." });
+      }
+      return reply.code(200).send({ assignment });
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    "/assignments/:id",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const deleted = await deps.store.deleteAssignment(ctx, req.params.id);
+      if (!deleted) {
+        return reply
+          .code(404)
+          .send({ error: "not_found", message: "Assignment not found." });
+      }
+      return reply.code(204).send();
     },
   );
 

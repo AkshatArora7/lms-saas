@@ -277,3 +277,112 @@ describe("tenant isolation", () => {
     expect(res.json()).toMatchObject({ error: "tenant_required" });
   });
 });
+
+describe("assignment update and delete", () => {
+  it("updates an assignment (partial patch keeps other fields)", async () => {
+    const app = buildTestApp();
+    const id = await createAssignment(app, {
+      title: "Draft",
+      points: 50,
+      instructions: "Original",
+    });
+
+    const patched = await app.inject({
+      method: "PATCH",
+      url: `/assignments/${id}`,
+      headers: HEADERS,
+      payload: { title: "Final", points: 80 },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json()).toMatchObject({
+      assignment: {
+        id,
+        title: "Final",
+        points: 80,
+        instructions: "Original",
+      },
+    });
+  });
+
+  it("rejects an empty title on update (400)", async () => {
+    const app = buildTestApp();
+    const id = await createAssignment(app);
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/assignments/${id}`,
+      headers: HEADERS,
+      payload: { title: "   " },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("rejects an invalid submissionType on update (400)", async () => {
+    const app = buildTestApp();
+    const id = await createAssignment(app);
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/assignments/${id}`,
+      headers: HEADERS,
+      payload: { submissionType: "carrier-pigeon" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 404 when updating a missing assignment", async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/assignments/does-not-exist",
+      headers: HEADERS,
+      payload: { title: "Nope" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("deletes an assignment (204) then 404 on re-fetch", async () => {
+    const app = buildTestApp();
+    const id = await createAssignment(app);
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/assignments/${id}`,
+      headers: HEADERS,
+    });
+    expect(deleted.statusCode).toBe(204);
+
+    const fetched = await app.inject({
+      method: "GET",
+      url: `/assignments/${id}`,
+      headers: HEADERS,
+    });
+    expect(fetched.statusCode).toBe(404);
+  });
+
+  it("returns 404 when deleting a missing assignment", async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/assignments/does-not-exist",
+      headers: HEADERS,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("does not delete another tenant's assignment (404)", async () => {
+    const app = buildTestApp(createSeededMemoryStore());
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/assignments/demo-alg-quiz-1",
+      headers: { "x-tenant-id": OTHER_TENANT.tenantId },
+    });
+    expect(res.statusCode).toBe(404);
+
+    const stillThere = await app.inject({
+      method: "GET",
+      url: "/assignments/demo-alg-quiz-1",
+      headers: HEADERS,
+    });
+    expect(stillThere.statusCode).toBe(200);
+  });
+});

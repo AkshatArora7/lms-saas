@@ -89,6 +89,9 @@ export default async function AdminHome() {
               <Button href="/org-units" variant="secondary">
                 Org units
               </Button>
+              <Button href="/reports" variant="secondary">
+                District reports
+              </Button>
             </Inline>
           </Stack>
         </Card>

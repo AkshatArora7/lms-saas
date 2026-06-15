@@ -137,17 +137,30 @@ export default async function Teach() {
                               </Badge>
                             </Inline>
                           </div>
-                          <a
-                            href={`/courses/${course.id}`}
-                            style={{
-                              color: "var(--lms-accent)",
-                              fontWeight: 600,
-                              textDecoration: "none",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            Open →
-                          </a>
+                          <Inline gap={2}>
+                            <a
+                              href={`/teach/${course.id}/gradebook`}
+                              style={{
+                                color: "var(--lms-accent)",
+                                fontWeight: 600,
+                                textDecoration: "none",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Gradebook
+                            </a>
+                            <a
+                              href={`/courses/${course.id}`}
+                              style={{
+                                color: "var(--lms-accent)",
+                                fontWeight: 600,
+                                textDecoration: "none",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Open →
+                            </a>
+                          </Inline>
                         </Inline>
 
                         <ProgressBar

@@ -201,3 +201,34 @@ export function getCourseDetail(
   if (tenantId !== DEMO_TENANT_ID) return null;
   return DEMO_COURSE_DETAILS[courseId] ?? null;
 }
+
+export interface ContentItemView {
+  course: Pick<CourseDetail, "id" | "title" | "code">;
+  module: Pick<CourseModule, "id" | "title">;
+  item: ContentItem;
+}
+
+/**
+ * Resolve a single content item along with its course and module context for
+ * the given tenant. Returns null for unknown tenants, courses, or item ids,
+ * driving the not-found path.
+ */
+export function getContentItem(
+  courseId: string,
+  itemId: string,
+  tenantId: string = TENANT_ID,
+): ContentItemView | null {
+  const course = getCourseDetail(courseId, tenantId);
+  if (!course) return null;
+  for (const module of course.modules) {
+    const item = module.items.find((i) => i.id === itemId);
+    if (item) {
+      return {
+        course: { id: course.id, title: course.title, code: course.code },
+        module: { id: module.id, title: module.title },
+        item,
+      };
+    }
+  }
+  return null;
+}

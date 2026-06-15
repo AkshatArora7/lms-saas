@@ -37,8 +37,11 @@ const bodyTextStyle: CSSProperties = {
 };
 
 const itemTitleStyle: CSSProperties = {
+  color: "var(--lms-accent)",
+  fontWeight: 600,
   margin: 0,
   overflowWrap: "anywhere",
+  textDecoration: "none",
 };
 
 const TYPE_LABEL: Record<ContentItemType, string> = {
@@ -109,7 +112,12 @@ export default async function CoursePage({
                                   <Badge tone="neutral">
                                     {TYPE_LABEL[item.type]}
                                   </Badge>
-                                  <p style={itemTitleStyle}>{item.title}</p>
+                                  <a
+                                    href={`/courses/${course.id}/items/${item.id}`}
+                                    style={itemTitleStyle}
+                                  >
+                                    {item.title}
+                                  </a>
                                 </Inline>
                                 <Chip tone={status.tone}>{status.label}</Chip>
                               </Inline>

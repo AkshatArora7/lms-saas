@@ -107,6 +107,32 @@ export function registerEnrollmentRoutes(
     },
   );
 
+  app.patch<{ Params: { id: string } }>(
+    "/enrollments/:id",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const body = (req.body ?? {}) as { role?: unknown };
+      if (!isNonEmptyString(body.role)) {
+        return badRequest(reply, "role is required.");
+      }
+      const result = await deps.store.updateEnrollmentRole(
+        ctx,
+        req.params.id,
+        body.role.trim(),
+      );
+      if (!result.ok) {
+        if (result.reason === "unknown_role") {
+          return badRequest(reply, "Unknown role for this tenant.");
+        }
+        return reply
+          .code(404)
+          .send({ error: "not_found", message: "Enrollment not found." });
+      }
+      return reply.code(200).send({ enrollment: result.enrollment });
+    },
+  );
+
   app.post<{ Params: { id: string } }>(
     "/enrollments/:id/complete",
     async (req, reply) => {

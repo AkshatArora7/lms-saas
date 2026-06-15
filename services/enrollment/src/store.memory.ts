@@ -7,6 +7,7 @@ import type {
   EnrollmentRecord,
   EnrollmentStore,
   NewEnrollmentInput,
+  UpdateEnrollmentResult,
 } from "./store.js";
 
 /** The demo tenant the local dev seed and the web BFFs agree on. */
@@ -100,6 +101,22 @@ export class MemoryEnrollmentStore implements EnrollmentStore {
     return this.transition(ctx, id, "withdrawn");
   }
 
+  async updateEnrollmentRole(
+    ctx: TenantContext,
+    id: string,
+    role: string,
+  ): Promise<UpdateEnrollmentResult> {
+    if (!this.knownRoles.includes(role)) {
+      return { ok: false, reason: "unknown_role" };
+    }
+    const enrollment = this.enrollments.find(
+      (e) => e.id === id && e.tenantId === ctx.tenantId,
+    );
+    if (!enrollment) return { ok: false, reason: "not_found" };
+    enrollment.role = role;
+    return { ok: true, enrollment };
+  }
+
   async completeEnrollment(
     ctx: TenantContext,
     id: string,
@@ -143,6 +160,35 @@ export function createSeededMemoryStore(
     role: "learner",
     status: "active",
     enrolledAt: new Date("2026-01-01T00:00:00.000Z").toISOString(),
+  });
+  // Active roster for a teacher demo course (alg-101) so the instructor roster
+  // console renders a real, populated section in local dev.
+  store.seed({
+    id: "demo-alg-enr-1",
+    tenantId: DEMO_TENANT_ID,
+    userId: "ada.lovelace",
+    orgUnitId: "alg-101",
+    role: "learner",
+    status: "active",
+    enrolledAt: new Date("2026-01-05T00:00:00.000Z").toISOString(),
+  });
+  store.seed({
+    id: "demo-alg-enr-2",
+    tenantId: DEMO_TENANT_ID,
+    userId: "alan.turing",
+    orgUnitId: "alg-101",
+    role: "learner",
+    status: "active",
+    enrolledAt: new Date("2026-01-06T00:00:00.000Z").toISOString(),
+  });
+  store.seed({
+    id: "demo-alg-enr-3",
+    tenantId: DEMO_TENANT_ID,
+    userId: "grace.hopper",
+    orgUnitId: "alg-101",
+    role: "teaching_assistant",
+    status: "active",
+    enrolledAt: new Date("2026-01-07T00:00:00.000Z").toISOString(),
   });
   return store;
 }

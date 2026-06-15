@@ -2,7 +2,7 @@ import type { AppConfig } from "@lms/config";
 import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import type { CourseStore, NewCourseInput } from "./store.js";
+import type { CourseStore, NewCourseInput, UpdateCourseInput } from "./store.js";
 
 export interface CourseRouteDeps {
   config: AppConfig;
@@ -12,6 +12,13 @@ export interface CourseRouteDeps {
 }
 
 interface CreateCourseBody {
+  title?: unknown;
+  description?: unknown;
+  startDate?: unknown;
+  endDate?: unknown;
+}
+
+interface UpdateCourseBody {
   title?: unknown;
   description?: unknown;
   startDate?: unknown;
@@ -39,7 +46,7 @@ function optionalString(value: unknown): string | null | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-/** Register the course domain surface: list, create, get, publish. */
+/** Register the course domain surface: list, create, get, publish, update, delete. */
 export function registerCourseRoutes(
   app: FastifyInstance,
   deps: CourseRouteDeps,
@@ -100,6 +107,57 @@ export function registerCourseRoutes(
           .send({ error: "not_found", message: "Course not found." });
       }
       return reply.code(200).send({ course });
+    },
+  );
+
+  app.patch<{ Params: { id: string } }>(
+    "/courses/:id",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+
+      const body = (req.body ?? {}) as UpdateCourseBody;
+      if (
+        body.title !== undefined &&
+        (typeof body.title !== "string" || body.title.trim().length === 0)
+      ) {
+        return reply.code(400).send({
+          error: "invalid_request",
+          message: "title, when provided, must be a non-empty string.",
+        });
+      }
+
+      const input: UpdateCourseInput = {};
+      if (body.title !== undefined) input.title = (body.title as string).trim();
+      if (body.description !== undefined)
+        input.description = optionalString(body.description) ?? null;
+      if (body.startDate !== undefined)
+        input.startDate = optionalString(body.startDate) ?? null;
+      if (body.endDate !== undefined)
+        input.endDate = optionalString(body.endDate) ?? null;
+
+      const course = await deps.store.updateCourse(ctx, req.params.id, input);
+      if (!course) {
+        return reply
+          .code(404)
+          .send({ error: "not_found", message: "Course not found." });
+      }
+      return reply.code(200).send({ course });
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    "/courses/:id",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const deleted = await deps.store.deleteCourse(ctx, req.params.id);
+      if (!deleted) {
+        return reply
+          .code(404)
+          .send({ error: "not_found", message: "Course not found." });
+      }
+      return reply.code(204).send();
     },
   );
 }

@@ -60,6 +60,9 @@ export default async function Home() {
             <Button href="/announcements" variant="secondary">
               Announcements{announcements.unread ? ` (${announcements.unread})` : ""}
             </Button>
+            <Button href="/assignments" variant="secondary">
+              Assignments
+            </Button>
             <Button href="/grades" variant="secondary">
               View grades
             </Button>

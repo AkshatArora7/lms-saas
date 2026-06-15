@@ -180,6 +180,47 @@ describe("enrollments", () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it("updates an enrollment's role", async () => {
+    const app = buildTestApp();
+    const created = await enroll(app);
+    const { enrollment } = created.json() as { enrollment: { id: string } };
+
+    const updated = await app.inject({
+      method: "PATCH",
+      url: `/enrollments/${enrollment.id}`,
+      headers: HEADERS,
+      payload: { role: "teaching_assistant" },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json()).toMatchObject({
+      enrollment: { role: "teaching_assistant", status: "active" },
+    });
+  });
+
+  it("rejects a role update to an unknown role (400)", async () => {
+    const app = buildTestApp();
+    const created = await enroll(app);
+    const { enrollment } = created.json() as { enrollment: { id: string } };
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/enrollments/${enrollment.id}`,
+      headers: HEADERS,
+      payload: { role: "wizard" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 404 when updating a missing enrollment's role", async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/enrollments/missing",
+      headers: HEADERS,
+      payload: { role: "learner" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
   it("requires a tenant context (400)", async () => {
     const app = buildTestApp();
     const res = await app.inject({

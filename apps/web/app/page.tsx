@@ -50,6 +50,9 @@ export default async function Home() {
                 Teaching
               </Button>
             ) : null}
+            <Button href="/schedule" variant="secondary">
+              Schedule
+            </Button>
             <Button href="/grades" variant="secondary">
               View grades
             </Button>

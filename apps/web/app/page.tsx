@@ -17,6 +17,7 @@ import {
 import { getBranding } from "./lib/branding";
 import { getSession } from "./lib/auth";
 import { getDashboardCourses } from "./lib/dashboard";
+import { canTeach } from "./lib/teaching";
 import SignOutButton from "./sign-out-button";
 
 const headingStyle: CSSProperties = {
@@ -43,9 +44,16 @@ export default async function Home() {
         title="Welcome back"
         subtitle="Here's your learning at a glance."
         actions={
-          <Button href="/grades" variant="secondary">
-            View grades
-          </Button>
+          <Inline gap={2}>
+            {canTeach(session.roles) ? (
+              <Button href="/teach" variant="secondary">
+                Teaching
+              </Button>
+            ) : null}
+            <Button href="/grades" variant="secondary">
+              View grades
+            </Button>
+          </Inline>
         }
       />
 

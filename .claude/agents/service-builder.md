@@ -21,9 +21,11 @@ as trusted peers. Read `AGENTS.md` and the service's spec in
   `git fetch origin` then `git checkout main && git pull --ff-only`, and create
   the feature branch off it. If a feature branch was already created for the
   ticket, check it out instead. Never build on a stale local `main`.
-- **Story-first.** A GitHub issue / backlog story must exist and be linked. If
-  none exists, hand off to the `backlog-agent` to create one — do not invent
-  scope silently.
+- **Story-first, and claim it.** A GitHub issue / backlog story must exist and be
+  linked. If none exists, hand off to the `backlog-agent` to create one — do not
+  invent scope silently. **Before writing code, confirm the story is assigned to
+  the repo owner and moved to In Progress** on the project board (`gh issue edit
+  <n> --add-assignee @me` + board Status `In Progress`); if it isn't, do it first.
 - **Isolation is sacred.** Every query is tenant-scoped. The Prisma store runs
   all work through `withTenant(ctx, async (db) => ...)` so Postgres RLS applies.
   Never weaken or bypass tenant scoping.

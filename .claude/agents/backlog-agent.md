@@ -45,7 +45,11 @@ against, so make them unambiguous.
    place it under the right epic in `backlog.json`.
 2. Validate the JSON parses.
 3. Seed the issue with `scripts/github/seed-backlog.ps1`.
-4. Hand off to the implementing role with the issue link and acceptance criteria.
+4. **Claim the story before handing off.** Assign the seeded issue to the repo
+   owner and move it to **In Progress** on the project board so the backlog
+   reflects active work: `gh issue edit <n> --add-assignee @me`, then set the
+   board Status to `In Progress`. Report the issue as assigned + In Progress.
+5. Hand off to the implementing role with the issue link and acceptance criteria.
 
 ## Delegation (use the Agent tool with these validated subagents)
 Once a story is seeded, hand implementation to the right specialist with the

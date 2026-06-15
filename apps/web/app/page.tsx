@@ -17,6 +17,7 @@ import {
 import { getBranding } from "./lib/branding";
 import { getSession } from "./lib/auth";
 import { getDashboardCourses } from "./lib/dashboard";
+import { getAnnouncements, summarizeAnnouncements } from "./lib/announcements";
 import { canTeach } from "./lib/teaching";
 import SignOutButton from "./sign-out-button";
 
@@ -37,6 +38,9 @@ export default async function Home() {
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
   const courses = getDashboardCourses(session.tenantId);
+  const announcements = summarizeAnnouncements(
+    getAnnouncements(session.tenantId),
+  );
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
@@ -52,6 +56,9 @@ export default async function Home() {
             ) : null}
             <Button href="/schedule" variant="secondary">
               Schedule
+            </Button>
+            <Button href="/announcements" variant="secondary">
+              Announcements{announcements.unread ? ` (${announcements.unread})` : ""}
             </Button>
             <Button href="/grades" variant="secondary">
               View grades

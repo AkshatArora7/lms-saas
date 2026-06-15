@@ -86,6 +86,9 @@ export default async function AdminHome() {
               <Button href="/users" variant="secondary">
                 Users &amp; roles
               </Button>
+              <Button href="/courses" variant="secondary">
+                Course catalogue
+              </Button>
               <Button href="/org-units" variant="secondary">
                 Org units
               </Button>

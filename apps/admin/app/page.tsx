@@ -95,6 +95,9 @@ export default async function AdminHome() {
               <Button href="/branding" variant="secondary">
                 White-label branding
               </Button>
+              <Button href="/settings" variant="secondary">
+                Tenant settings
+              </Button>
             </Inline>
           </Stack>
         </Card>

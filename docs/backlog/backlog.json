@@ -515,6 +515,22 @@
             "Automated CI test proves a cross-tenant read of role_permission returns zero rows",
             "permission remains a shared, read-only capability vocabulary"
           ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 3,
+          "title": "Propagate owning parentTenantId in tenant-scoped access tokens",
+          "as_a": "platform engineer",
+          "i_want": "the identity service to stamp the owning parentTenantId into tenant-scoped access tokens and expose it on /auth/me",
+          "so_that": "downstream services can resolve a sub-tenant's owning district from the token without an extra control-plane lookup",
+          "ac": [
+            "AccessTokenClaims (@lms/auth) and TenantContext (@lms/types) carry parentTenantId",
+            "IdentityStore.getParentTenantId(ctx) reads the control-plane tenant registry, falling back to ctx.parentTenantId",
+            "Login, refresh and SSO callback stamp parentTenantId into the access token",
+            "/auth/me returns parentTenantId",
+            "Unit tests cover the claim on login/refresh/SSO and the registry lookup/fallback; suite is green"
+          ]
         }
       ]
     },

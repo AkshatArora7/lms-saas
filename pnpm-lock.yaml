@@ -1197,6 +1197,9 @@ importers:
       '@lms/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
+      '@lms/service-tenant':
+        specifier: workspace:*
+        version: link:../../services/tenant
       '@lms/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig

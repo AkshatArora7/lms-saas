@@ -2,26 +2,36 @@
  * tenant service.
  * Control plane: tenant catalog (tenant_id -> DSN/region/tier), provisioning saga, pool/silo routing, feature flags, onboarding/offboarding.
  *
- * Lightweight Fastify HTTP service. Each request resolves a TenantContext
- * (pool vs silo) and runs domain work through @lms/db.withTenant so Postgres
- * RLS scopes every query. Deployable as a container image (Dockerfile ->
- * GHCR -> container host) or, for edge/BFF roles, as Vercel Functions.
+ * Lightweight Fastify HTTP service. Unlike tenant-scoped domain services, this
+ * is the CONTROL PLANE: it owns the `tenant` registry, which sits OUTSIDE
+ * Postgres RLS. Provisioning runs against a control-plane Prisma client (never
+ * `withTenant`). Deployable as a container image (Dockerfile -> GHCR ->
+ * container host) or, for edge/BFF roles, as Vercel Functions.
  */
+import { loadConfig, type AppConfig } from "@lms/config";
+import { createLogger } from "@lms/logger";
 import Fastify, { type FastifyInstance } from "fastify";
 
-import { loadConfig } from "@lms/config";
-import { createLogger } from "@lms/logger";
+import { registerTenantRoutes, type TenantRouteDeps } from "./routes.js";
+import { createSeededMemoryStore } from "./store.memory.js";
+import { createPrismaStore } from "./store.prisma.js";
 
 const SERVICE = "tenant";
 const log = createLogger(SERVICE);
+
+/** Overridable dependencies — tests inject an in-memory store. */
+export interface BuildAppOptions {
+  config?: AppConfig;
+  store?: TenantRouteDeps["store"];
+}
 
 /**
  * Build the Fastify app without binding a port, so tests can drive it via
  * `app.inject(...)`. Config is resolved lazily here (not at import time) to
  * keep the module import side-effect free.
  */
-export function buildApp(): FastifyInstance {
-  const config = loadConfig();
+export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
+  const config = options.config ?? loadConfig();
   const app = Fastify({ logger: false });
 
   app.get("/health", async () => ({
@@ -31,19 +41,37 @@ export function buildApp(): FastifyInstance {
     uptime: process.uptime(),
   }));
 
-  // TODO: register domain routes (see /docs/ARCHITECTURE.md). Tenant-resolution
-  // middleware and RLS-scoped handlers are added per bounded context.
+  registerTenantRoutes(app, {
+    config,
+    store: options.store ?? createPrismaStore(),
+  });
 
   return app;
 }
 
 const port = Number(process.env.PORT ?? 4002);
 
+/**
+ * Local dev convenience: `TENANT_STORE=memory` runs the service against an
+ * in-memory control-plane registry seeded with a demo tenant, so the
+ * provisioning surface works without a Postgres database. Production leaves
+ * this unset.
+ */
+const useMemoryStore = process.env.TENANT_STORE === "memory";
+
 async function start(): Promise<void> {
   try {
-    const app = buildApp();
+    if (useMemoryStore) {
+      process.env.DATABASE_URL ??= "postgres://demo:demo@localhost:5432/demo";
+      process.env.JWT_SECRET ??= "local-dev-secret-not-for-production";
+    }
+    const store = useMemoryStore ? createSeededMemoryStore() : undefined;
+    const app = buildApp(store ? { store } : {});
     await app.listen({ port, host: "0.0.0.0" });
-    log.info({ port }, `${SERVICE} service listening`);
+    log.info(
+      { port, store: useMemoryStore ? "memory(demo)" : "prisma" },
+      `${SERVICE} service listening`,
+    );
   } catch (err) {
     log.error({ err }, `failed to start ${SERVICE} service`);
     process.exit(1);

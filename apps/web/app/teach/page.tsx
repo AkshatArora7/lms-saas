@@ -9,7 +9,6 @@ import {
   Chip,
   EmptyState,
   Grid,
-  Inline,
   PageHeader,
   ProgressBar,
   Stack,
@@ -26,39 +25,203 @@ import {
 } from "../lib/teaching";
 import SignOutButton from "../sign-out-button";
 
-const headingStyle: CSSProperties = {
-  fontSize: "1rem",
-  lineHeight: 1.3,
-  margin: 0,
-  overflowWrap: "anywhere",
-};
-
-const statValueStyle: CSSProperties = {
-  fontSize: "1.75rem",
-  fontWeight: 700,
-  lineHeight: 1.1,
-  margin: 0,
-};
-
-const mutedStyle: CSSProperties = {
-  color: "var(--lms-text-muted)",
-  margin: 0,
-  overflowWrap: "anywhere",
-};
-
-const riskRowStyle: CSSProperties = {
-  alignItems: "center",
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "var(--lms-space-2)",
-  justifyContent: "space-between",
-};
+/**
+ * Scoped layout polish for the instructor teaching dashboard. Every visual
+ * decision resolves from the tenant theme tokens (var(--lms-*)) so the page
+ * stays fully white-label: the same markup renders correctly for a teal/rounded
+ * brand and a red/sharp one. The summary band leads with three stats (the
+ * at-risk count subtly tinted via the warning token), then a responsive grid of
+ * course cards — clean header, a wrapping quick-actions row, an engagement bar,
+ * and a scannable at-risk list. Risk is always carried by a TEXT pill (Chip),
+ * never colour alone, and the layout reflows from a single stacked column on
+ * phones to a two-up grid on desktop with no horizontal overflow at 360px.
+ */
+const teachCss = `
+.tch-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-1);
+  align-items: flex-start;
+}
+.tch-stat {
+  font-size: clamp(1.9rem, 5vw, 2.4rem);
+  font-weight: 700;
+  line-height: 1;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--lms-stat-accent, var(--lms-text));
+}
+.tch-stat-label {
+  color: var(--lms-stat-accent, var(--lms-text-muted));
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tch-section-heading {
+  font-size: clamp(1.15rem, 3vw, 1.4rem);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0 0 var(--lms-space-3);
+  padding-bottom: var(--lms-space-2);
+  border-bottom: 1px solid var(--lms-border);
+}
+.tch-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-4);
+  height: 100%;
+}
+.tch-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-2);
+  min-width: 0;
+}
+.tch-title {
+  font-size: clamp(1.05rem, 2.5vw, 1.25rem);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.tch-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lms-space-2);
+}
+.tch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lms-space-2);
+  padding: var(--lms-space-2) 0;
+  border-top: 1px solid var(--lms-border);
+  border-bottom: 1px solid var(--lms-border);
+}
+.tch-engage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-2);
+}
+.tch-engage__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--lms-space-2);
+}
+.tch-engage__label {
+  color: var(--lms-text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.tch-engage__value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--lms-accent);
+}
+.tch-risk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-2);
+}
+.tch-risk__heading {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lms-text-muted);
+  margin: 0;
+}
+.tch-risk__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-2);
+}
+.tch-risk__row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--lms-space-2);
+  padding: var(--lms-space-3);
+  border: 1px solid var(--lms-border);
+  border-radius: var(--lms-radius-md);
+  background: var(--lms-surface-2);
+}
+@media (min-width: 480px) {
+  .tch-risk__row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+.tch-risk__who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tch-risk__name {
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.tch-risk__reason {
+  color: var(--lms-text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.tch-risk__empty {
+  color: var(--lms-text-muted);
+  margin: 0;
+  padding: var(--lms-space-3);
+  border: 1px dashed var(--lms-border);
+  border-radius: var(--lms-radius-md);
+  text-align: center;
+}
+`;
 
 const RISK_META: Record<RiskLevel, { label: string; tone: BadgeTone }> = {
   on_track: { label: "On track", tone: "success" },
   at_risk: { label: "At risk", tone: "warning" },
   critical: { label: "Critical", tone: "danger" },
 };
+
+const QUICK_ACTIONS: {
+  key: string;
+  label: string;
+  href: (id: string) => string;
+}[] = [
+  {
+    key: "discussions",
+    label: "Discussions",
+    href: (id) => `/teach/${id}/discussions`,
+  },
+  { key: "roster", label: "Roster", href: (id) => `/teach/${id}/roster` },
+  {
+    key: "announcements",
+    label: "Announcements",
+    href: (id) => `/teach/${id}/announcements`,
+  },
+  {
+    key: "assignments",
+    label: "Assignments",
+    href: (id) => `/teach/${id}/assignments`,
+  },
+  {
+    key: "gradebook",
+    label: "Gradebook",
+    href: (id) => `/teach/${id}/gradebook`,
+  },
+  { key: "open", label: "Open →", href: (id) => `/courses/${id}` },
+];
 
 export default async function Teach() {
   const session = await getSession();
@@ -85,6 +248,7 @@ export default async function Teach() {
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
+      <style>{teachCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
           ← Back to dashboard
@@ -97,150 +261,121 @@ export default async function Teach() {
 
         {courses.length ? (
           <>
-            <Grid gap={4} min="180px">
+            <Grid gap={4} min="200px">
               <Card>
-                <Stack gap={1}>
-                  <p style={statValueStyle}>{summary.courseCount}</p>
-                  <p style={mutedStyle}>Courses taught</p>
-                </Stack>
+                <div
+                  className="tch-stat-card"
+                  style={
+                    { "--lms-stat-accent": "var(--lms-text)" } as CSSProperties
+                  }
+                >
+                  <p className="tch-stat">{summary.courseCount}</p>
+                  <p className="tch-stat-label">Courses taught</p>
+                </div>
               </Card>
               <Card>
-                <Stack gap={1}>
-                  <p style={statValueStyle}>{summary.totalEnrolled}</p>
-                  <p style={mutedStyle}>Learners enrolled</p>
-                </Stack>
+                <div
+                  className="tch-stat-card"
+                  style={
+                    { "--lms-stat-accent": "var(--lms-text)" } as CSSProperties
+                  }
+                >
+                  <p className="tch-stat">{summary.totalEnrolled}</p>
+                  <p className="tch-stat-label">Learners enrolled</p>
+                </div>
               </Card>
               <Card>
-                <Stack gap={1}>
-                  <p style={statValueStyle}>{summary.atRiskCount}</p>
-                  <p style={mutedStyle}>At-risk learners</p>
-                </Stack>
+                <div
+                  className="tch-stat-card"
+                  style={
+                    {
+                      "--lms-stat-accent": "var(--lms-warning)",
+                    } as CSSProperties
+                  }
+                >
+                  <p className="tch-stat">{summary.atRiskCount}</p>
+                  <p className="tch-stat-label">At-risk learners</p>
+                </div>
               </Card>
             </Grid>
 
             <section aria-labelledby="teach-heading">
-              <Stack gap={3}>
-                <h2 id="teach-heading" style={headingStyle}>
-                  By course
-                </h2>
-                <Grid min="300px">
-                  {courses.map((course) => (
-                    <Card key={course.id}>
-                      <Stack gap={3}>
-                        <Inline align="center" gap={2} justify="space-between">
-                          <div>
-                            <h3 style={headingStyle}>{course.title}</h3>
-                            <Inline gap={2}>
-                              <Badge tone="neutral">{course.code}</Badge>
-                              <Badge tone="neutral">
-                                {course.enrolled} enrolled
-                              </Badge>
-                            </Inline>
-                          </div>
-                          <Inline gap={2}>
-                            <a
-                              href={`/teach/${course.id}/discussions`}
-                              style={{
-                                color: "var(--lms-accent)",
-                                fontWeight: 600,
-                                textDecoration: "none",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              Discussions
-                            </a>
-                            <a
-                              href={`/teach/${course.id}/roster`}
-                              style={{
-                                color: "var(--lms-accent)",
-                                fontWeight: 600,
-                                textDecoration: "none",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              Roster
-                            </a>
-                            <a
-                              href={`/teach/${course.id}/announcements`}
-                              style={{
-                                color: "var(--lms-accent)",
-                                fontWeight: 600,
-                                textDecoration: "none",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              Announcements
-                            </a>
-                            <a
-                              href={`/teach/${course.id}/assignments`}
-                              style={{
-                                color: "var(--lms-accent)",
-                                fontWeight: 600,
-                                textDecoration: "none",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              Assignments
-                            </a>
-                            <a
-                              href={`/teach/${course.id}/gradebook`}
-                              style={{
-                                color: "var(--lms-accent)",
-                                fontWeight: 600,
-                                textDecoration: "none",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              Gradebook
-                            </a>
-                            <a
-                              href={`/courses/${course.id}`}
-                              style={{
-                                color: "var(--lms-accent)",
-                                fontWeight: 600,
-                                textDecoration: "none",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              Open →
-                            </a>
-                          </Inline>
-                        </Inline>
+              <h2 className="tch-section-heading" id="teach-heading">
+                By course
+              </h2>
+              <Grid gap={4} min="320px">
+                {courses.map((course) => (
+                  <Card key={course.id}>
+                    <div className="tch-card">
+                      <div className="tch-head">
+                        <h3 className="tch-title">{course.title}</h3>
+                        <div className="tch-chips">
+                          <Badge tone="neutral">{course.code}</Badge>
+                          <Badge tone="neutral">
+                            {course.enrolled} enrolled
+                          </Badge>
+                        </div>
+                      </div>
 
+                      <div className="tch-actions">
+                        {QUICK_ACTIONS.map((action) => (
+                          <Button
+                            key={action.key}
+                            href={action.href(course.id)}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            {action.label}
+                          </Button>
+                        ))}
+                      </div>
+
+                      <div className="tch-engage">
+                        <div className="tch-engage__meta">
+                          <span className="tch-engage__label">
+                            Avg engagement
+                          </span>
+                          <span className="tch-engage__value">
+                            {course.engagement}%
+                          </span>
+                        </div>
                         <ProgressBar
-                          label={`${course.title} engagement`}
+                          label={`${course.title} average engagement: ${course.engagement}%`}
                           value={course.engagement}
                         />
-                        <Badge tone="neutral">
-                          {course.engagement}% avg engagement
-                        </Badge>
+                      </div>
 
-                        <Stack gap={2}>
-                          <strong>At-risk learners</strong>
-                          {course.atRisk.length ? (
-                            course.atRisk.map((learner) => {
+                      <div className="tch-risk">
+                        <p className="tch-risk__heading">At-risk learners</p>
+                        {course.atRisk.length ? (
+                          <ul className="tch-risk__list">
+                            {course.atRisk.map((learner) => {
                               const risk = RISK_META[learner.risk];
                               return (
-                                <div key={learner.id} style={riskRowStyle}>
-                                  <div>
-                                    <p style={headingStyle}>{learner.name}</p>
-                                    <p style={mutedStyle}>{learner.reason}</p>
+                                <li className="tch-risk__row" key={learner.id}>
+                                  <div className="tch-risk__who">
+                                    <p className="tch-risk__name">
+                                      {learner.name}
+                                    </p>
+                                    <p className="tch-risk__reason">
+                                      {learner.reason}
+                                    </p>
                                   </div>
                                   <Chip tone={risk.tone}>{risk.label}</Chip>
-                                </div>
+                                </li>
                               );
-                            })
-                          ) : (
-                            <p style={mutedStyle}>
-                              No learners flagged - everyone is on track.
-                            </p>
-                          )}
-                        </Stack>
-                      </Stack>
-                    </Card>
-                  ))}
-                </Grid>
-              </Stack>
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="tch-risk__empty">
+                            No learners flagged - everyone is on track.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </Grid>
             </section>
           </>
         ) : (

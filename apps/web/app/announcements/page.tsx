@@ -21,6 +21,16 @@ import {
 } from "../lib/announcements";
 import SignOutButton from "../sign-out-button";
 
+/**
+ * Scoped layout polish for the learner announcements inbox. Every visual
+ * decision resolves from the tenant theme tokens (var(--lms-*)) so the page
+ * stays fully white-label — the same markup renders correctly for a teal/rounded
+ * brand and a red/sharp one, and never names a single school. Unread items are
+ * differentiated by a token-driven accent rail PLUS a text-labelled "Unread"
+ * dot (never colour alone), scope is carried by a labelled Badge, and the list
+ * reflows from a single stacked column on phones to a roomier desktop layout
+ * with no horizontal overflow at 360px.
+ */
 const announcementsCss = `
 .ann-list {
   display: flex;
@@ -30,23 +40,42 @@ const announcementsCss = `
   margin: 0;
   padding: 0;
 }
-.ann-card--unread {
-  border-left: 3px solid var(--lms-accent);
+.ann-card {
+  position: relative;
+  padding-left: var(--lms-space-5);
 }
-.ann-title {
-  font-weight: 600;
-  margin: 0;
-  overflow-wrap: anywhere;
+.ann-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: var(--lms-space-3);
+  bottom: var(--lms-space-3);
+  width: 4px;
+  border-radius: var(--lms-radius-pill);
+  background: transparent;
 }
-.ann-body {
-  color: var(--lms-text);
-  margin: 0;
-  overflow-wrap: anywhere;
+.ann-card--unread::before {
+  background: var(--lms-accent);
 }
-.ann-meta {
-  color: var(--lms-text-muted);
-  margin: 0;
-  overflow-wrap: anywhere;
+.ann-card--read { opacity: 0.92; }
+.ann-body-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-2);
+  min-width: 0;
+}
+.ann-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--lms-space-2) var(--lms-space-3);
+}
+.ann-headline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--lms-space-2);
+  min-width: 0;
 }
 .ann-dot {
   background: var(--lms-accent);
@@ -55,7 +84,34 @@ const announcementsCss = `
   height: 8px;
   width: 8px;
   flex-shrink: 0;
+  transform: translateY(-1px);
 }
+.ann-title {
+  font-size: clamp(1.05rem, 2.5vw, 1.25rem);
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.ann-card--read .ann-title { font-weight: 600; }
+.ann-body {
+  color: var(--lms-text-muted);
+  margin: 0;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.ann-meta {
+  color: var(--lms-text-muted);
+  margin: 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.ann-meta__sep { color: var(--lms-border); padding: 0 0.15em; }
 `;
 
 type Filter = "all" | AnnouncementScope;
@@ -132,22 +188,24 @@ export default async function AnnouncementsPage({
             now. Try a different filter.
           </Alert>
         ) : (
-          <ul className="ann-list">
+          <ul className="ann-list" aria-label="Announcements">
             {visible.map((announcement) => (
               <li key={announcement.id}>
                 <Card
                   className={
-                    announcement.unread ? "ann-card--unread" : undefined
+                    announcement.unread
+                      ? "ann-card ann-card--unread"
+                      : "ann-card ann-card--read"
                   }
                 >
-                  <Stack gap={2}>
-                    <Inline gap={2} justify="space-between">
-                      <Inline gap={2}>
+                  <div className="ann-body-wrap">
+                    <div className="ann-head">
+                      <div className="ann-headline">
                         {announcement.unread ? (
                           <span aria-label="Unread" className="ann-dot" />
                         ) : null}
-                        <p className="ann-title">{announcement.title}</p>
-                      </Inline>
+                        <h2 className="ann-title">{announcement.title}</h2>
+                      </div>
                       <Badge
                         tone={
                           announcement.scope === "school" ? "accent" : "neutral"
@@ -155,13 +213,20 @@ export default async function AnnouncementsPage({
                       >
                         {announcement.scope === "school" ? "School" : "Course"}
                       </Badge>
-                    </Inline>
+                    </div>
                     <p className="ann-body">{announcement.body}</p>
                     <p className="ann-meta">
-                      {announcement.source} · {announcement.author} ·{" "}
+                      {announcement.source}
+                      <span aria-hidden="true" className="ann-meta__sep">
+                        ·
+                      </span>
+                      {announcement.author}
+                      <span aria-hidden="true" className="ann-meta__sep">
+                        ·
+                      </span>
                       {relativeTime(announcement.postedAt)}
                     </p>
-                  </Stack>
+                  </div>
                 </Card>
               </li>
             ))}

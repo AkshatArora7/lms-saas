@@ -79,7 +79,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `grading.final.calculated` | grading | - |
 | `grading.graded` | grading | notification |
 | `grading.graded (AGS score passback)` | - | lti |
-| `grading.graded (mastery recompute)` | - | rubric |
 | `grading.graded (reflect status)` | - | assignment |
 | `identity.role.assigned` | identity | - |
 | `identity.role.revoked` | identity | - |
@@ -87,7 +86,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `invoice.issued` | billing | - |
 | `lti.deeplink.created` | lti | - |
 | `lti.tool.launched` | lti | - |
-| `mastery.updated` | rubric | - |
 | `notification.failed` | notification | - |
 | `notification.sent` | notification | - |
 | `orgunit.created` | user-org | - |
@@ -98,7 +96,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `release.condition.evaluated` | - | content |
 | `report.completed` | reporting | - |
 | `report.requested` | - | reporting |
-| `rubric.scored` | rubric | - |
 | `scorm.attempt.recorded` | content | - |
 | `search.reindexed` | search | - |
 | `sis.class.upserted` | sis | course |

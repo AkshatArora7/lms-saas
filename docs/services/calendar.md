@@ -16,22 +16,22 @@ Calendar events, deadlines, iCal feeds, and timetable/class scheduling (bell sch
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/events` | Create an event/deadline. |
-| `GET` | `/users/{id}/calendar.ics` | Personal iCal feed (events + timetable). |
+| `POST` | `/calendar/events` | Create a manual event/deadline. |
+| `PUT` | `/calendar/events/source` | Idempotently upsert an assignment/quiz due-date event (aggregation). |
+| `GET` | `/calendar/events` | List events (filter by orgUnitId + from/to time range). |
+| `GET` | `/calendar/feed.ics` | Timezone-correct (UTC) iCal subscription feed. |
 | `POST` | `/schedules` | Create a bell schedule with named periods/times. |
 | `POST` | `/timetable` | Assign a section to a period, room and instructor; detects conflicts. |
 | `GET` | `/users/{id}/timetable` | Personal recurring weekly timetable. |
 
 ## Events published
 
-- `calendar.event.created`
 - `timetable.entry.scheduled`
 
 ## Events consumed
 
-- `assignment.created`
+- `assignment.created (due-date sync)`
 - `quiz.attempt.started`
-- `announcement.published`
 
 ## Dependencies
 

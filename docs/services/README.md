@@ -46,16 +46,16 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `* (republishes any event_outbox row to consumers)` | relay | - |
 | `ai.answer.generated` | ai | - |
 | `analytics.atrisk.flagged` | analytics | - |
-| `announcement.published` | announcement | notification, calendar |
-| `assignment.created` | assignment | notification, calendar |
+| `announcement.published` | announcement | notification |
+| `assignment.created` | assignment | notification |
 | `assignment.created (create line item)` | - | grading |
+| `assignment.created (due-date sync)` | - | calendar |
 | `attendance.marked` | attendance | - |
 | `attendance.session.finalized` | attendance | - |
 | `billing.seat.rejected` | - | enrollment |
 | `billing.seat.reserved` | - | enrollment |
 | `billing.subscription.changed` | billing | - |
 | `billing.subscription.changed (entitlements)` | - | tenant |
-| `calendar.event.created` | calendar | - |
 | `content.completed` | - | analytics, search |
 | `content.completed (reindex)` | - | ai |
 | `content.created` | - | search |

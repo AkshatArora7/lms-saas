@@ -18,6 +18,11 @@ import Fastify, {
   type FastifyRequest,
 } from "fastify";
 
+import { createPrismaEventStore } from "./events.prisma.js";
+import {
+  registerCalendarEventRoutes,
+  type CalendarEventRouteDeps,
+} from "./events.routes.js";
 import {
   registerSchedulingRoutes,
   type SchedulingRouteDeps,
@@ -28,11 +33,13 @@ import { createPrismaStore } from "./store.prisma.js";
 const SERVICE = "calendar";
 const log = createLogger(SERVICE);
 
-/** Overridable dependencies — tests inject an in-memory store. */
+/** Overridable dependencies — tests inject in-memory stores. */
 export interface BuildAppOptions {
   config?: AppConfig;
   store?: SchedulingRouteDeps["store"];
   resolveTenant?: SchedulingRouteDeps["resolveTenant"];
+  /** Calendar event store (events + iCal); tests inject memory. */
+  eventStore?: CalendarEventRouteDeps["store"];
 }
 
 /**
@@ -72,10 +79,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     uptime: process.uptime(),
   }));
 
+  const resolveTenant = options.resolveTenant ?? headerTenantResolver(config);
+
   registerSchedulingRoutes(app, {
     config,
     store: options.store ?? createPrismaStore(),
-    resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+    resolveTenant,
+  });
+
+  // Calendar events + iCal feed (shares the tenant resolver).
+  registerCalendarEventRoutes(app, {
+    store: options.eventStore ?? createPrismaEventStore(),
+    resolveTenant,
   });
 
   return app;

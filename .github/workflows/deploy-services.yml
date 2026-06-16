@@ -57,6 +57,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # GHCR/Docker image references must be all lowercase, but
+      # github.repository preserves the owner's original casing
+      # (e.g. AkshatArora7/lms-saas). Lowercase it before tagging.
+      - name: Compute lowercase image base
+        id: image
+        run: echo "repo=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       - name: Build & push ${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
@@ -64,7 +71,7 @@ jobs:
           file: services/${{ matrix.service }}/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/${{ matrix.service }}:latest
-            ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ steps.image.outputs.repo }}/${{ matrix.service }}:latest
+            ghcr.io/${{ steps.image.outputs.repo }}/${{ matrix.service }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

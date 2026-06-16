@@ -22,7 +22,10 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 | `PATCH` | `/tenants/{id}/flags` | Toggle feature flags / add-on entitlements. |
 | `PUT` | `/tenants/{id}/branding` | Set white-label branding (logo, colours, theme, custom domain). |
 | `GET` | `/tenants/{id}/branding` | Resolve effective branding (with parent inheritance). |
-| `PUT` | `/tenants/{id}/settings/{key}` | Set a per-tenant governance setting. |
+| `PUT` | `/tenants/{id}/settings/{key}` | Set a per-tenant governance setting (validated against the key catalog). |
+| `GET` | `/tenants/{id}/settings` | Effective governance settings (catalog defaults + overrides). |
+| `GET` | `/tenants/{id}/settings/{key}` | Effective value for one setting key. |
+| `GET` | `/settings/catalog` | The catalog of known governance keys, types and defaults. |
 
 ## Events published
 

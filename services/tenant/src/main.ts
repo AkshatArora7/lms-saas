@@ -13,16 +13,19 @@ import { createLogger } from "@lms/logger";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import { registerTenantRoutes, type TenantRouteDeps } from "./routes.js";
+import { MemorySettingsStore } from "./settings.memory.js";
+import { createPrismaSettingsStore } from "./settings.prisma.js";
 import { createSeededMemoryStore } from "./store.memory.js";
 import { createPrismaStore } from "./store.prisma.js";
 
 const SERVICE = "tenant";
 const log = createLogger(SERVICE);
 
-/** Overridable dependencies — tests inject an in-memory store. */
+/** Overridable dependencies — tests inject in-memory stores. */
 export interface BuildAppOptions {
   config?: AppConfig;
   store?: TenantRouteDeps["store"];
+  settingsStore?: TenantRouteDeps["settingsStore"];
 }
 
 /**
@@ -44,6 +47,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerTenantRoutes(app, {
     config,
     store: options.store ?? createPrismaStore(),
+    settingsStore: options.settingsStore ?? createPrismaSettingsStore(),
   });
 
   return app;
@@ -65,8 +69,14 @@ async function start(): Promise<void> {
       process.env.DATABASE_URL ??= "postgres://demo:demo@localhost:5432/demo";
       process.env.JWT_SECRET ??= "local-dev-secret-not-for-production";
     }
-    const store = useMemoryStore ? createSeededMemoryStore() : undefined;
-    const app = buildApp(store ? { store } : {});
+    const app = buildApp(
+      useMemoryStore
+        ? {
+            store: createSeededMemoryStore(),
+            settingsStore: new MemorySettingsStore(),
+          }
+        : {},
+    );
     await app.listen({ port, host: "0.0.0.0" });
     log.info(
       { port, store: useMemoryStore ? "memory(demo)" : "prisma" },

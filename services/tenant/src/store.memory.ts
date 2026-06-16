@@ -1,0 +1,140 @@
+import { randomUUID } from "node:crypto";
+
+import { EVENT_TYPES } from "@lms/events";
+
+import {
+  normalizeSlug,
+  subdomainFor,
+  type OutboxEvent,
+  type ProvisionTenantInput,
+  type ProvisionTenantResult,
+  type TenantRecord,
+  type TenantStore,
+} from "./store.js";
+
+/** Plan codes the demo control plane knows about; mirrors seeded `plan` rows. */
+export const KNOWN_PLAN_CODES: readonly string[] = ["core", "performance_plus"];
+
+/**
+ * In-memory TenantStore. Emulates the control-plane tenant registry in an
+ * array (the registry is NOT RLS-scoped, so there is no tenant filtering here —
+ * see store.ts). Used by the test suite and `TENANT_STORE=memory`.
+ *
+ * The transactional outbox is modelled too: every successful provision appends
+ * a `tenant.provisioned` event to an in-memory array, exposed via
+ * `emittedEvents()`, so tests can assert the event was written alongside the
+ * tenant row (the Prisma store writes both in one control-plane transaction).
+ */
+export class MemoryTenantStore implements TenantStore {
+  private tenants: TenantRecord[] = [];
+  private outbox: OutboxEvent[] = [];
+
+  constructor(
+    private readonly generateId: () => string = randomUUID,
+    private readonly now: () => Date = () => new Date(),
+    private readonly knownPlanCodes: readonly string[] = KNOWN_PLAN_CODES,
+  ) {}
+
+  seed(tenant: TenantRecord): void {
+    this.tenants.push(tenant);
+  }
+
+  /** Outbox events recorded so far (test accessor). */
+  emittedEvents(): readonly OutboxEvent[] {
+    return this.outbox;
+  }
+
+  async provisionTenant(
+    input: ProvisionTenantInput,
+  ): Promise<ProvisionTenantResult> {
+    const slug = normalizeSlug(input.slug);
+
+    // citext slug uniqueness — compare normalised (lowercased) slugs.
+    const taken = this.tenants.some((t) => normalizeSlug(t.slug) === slug);
+    if (taken) return { ok: false, reason: "slug_taken" };
+
+    let planId: string | null = null;
+    if (input.plan !== undefined) {
+      if (!this.knownPlanCodes.includes(input.plan)) {
+        return { ok: false, reason: "unknown_plan" };
+      }
+      // The Prisma store resolves the plan *code* to a plan id; in memory we
+      // use the code itself as a stand-in identifier.
+      planId = input.plan;
+    }
+
+    const region = input.region ?? "us-east";
+    const timestamp = this.now().toISOString();
+
+    // Model the provisioning lifecycle explicitly: a tenant is born
+    // "provisioning", and for a pool tenant (shared infra, nothing to stand
+    // up) provisioning completes synchronously, so it transitions to "active".
+    const tenant: TenantRecord = {
+      id: this.generateId(),
+      slug,
+      name: input.name,
+      kind: "standalone",
+      tier: "pool",
+      status: "provisioning",
+      region,
+      planId,
+      subdomain: subdomainFor(slug),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    tenant.status = "active";
+    this.tenants.push(tenant);
+
+    // Transactional outbox: record the event in the same logical step as the
+    // tenant insert (one transaction in the Prisma store).
+    this.outbox.push({
+      tenantId: tenant.id,
+      type: EVENT_TYPES.TENANT_PROVISIONED,
+      payload: {
+        slug: tenant.slug,
+        name: tenant.name,
+        region: tenant.region,
+        tier: tenant.tier,
+        subdomain: tenant.subdomain,
+        planId: tenant.planId,
+      },
+    });
+
+    return { ok: true, tenant };
+  }
+
+  async getTenant(id: string): Promise<TenantRecord | null> {
+    return this.tenants.find((t) => t.id === id) ?? null;
+  }
+
+  async getTenantBySlug(slug: string): Promise<TenantRecord | null> {
+    const normalized = normalizeSlug(slug);
+    return this.tenants.find((t) => normalizeSlug(t.slug) === normalized) ?? null;
+  }
+
+  async listTenants(): Promise<TenantRecord[]> {
+    return [...this.tenants];
+  }
+}
+
+/** Build a MemoryTenantStore pre-seeded with a demo tenant for local dev. */
+export function createSeededMemoryStore(
+  generateId: () => string = randomUUID,
+  now: () => Date = () => new Date(),
+): MemoryTenantStore {
+  const store = new MemoryTenantStore(generateId, now);
+  store.seed({
+    id: "11111111-1111-1111-1111-111111111111",
+    slug: "demo",
+    name: "Demo Academy",
+    kind: "standalone",
+    tier: "pool",
+    status: "active",
+    region: "us-east",
+    planId: null,
+    subdomain: subdomainFor("demo"),
+    createdAt: new Date("2026-01-01T00:00:00.000Z").toISOString(),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z").toISOString(),
+  });
+  return store;
+}

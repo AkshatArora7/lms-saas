@@ -9,6 +9,15 @@ on:
   push:
     branches: [main]
     paths: ["services/**", "packages/**", ".github/workflows/deploy-services.yml"]
+  # Manual re-deploy: pick a single service or "all". Useful when a push
+  # deploy was skipped/failed and the images still need publishing.
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to deploy, or 'all' for every service"
+        required: true
+        default: "all"
+        type: string
 
 permissions:
   contents: read
@@ -18,10 +27,11 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      services: ${{ steps.filter.outputs.changes }}
+      services: ${{ steps.resolve.outputs.services }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
+        if: github.event_name == 'push'
         id: filter
         with:
           filters: |
@@ -37,6 +47,23 @@ jobs:
             notification: services/notification/**
             analytics: services/analytics/**
             integration: services/integration/**
+      # On push: build only changed services (paths-filter output).
+      # On manual dispatch: build the requested service, or all of them.
+      - name: Resolve service matrix
+        id: resolve
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_SERVICE: ${{ github.event.inputs.service }}
+          PUSH_SERVICES: ${{ steps.filter.outputs.changes }}
+        run: |
+          ALL='["gateway","identity","tenant","course","content","enrollment","assessment","grading","discussion","notification","analytics","integration"]'
+          if [ "$EVENT" = "push" ]; then
+            echo "services=$PUSH_SERVICES" >> "$GITHUB_OUTPUT"
+          elif [ "$INPUT_SERVICE" = "all" ]; then
+            echo "services=$ALL" >> "$GITHUB_OUTPUT"
+          else
+            echo "services=[\"$INPUT_SERVICE\"]" >> "$GITHUB_OUTPUT"
+          fi
 
   build-push:
     needs: changes

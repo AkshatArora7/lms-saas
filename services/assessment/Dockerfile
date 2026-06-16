@@ -7,7 +7,7 @@ WORKDIR /app
 FROM base AS build
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @lms/service-assessment build
+RUN pnpm --filter "@lms/service-assessment..." build
 
 FROM base AS runtime
 ENV NODE_ENV=production PORT=4008

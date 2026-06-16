@@ -16,26 +16,25 @@ Tamper-evident hash-chained audit logs, DSAR (data subject access) fulfilment, r
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/events` | Append an audit event (hash-chained). |
-| `GET` | `/audit` | Query/verify the audit trail. |
-| `POST` | `/dsar` | Initiate a data subject access/erasure request. |
+| `POST` | `/audit/events` | Append a tamper-evident audit event (links to the tenant's hash chain). |
+| `GET` | `/audit/events` | List recent entries (filter by actorId, targetType, limit). |
+| `GET` | `/audit/verify` | Re-hash the tenant's chain and report the first break (verification job). |
 
 ## Events published
 
-- `audit.dsar.completed`
+_None_
 
 ## Events consumed
 
-- `* (all mutating domain events are mirrored for audit)`
+- `* (mutating domain events can be mirrored for audit)`
 
 ## Dependencies
 
-- all services (event stream)
-- Vercel Blob (DSAR export)
+- all services (callers append audit events)
 
 ## Notes
 
-Each record stores prev_hash to form a verifiable chain; retention jobs run on QStash schedule.
+Per-tenant hash chain over audit_log.prev_hash/row_hash (SHA-256 of prev||row payload). /audit/verify is the tamper-detection job (run on a QStash/cron schedule). DSAR fulfilment and retention enforcement are tracked follow-ups.
 
 ## Cross-cutting
 

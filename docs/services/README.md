@@ -30,7 +30,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [sis](sis.md) | 4019 | Postgres | `sis_sync`, `sis_id_map` |
 | [video](video.md) | 4020 | Blob + JSONB | `video_asset` |
 | [search](search.md) | 4021 | Postgres (FTS/vector) | - |
-| [billing](billing.md) | 4022 | Postgres | `invoice`, `usage_meter` |
+| [billing](billing.md) | 4022 | Postgres | `plan`, `subscription`, `invoice`, `usage_meter` |
 | [audit](audit.md) | 4023 | Postgres (ledger) | `audit_log` |
 | [mobile-bff](mobile-bff.md) | 4024 | stateless | - |
 | [attendance](attendance.md) | 4025 | Postgres | `attendance_code`, `attendance_session`, `attendance_record` |
@@ -51,8 +51,8 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `assignment.created (create line item)` | - | grading |
 | `attendance.marked` | attendance | - |
 | `attendance.session.finalized` | attendance | - |
-| `billing.seat.rejected` | billing | enrollment |
-| `billing.seat.reserved` | billing | enrollment |
+| `billing.seat.rejected` | - | enrollment |
+| `billing.seat.reserved` | - | enrollment |
 | `billing.subscription.changed` | billing | - |
 | `billing.subscription.changed (entitlements)` | - | tenant |
 | `calendar.event.created` | calendar | - |
@@ -71,9 +71,8 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `engagement.summary.updated` | analytics | - |
 | `enrollment.completed` | enrollment | - |
 | `enrollment.created` | enrollment | notification, attendance |
-| `enrollment.created (reserve)` | - | billing |
+| `enrollment.created (seat reservation, roadmap)` | - | billing |
 | `enrollment.dropped` | enrollment | - |
-| `enrollment.dropped (release)` | - | billing |
 | `grade.released` | - | notification |
 | `grading.final.calculated` | grading | - |
 | `grading.graded` | grading | notification |
@@ -82,7 +81,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `identity.role.assigned` | identity | - |
 | `identity.role.revoked` | identity | - |
 | `identity.user.authenticated` | identity | - |
-| `invoice.issued` | billing | - |
 | `lti.deeplink.created` | lti | - |
 | `lti.tool.launched` | lti | - |
 | `notification.failed` | notification | - |

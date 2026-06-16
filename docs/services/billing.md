@@ -6,41 +6,40 @@
 
 ## Responsibility
 
-Plans, seats, invoices, usage metering, and the enrollment+billing saga participant.
+Plans and per-tenant subscriptions (trialing->active->past_due->canceled), seats and seat enforcement; invoices/usage metering and the enrollment+billing saga participant are roadmap.
 
 ## Owned tables
 
-`invoice`, `usage_meter`
+`plan`, `subscription`, `invoice`, `usage_meter`
 
 ## Key endpoints
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/seats/reserve` | Reserve a seat for an enrollment (saga step). |
-| `GET` | `/tenants/{id}/invoices` | Invoice history. |
-| `POST` | `/usage` | Record a usage meter reading. |
+| `GET` | `/plans` | List the plan catalog (code, price, billing model, add-ons). |
+| `POST` | `/tenants/{id}/subscription` | Subscribe a tenant to a plan (defaults to trialing). |
+| `GET` | `/tenants/{id}/subscription` | The tenant's current subscription. |
+| `POST` | `/tenants/{id}/subscription/transition` | Lifecycle transition (validated state machine). |
+| `PUT` | `/tenants/{id}/subscription/seats` | Set the seat count. |
+| `GET` | `/tenants/{id}/subscription/seat-check` | Seat enforcement against an active-user count. |
 
 ## Events published
 
-- `billing.seat.reserved`
-- `billing.seat.rejected`
 - `billing.subscription.changed`
-- `invoice.issued`
 
 ## Events consumed
 
-- `enrollment.created (reserve)`
-- `enrollment.dropped (release)`
+- `enrollment.created (seat reservation, roadmap)`
 - `tenant.activated`
 
 ## Dependencies
 
-- tenant (plan/subscription)
-- payment provider (Stripe)
+- tenant (registry)
+- payment provider (Stripe, roadmap)
 
 ## Notes
 
-Saga participant for seat reservation; district parent tenants can be billed via tenant_subtree() roll-up.
+plan is the global control-plane catalog; subscription is tenant-scoped under RLS. Add-on enablement per subscription, invoices, usage metering and the seat-reservation saga are tracked follow-ups.
 
 ## Cross-cutting
 

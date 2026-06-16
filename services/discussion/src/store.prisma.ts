@@ -220,6 +220,22 @@ export function createPrismaStore(): DiscussionStore {
       });
     },
 
+    async updatePost(ctx, postId, body) {
+      return withTenant(ctx, async (db) => {
+        const updated = await db.$executeRawUnsafe(
+          `UPDATE discussion_post SET body = $2 WHERE id = $1`,
+          postId,
+          body,
+        );
+        if (updated === 0) return null;
+        const rows = await db.$queryRawUnsafe<PostRow[]>(
+          `${SELECT_POST} WHERE id = $1 LIMIT 1`,
+          postId,
+        );
+        return rows[0] ? toPost(rows[0]) : null;
+      });
+    },
+
     async deletePost(ctx, postId) {
       return withTenant(ctx, async (db) => {
         const deleted = await db.$executeRawUnsafe(

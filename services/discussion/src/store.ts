@@ -99,6 +99,13 @@ export interface DiscussionStore {
     pinned: boolean,
   ): Promise<PostRecord | null>;
 
+  /** Edit a post's body; null when the post does not exist for this tenant. */
+  updatePost(
+    ctx: TenantContext,
+    postId: string,
+    body: string,
+  ): Promise<PostRecord | null>;
+
   /** Moderation: delete a post (and, by cascade, its replies). */
   deletePost(ctx: TenantContext, postId: string): Promise<boolean>;
 

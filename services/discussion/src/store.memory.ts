@@ -175,6 +175,19 @@ export class MemoryDiscussionStore implements DiscussionStore {
     return post;
   }
 
+  async updatePost(
+    ctx: TenantContext,
+    postId: string,
+    body: string,
+  ): Promise<PostRecord | null> {
+    const post = this.posts.find(
+      (p) => p.id === postId && p.tenantId === ctx.tenantId,
+    );
+    if (!post) return null;
+    post.body = body;
+    return post;
+  }
+
   async deletePost(ctx: TenantContext, postId: string): Promise<boolean> {
     const exists = this.posts.some(
       (p) => p.id === postId && p.tenantId === ctx.tenantId,
@@ -238,6 +251,43 @@ export function createSeededMemoryStore(
     forumId: "demo-forum-1",
     title: "Welcome",
     description: "Introduce yourself.",
+  });
+
+  // Seed a forum/topic/posts under the demo taught course (alg-101) so the
+  // teacher web discussions screens have content to manage out of the box.
+  store.seedForum({
+    id: "demo-alg-forum-1",
+    tenantId: DEMO_TENANT_ID,
+    courseId: "alg-101",
+    title: "Q&A",
+    position: 0,
+  });
+  store.seedTopic({
+    id: "demo-alg-topic-1",
+    tenantId: DEMO_TENANT_ID,
+    forumId: "demo-alg-forum-1",
+    title: "Week 1: Linear equations",
+    description: "Ask anything about this week's material.",
+  });
+  store.seedPost({
+    id: "demo-alg-post-1",
+    tenantId: DEMO_TENANT_ID,
+    topicId: "demo-alg-topic-1",
+    parentId: null,
+    authorId: "ada.lovelace",
+    body: "Is question 3 on the homework graded?",
+    isPinned: false,
+    createdAt: "2026-01-05T09:00:00.000Z",
+  });
+  store.seedPost({
+    id: "demo-alg-post-2",
+    tenantId: DEMO_TENANT_ID,
+    topicId: "demo-alg-topic-1",
+    parentId: "demo-alg-post-1",
+    authorId: "grace.hopper",
+    body: "Yes, it counts toward participation.",
+    isPinned: false,
+    createdAt: "2026-01-05T10:30:00.000Z",
   });
   return store;
 }

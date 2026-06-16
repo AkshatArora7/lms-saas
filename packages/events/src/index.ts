@@ -24,7 +24,10 @@ export type EventEnvelope = z.infer<typeof EventEnvelope>;
 export const EVENT_TYPES = {
   TENANT_PROVISIONED: "tenant.provisioned",
   USER_CREATED: "user.created",
+  USER_UPDATED: "user.updated",
+  USER_DEACTIVATED: "user.deactivated",
   USER_ROLE_ASSIGNED: "user.role_assigned",
+  ORGUNIT_CREATED: "orgunit.created",
   COURSE_PUBLISHED: "course.published",
   ENROLLMENT_CREATED: "enrollment.created",
   CONTENT_VIEWED: "content.viewed",

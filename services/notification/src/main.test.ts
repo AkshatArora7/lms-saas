@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { AppConfig } from "@lms/config";
 import type { TenantContext } from "@lms/types";
 import type { FastifyRequest } from "fastify";
@@ -57,6 +59,7 @@ async function ingest(
     url: "/events",
     headers: HEADERS,
     payload: {
+      message_id: randomUUID(),
       type: "grade.released",
       title: "New grade posted",
       recipientIds: ["stu-1"],
@@ -164,9 +167,85 @@ describe("fan-out ingest", () => {
       method: "POST",
       url: "/events",
       headers: HEADERS,
-      payload: { type: "grade.released", recipientIds: ["stu-1"] },
+      payload: {
+        message_id: randomUUID(),
+        type: "grade.released",
+        recipientIds: ["stu-1"],
+      },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it("requires a message_id / event id (400)", async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/events",
+      headers: HEADERS,
+      payload: {
+        type: "grade.released",
+        title: "New grade posted",
+        recipientIds: ["stu-1"],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("dedupes a redelivered event id: notifications created once", async () => {
+    const app = buildTestApp();
+    const messageId = randomUUID();
+    const payload = {
+      message_id: messageId,
+      type: "grade.released",
+      title: "New grade posted",
+      recipientIds: ["stu-1"],
+    };
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/events",
+      headers: HEADERS,
+      payload,
+    });
+    expect(first.statusCode).toBe(201);
+    expect(first.json()).toMatchObject({ created: 2, deduped: false });
+
+    // Redelivery of the SAME event id: a no-op that still reports success so
+    // the relay stamps published_at. No additional rows are created.
+    const second = await app.inject({
+      method: "POST",
+      url: "/events",
+      headers: HEADERS,
+      payload,
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toMatchObject({ created: 0, deduped: true });
+
+    // The recipient's in-app inbox has exactly one notification.
+    const inbox = await app.inject({
+      method: "GET",
+      url: "/users/stu-1/notifications",
+      headers: HEADERS,
+    });
+    expect(
+      (inbox.json() as { notifications: unknown[] }).notifications,
+    ).toHaveLength(1);
+  });
+
+  it("accepts the envelope id field as the message id", async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/events",
+      headers: HEADERS,
+      payload: {
+        id: randomUUID(),
+        type: "grade.released",
+        title: "New grade posted",
+        recipientIds: ["stu-1"],
+      },
+    });
+    expect(res.statusCode).toBe(201);
   });
 });
 

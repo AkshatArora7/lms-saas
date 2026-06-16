@@ -1439,6 +1439,25 @@
             "Hand-offs are logged (issue comment / commit trailer referencing the role)",
             "An escalation path exists when no role can accept"
           ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "Transactional-outbox relay publishes domain events exactly-once",
+          "as_a": "platform engineer",
+          "i_want": "a transactional-outbox relay that publishes unpublished event_outbox rows to consumers exactly-once",
+          "so_that": "domain events actually drive notifications/analytics/search",
+          "ac": [
+            "Relay polls unpublished outbox rows (WHERE published_at IS NULL) oldest-first by occurred_at, per tenant",
+            "Relay publishes each event through a transport abstraction, then stamps published_at in the same scoped transaction",
+            "The relay enumerates tenants from the control-plane tenant table (not under RLS), and reads/writes each tenant's outbox inside an RLS-scoped transaction that sets the app.tenant_id GUC (transaction-local), respecting FORCE ROW LEVEL SECURITY and the non-superuser app role",
+            "A concrete EventPublisher and a transport seam (EventTransport) live in packages/events; the default dev transport is in-process/HTTP dispatch to consumers (no QStash creds required in dev), with a clean adapter for a QStash transport later. No secrets hardcoded",
+            "Consumer-side dedupe via event_inbox (consumer, message_id): redelivery of the same event is exactly-once-effective",
+            "Tenant isolation is never weakened; no new tenant-scoped table without its RLS policy",
+            "The notification service POST /events is wired as the first real consumer for at least one event type end-to-end",
+            "Unit tests cover the publisher/relay (publish + dedupe + published_at stamping) and an integration test proves an outbox row is published and a redelivery is deduped, using the existing non-superuser RLS harness in tests/integration"
+          ]
         }
       ]
     },

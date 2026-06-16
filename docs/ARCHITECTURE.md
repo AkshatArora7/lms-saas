@@ -15,7 +15,7 @@ clients (web / mobile)
   → Next.js Route Handlers (Web BFF) / mobile-bff   [was: YARP BFFs]
   → domain microservices (Fastify, one DB boundary each)
   → Postgres (pool + silo) / Vercel Blob / Upstash / pgvector
-events: domain services → outbox (Postgres) → QStash → consumers (analytics, notification)
+events: domain services → outbox (Postgres) → relay (per-tenant drain) → transport → consumers (notification today; analytics next)
 ```
 
 ## Azure → GitHub/Vercel translation
@@ -75,16 +75,44 @@ events: domain services → outbox (Postgres) → QStash → consumers (analytic
 Each service follows a layered shape: **API (Fastify routes) → application
 (commands/queries) → domain → infrastructure (Prisma + RLS) → Postgres**, plus a
 **transactional outbox** written in the same DB transaction as the business
-change and relayed to QStash after commit.
+change and relayed to consumers after commit by the `relay` worker.
+
+## Event-outbox relay
+
+The `relay` service (dev port 4026) is the actual implementation of the
+**outbox → transport → consumers** path. It is a long-running worker (its Fastify
+app exposes only `GET /health` and a manual `POST /relay/run`):
+
+- It **enumerates active tenants** from the control-plane `tenant` registry
+  (read outside RLS), then **drains each tenant's unpublished `event_outbox`
+  rows inside that tenant's own `app.tenant_id` GUC transaction** via
+  `@lms/db.withTenant`. Because `event_outbox` is under `FORCE ROW LEVEL
+  SECURITY` and the app connects as a non-superuser (NOBYPASSRLS) role, the relay
+  can never read the outbox cross-tenant — a query with no tenant GUC returns
+  zero rows.
+- Rows are drained oldest-first (causal order within a tenant); only rows that
+  delivered are stamped `published_at`, re-guarded `published_at IS NULL` so a
+  concurrent relay cannot double-stamp.
+- The **transport is abstracted** behind the `@lms/events` `EventTransport` seam
+  (the `events` package stays DB-free). The default is in-process / HTTP; a
+  hosted **QStash/Upstash** transport implementing the same interface is a future
+  seam (not used in dev, no secrets hard-coded).
+- **Consumers dedupe via `event_inbox`** keyed on `(consumer, message_id)` for
+  exactly-once-effective processing: the first delivery of an event id processes;
+  a redelivery finds the row already present and is a no-op. The `notification`
+  service's `POST /events` is the **first real consumer** — `enrollment.created`
+  and `grade.released` flow end-to-end. `analytics` is **not yet wired**.
 
 ## Cross-cutting concerns
 
 - **Auth**: OAuth2 + OIDC via external CIAM; auth-code + PKCE for web/mobile
   through the BFF (tokens kept server-side in the auth cookie); client-credentials
   for service-to-service and LTI AGS/NRPS.
-- **Messaging**: transactional **outbox** + **inbox** (exactly-once) tables;
-  QStash transport. **Saga**: enrollment+billing (enroll → reserve seat → invoice;
-  compensate on failure).
+- **Messaging**: transactional **outbox** + **inbox** (exactly-once) tables,
+  drained by the `relay` worker through an abstracted transport (in-process / HTTP
+  today; QStash a future seam). Consumer dedupe is keyed on `event_inbox
+  (consumer, message_id)`. **Saga**: enrollment+billing (enroll → reserve seat →
+  invoice; compensate on failure).
 - **Idempotency**: `Idempotency-Key` header on mutating APIs; dedupe in
   `idempotency_key`.
 - **Resilience**: retry w/ backoff, circuit breaker, timeout on all clients.

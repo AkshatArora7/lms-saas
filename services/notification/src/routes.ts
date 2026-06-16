@@ -171,6 +171,17 @@ export function registerNotificationRoutes(
     if (!ctx) return reply;
     const body = (req.body ?? {}) as Record<string, unknown>;
 
+    // The relay forwards the event id so the claim-and-apply can dedupe. Accept
+    // it as `message_id`, falling back to the envelope's `id` field.
+    const messageId = isNonEmptyString(body.message_id)
+      ? body.message_id.trim()
+      : isNonEmptyString(body.id)
+        ? body.id.trim()
+        : null;
+    if (!messageId) {
+      return badRequest(reply, "message_id (the event id) is required.");
+    }
+
     if (!isNonEmptyString(body.type) && !isNonEmptyString(body.category)) {
       return badRequest(reply, "type or category is required.");
     }
@@ -206,10 +217,18 @@ export function registerNotificationRoutes(
       quietHours: parseQuietHours(body.quietHours),
     });
 
-    const notifications = await deps.store.createNotifications(ctx, rows);
-    return reply.code(201).send({
+    // Claim-and-apply atomically: a redelivery of the same event id is a no-op
+    // (deduped) but still succeeds, so the relay stamps published_at and never
+    // retries forever.
+    const { claimed, notifications } = await deps.store.ingestEvent(
+      ctx,
+      messageId,
+      rows,
+    );
+    return reply.code(claimed ? 201 : 200).send({
       category,
       created: notifications.length,
+      deduped: !claimed,
       notifications,
     });
   });

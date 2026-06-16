@@ -43,3 +43,16 @@ export interface EventPublisher {
 export interface EventConsumer {
   on(type: EventType, handler: (e: EventEnvelope) => Promise<void>): void;
 }
+
+// Concrete publisher + transport seam. The relay drains the outbox and calls
+// OutboxPublisher.publish() per row; transports decide how the event is
+// delivered (in-process for dev/test, HTTP to a consumer, QStash in future).
+export {
+  type EventTransport,
+  type EventHandler,
+  type RoutingTable,
+  InProcessTransport,
+  HttpTransport,
+  type HttpTransportOptions,
+} from "./transport.js";
+export { OutboxPublisher } from "./publisher.js";

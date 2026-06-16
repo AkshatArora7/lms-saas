@@ -79,6 +79,39 @@ const SELECT_NOTIFICATION = `
          status, created_at, read_at
     FROM notification`;
 
+/** The consumer name this service records in `event_inbox` for dedupe. */
+const NOTIFICATION_CONSUMER = "notification";
+
+/**
+ * Insert one notification row inside an already-open tenant transaction `db`.
+ * Shared by `createNotifications` and the atomic `ingestEvent` so the INSERT
+ * shape stays in one place.
+ */
+async function insertNotification(
+  db: {
+    $queryRawUnsafe<T>(sql: string, ...args: unknown[]): Promise<T>;
+  },
+  tenantId: string,
+  row: NewNotificationInput,
+): Promise<NotificationRecord> {
+  const inserted = await db.$queryRawUnsafe<NotificationRow[]>(
+    `INSERT INTO notification
+       (tenant_id, user_id, category, channel, title, body, data, status)
+     VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8)
+     RETURNING id, tenant_id, user_id, category, channel, title, body,
+               data, status, created_at, read_at`,
+    tenantId,
+    row.userId,
+    row.category,
+    row.channel,
+    row.title,
+    row.body ?? null,
+    JSON.stringify(row.data ?? {}),
+    row.status ?? "queued",
+  );
+  return toNotification(inserted[0]!);
+}
+
 /**
  * Postgres-backed notification store. Every call runs through `withTenant`, so
  * all statements execute inside an RLS-scoped transaction (pool) or against the
@@ -90,14 +123,14 @@ export function createPrismaStore(): NotificationStore {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<NotificationRow[]>(
           `${SELECT_NOTIFICATION}
-            WHERE user_id = $1 AND channel = 'in_app'
+            WHERE user_id = $1::uuid AND channel = 'in_app'
               ${opts.unreadOnly ? "AND read_at IS NULL" : ""}
             ORDER BY created_at DESC`,
           userId,
         );
         const unread = await db.$queryRawUnsafe<{ count: bigint | number }[]>(
           `SELECT COUNT(*)::int AS count FROM notification
-            WHERE user_id = $1 AND channel = 'in_app' AND read_at IS NULL`,
+            WHERE user_id = $1::uuid AND channel = 'in_app' AND read_at IS NULL`,
           userId,
         );
         return {
@@ -112,24 +145,35 @@ export function createPrismaStore(): NotificationStore {
       return withTenant(ctx, async (db) => {
         const created: NotificationRecord[] = [];
         for (const row of rows) {
-          const inserted = await db.$queryRawUnsafe<NotificationRow[]>(
-            `INSERT INTO notification
-               (tenant_id, user_id, category, channel, title, body, data, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
-             RETURNING id, tenant_id, user_id, category, channel, title, body,
-                       data, status, created_at, read_at`,
-            ctx.tenantId,
-            row.userId,
-            row.category,
-            row.channel,
-            row.title,
-            row.body ?? null,
-            JSON.stringify(row.data ?? {}),
-            row.status ?? "queued",
-          );
-          created.push(toNotification(inserted[0]!));
+          created.push(await insertNotification(db, ctx.tenantId, row));
         }
         return created;
+      });
+    },
+
+    async ingestEvent(ctx, messageId, rows: NewNotificationInput[]) {
+      // ONE tenant-scoped transaction (withTenant runs the callback inside a
+      // single $transaction for pool tenants), so the inbox claim and the
+      // notification inserts commit or roll back TOGETHER.
+      return withTenant(ctx, async (db) => {
+        const claimed = await db.$executeRawUnsafe(
+          `INSERT INTO event_inbox (consumer, message_id, tenant_id)
+           VALUES ($1, $2::uuid, $3::uuid)
+           ON CONFLICT (consumer, message_id) DO NOTHING`,
+          NOTIFICATION_CONSUMER,
+          messageId,
+          ctx.tenantId,
+        );
+        // rowCount === 0 means the event was already processed — a redelivery.
+        // Insert nothing and report deduped; the relay treats this as success.
+        if (claimed !== 1) {
+          return { claimed: false, notifications: [] };
+        }
+        const created: NotificationRecord[] = [];
+        for (const row of rows) {
+          created.push(await insertNotification(db, ctx.tenantId, row));
+        }
+        return { claimed: true, notifications: created };
       });
     },
 
@@ -139,7 +183,7 @@ export function createPrismaStore(): NotificationStore {
           `UPDATE notification
               SET read_at = COALESCE(read_at, now()),
                   status = 'read'
-            WHERE id = $1 AND user_id = $2
+            WHERE id = $1::uuid AND user_id = $2::uuid
             RETURNING id, tenant_id, user_id, category, channel, title, body,
                       data, status, created_at, read_at`,
           notificationId,
@@ -154,7 +198,7 @@ export function createPrismaStore(): NotificationStore {
         return db.$executeRawUnsafe(
           `UPDATE notification
               SET read_at = now(), status = 'read'
-            WHERE user_id = $1 AND channel = 'in_app' AND read_at IS NULL`,
+            WHERE user_id = $1::uuid AND channel = 'in_app' AND read_at IS NULL`,
           userId,
         );
       });
@@ -165,7 +209,7 @@ export function createPrismaStore(): NotificationStore {
         const rows = await db.$queryRawUnsafe<PreferenceRow[]>(
           `SELECT user_id, channel, category, is_enabled
              FROM notification_preference
-            WHERE user_id = $1
+            WHERE user_id = $1::uuid
             ORDER BY category, channel`,
           userId,
         );
@@ -179,7 +223,7 @@ export function createPrismaStore(): NotificationStore {
           await db.$executeRawUnsafe(
             `INSERT INTO notification_preference
                (tenant_id, user_id, channel, category, is_enabled)
-             VALUES ($1, $2, $3, $4, $5)
+             VALUES ($1::uuid, $2::uuid, $3, $4, $5)
              ON CONFLICT (user_id, channel, category)
              DO UPDATE SET is_enabled = EXCLUDED.is_enabled`,
             ctx.tenantId,
@@ -192,7 +236,7 @@ export function createPrismaStore(): NotificationStore {
         const rows = await db.$queryRawUnsafe<PreferenceRow[]>(
           `SELECT user_id, channel, category, is_enabled
              FROM notification_preference
-            WHERE user_id = $1
+            WHERE user_id = $1::uuid
             ORDER BY category, channel`,
           userId,
         );
@@ -205,7 +249,7 @@ export function createPrismaStore(): NotificationStore {
         const rows = await db.$queryRawUnsafe<NotificationRow[]>(
           `UPDATE notification
               SET status = 'sent'
-            WHERE user_id = $1 AND channel <> 'in_app' AND status = 'queued'
+            WHERE user_id = $1::uuid AND channel <> 'in_app' AND status = 'queued'
             RETURNING id, tenant_id, user_id, category, channel, title, body,
                       data, status, created_at, read_at`,
           userId,

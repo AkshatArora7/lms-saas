@@ -32,16 +32,18 @@ Multi-channel delivery (email/SMS/push/in-app), per-user preferences, unread cou
 - `grading.graded`
 - `assignment.created`
 - `enrollment.created`
+- `grade.released`
 
 ## Dependencies
 
 - Email/SMS/Push providers
 - Upstash Redis (unread counters)
 - analytics (agent triggers)
+- relay (event delivery via POST /events)
 
 ## Notes
 
-Central fanout consumer; respects per-user preferences and quiet hours. Intelligent agents evaluate analytics signals.
+Central fanout consumer; respects per-user preferences and quiet hours. Intelligent agents evaluate analytics signals. First real event consumer wired to the `relay` (`POST /events`): `enrollment.created` and `grade.released` flow end-to-end, deduped exactly-once via `event_inbox` keyed on `(consumer, message_id)`.
 
 ## Cross-cutting
 

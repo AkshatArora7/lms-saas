@@ -41,6 +41,19 @@ await tx.$executeRawUnsafe(
 
 `current_tenant_id()` (in `schema.sql`) reads the GUC for the RLS predicate.
 
+### Background work stays tenant-scoped (the relay)
+
+The `event_outbox` relay shows the safety net working for non-request work. The
+relay has no incoming tenant context, so it **enumerates active tenants from the
+control-plane `tenant` registry** (read outside RLS) and then **drains each
+tenant's unpublished `event_outbox` rows inside that tenant's own `app.tenant_id`
+GUC transaction** (`withTenant`). Because the outbox is under `FORCE ROW LEVEL
+SECURITY` and the relay connects as the non-superuser (NOBYPASSRLS) role, a naive
+`SELECT … FROM event_outbox` with no GUC set returns **zero rows** — the engine
+makes it impossible to read the outbox cross-tenant even from a background worker.
+Consumers then dedupe per tenant via `event_inbox (consumer, message_id)` for
+exactly-once-effective processing.
+
 ## Silo routing
 
 For silo tenants, `withTenant()` resolves a **dedicated `PrismaClient`** keyed by

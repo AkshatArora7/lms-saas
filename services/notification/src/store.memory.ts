@@ -20,9 +20,14 @@ export const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
  * row-level isolation Postgres RLS enforces in production. Used by the test
  * suite and `NOTIFICATION_STORE=memory`.
  */
+/** The consumer name recorded in the emulated `event_inbox` for dedupe. */
+const NOTIFICATION_CONSUMER = "notification";
+
 export class MemoryNotificationStore implements NotificationStore {
   private notifications: NotificationRecord[] = [];
   private preferences: PreferenceRecord[] = [];
+  /** Emulated `event_inbox` claims, keyed by `${tenantId}::consumer::messageId`. */
+  private inboxClaims = new Set<string>();
 
   constructor(
     private readonly generateId: () => string = randomUUID,
@@ -88,6 +93,26 @@ export class MemoryNotificationStore implements NotificationStore {
       return record;
     });
     return created;
+  }
+
+  async ingestEvent(
+    ctx: TenantContext,
+    messageId: string,
+    rows: NewNotificationInput[],
+  ): Promise<{ claimed: boolean; notifications: NotificationRecord[] }> {
+    const key = `${ctx.tenantId}::${NOTIFICATION_CONSUMER}::${messageId}`;
+    // Redelivery: already processed — insert nothing, report deduped.
+    if (this.inboxClaims.has(key)) {
+      return { claimed: false, notifications: [] };
+    }
+    // First delivery. Model the DB transaction's atomicity: build the rows
+    // first, and only commit (record the claim AND keep the notifications)
+    // once the effect has fully succeeded. If `createNotifications` throws,
+    // we never reach the claim — mirroring ON CONFLICT + same-tx insert
+    // rolling back together (nothing persisted).
+    const notifications = await this.createNotifications(ctx, rows);
+    this.inboxClaims.add(key);
+    return { claimed: true, notifications };
   }
 
   async markRead(

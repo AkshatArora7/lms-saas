@@ -82,6 +82,26 @@ export interface NotificationStore {
     rows: NewNotificationInput[],
   ): Promise<NotificationRecord[]>;
 
+  /**
+   * Atomically dedupe-and-apply a domain event delivery for the `notification`
+   * consumer. In ONE tenant-scoped transaction, claim `(consumer='notification',
+   * messageId)` in `event_inbox` via `INSERT ... ON CONFLICT DO NOTHING`:
+   *
+   *  - First delivery (claimed): insert the notification `rows` IN THE SAME tx
+   *    and return `{ claimed: true, notifications }`. Claim + side-effect commit
+   *    or roll back together — so if the inserts fail, the claim never persists.
+   *  - Redelivery (already claimed): insert nothing and return
+   *    `{ claimed: false, notifications: [] }`.
+   *
+   * This is the exactly-once seam: the relay's at-least-once redelivery becomes
+   * an idempotent no-op because the claim and the effect share one transaction.
+   */
+  ingestEvent(
+    ctx: TenantContext,
+    messageId: string,
+    rows: NewNotificationInput[],
+  ): Promise<{ claimed: boolean; notifications: NotificationRecord[] }>;
+
   /** Mark one notification read; null when it is not the user's / unknown. */
   markRead(
     ctx: TenantContext,

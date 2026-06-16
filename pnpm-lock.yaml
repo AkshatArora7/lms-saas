@@ -176,6 +176,9 @@ importers:
       '@lms/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      vitest:
+        specifier: ^2.0.5
+        version: 2.1.9(@types/node@20.19.43)
 
   packages/logger:
     dependencies:
@@ -929,6 +932,40 @@ importers:
         specifier: ^2.0.5
         version: 2.1.9(@types/node@20.19.43)
 
+  services/relay:
+    dependencies:
+      '@lms/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@lms/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@lms/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@lms/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
+      '@lms/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      fastify:
+        specifier: ^4.28.1
+        version: 4.29.1
+    devDependencies:
+      '@lms/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
+      '@lms/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      tsx:
+        specifier: ^4.17.0
+        version: 4.22.4
+      vitest:
+        specifier: ^2.0.5
+        version: 2.1.9(@types/node@20.19.43)
+
   services/reporting:
     dependencies:
       '@lms/auth':
@@ -1197,6 +1234,12 @@ importers:
       '@lms/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
+      '@lms/service-notification':
+        specifier: workspace:*
+        version: link:../../services/notification
+      '@lms/service-relay':
+        specifier: workspace:*
+        version: link:../../services/relay
       '@lms/service-tenant':
         specifier: workspace:*
         version: link:../../services/tenant

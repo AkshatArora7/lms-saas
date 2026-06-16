@@ -15,6 +15,8 @@
   },
   "devDependencies": {
     "@lms/eslint-config": "workspace:*",
+    "@lms/service-notification": "workspace:*",
+    "@lms/service-relay": "workspace:*",
     "@lms/service-tenant": "workspace:*",
     "@lms/tsconfig": "workspace:*",
     "@types/node": "^20.14.0",

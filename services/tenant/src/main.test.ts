@@ -2,6 +2,7 @@ import type { AppConfig } from "@lms/config";
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "./main.js";
+import { MemorySettingsStore } from "./settings.memory.js";
 import { MemoryTenantStore } from "./store.memory.js";
 
 const config = {
@@ -11,8 +12,12 @@ const config = {
 } as unknown as AppConfig;
 
 function buildTestApp(store = new MemoryTenantStore()) {
-  return { app: buildApp({ config, store }), store };
+  const settingsStore = new MemorySettingsStore();
+  return { app: buildApp({ config, store, settingsStore }), store, settingsStore };
 }
+
+const TENANT_A = "11111111-1111-1111-1111-111111111111";
+const TENANT_B = "22222222-2222-2222-2222-222222222222";
 
 async function provision(
   app: ReturnType<typeof buildApp>,
@@ -137,5 +142,103 @@ describe("tenant provisioning", () => {
     const res = await app.inject({ method: "GET", url: "/tenants" });
     expect(res.statusCode).toBe(200);
     expect((res.json() as { tenants: unknown[] }).tenants).toHaveLength(2);
+  });
+});
+
+describe("per-tenant governance settings (#90)", () => {
+  it("exposes the setting catalog", async () => {
+    const { app } = buildTestApp();
+    const res = await app.inject({ method: "GET", url: "/settings/catalog" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().catalog).toHaveProperty("password.min_length");
+  });
+
+  it("returns effective defaults before any override", async () => {
+    const { app } = buildTestApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/tenants/${TENANT_A}/settings`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().settings["password.min_length"]).toBe(8);
+    expect(res.json().overrides).toEqual({});
+  });
+
+  it("validates the key against the catalog and the value type", async () => {
+    const { app } = buildTestApp();
+    const unknownKey = await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_A}/settings/not.a.real.key`,
+      payload: { value: 1 },
+    });
+    expect(unknownKey.statusCode).toBe(404);
+
+    const badType = await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_A}/settings/password.min_length`,
+      payload: { value: "eight" },
+    });
+    expect(badType.statusCode).toBe(400);
+
+    const outOfRange = await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_A}/settings/password.min_length`,
+      payload: { value: 3 },
+    });
+    expect(outOfRange.statusCode).toBe(400);
+
+    const missingValue = await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_A}/settings/quiz.lockdown_default`,
+      payload: {},
+    });
+    expect(missingValue.statusCode).toBe(400);
+
+    const badId = await app.inject({
+      method: "PUT",
+      url: `/tenants/not-a-uuid/settings/quiz.lockdown_default`,
+      payload: { value: true },
+    });
+    expect(badId.statusCode).toBe(400);
+  });
+
+  it("sets a setting and reads it back as the effective value", async () => {
+    const { app } = buildTestApp();
+    const put = await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_A}/settings/password.min_length`,
+      payload: { value: 12 },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json().setting).toMatchObject({ key: "password.min_length", value: 12 });
+
+    const one = await app.inject({
+      method: "GET",
+      url: `/tenants/${TENANT_A}/settings/password.min_length`,
+    });
+    expect(one.json()).toMatchObject({ key: "password.min_length", value: 12 });
+
+    const all = await app.inject({
+      method: "GET",
+      url: `/tenants/${TENANT_A}/settings`,
+    });
+    expect(all.json().settings["password.min_length"]).toBe(12);
+    expect(all.json().overrides).toEqual({ "password.min_length": 12 });
+  });
+
+  it("isolates settings per tenant", async () => {
+    const { app } = buildTestApp();
+    await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_A}/settings/enrollment.self_registration`,
+      payload: { value: true },
+    });
+    const other = await app.inject({
+      method: "GET",
+      url: `/tenants/${TENANT_B}/settings`,
+    });
+    // Tenant B sees only defaults — no override leaked from A.
+    expect(other.json().overrides).toEqual({});
+    expect(other.json().settings["enrollment.self_registration"]).toBe(false);
   });
 });

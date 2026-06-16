@@ -42,7 +42,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 
 | Event | Published by | Consumed by |
 | --- | --- | --- |
-| `* (all mutating domain events are mirrored for audit)` | - | audit |
+| `* (mutating domain events can be mirrored for audit)` | - | audit |
 | `* (republishes any event_outbox row to consumers)` | relay | - |
 | `ai.answer.generated` | ai | - |
 | `analytics.atrisk.flagged` | analytics | - |
@@ -51,7 +51,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `assignment.created (create line item)` | - | grading |
 | `attendance.marked` | attendance | - |
 | `attendance.session.finalized` | attendance | - |
-| `audit.dsar.completed` | audit | - |
 | `billing.seat.rejected` | billing | enrollment |
 | `billing.seat.reserved` | billing | enrollment |
 | `billing.subscription.changed` | billing | - |

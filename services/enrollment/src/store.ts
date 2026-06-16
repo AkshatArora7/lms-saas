@@ -29,6 +29,14 @@ export type CreateEnrollmentResult =
   | { ok: false; reason: "already_enrolled" | "unknown_role" };
 
 /**
+ * Result of a role update: the updated record, a not-found signal, or an
+ * unknown-role rejection (the role is not valid for the tenant).
+ */
+export type UpdateEnrollmentResult =
+  | { ok: true; enrollment: EnrollmentRecord }
+  | { ok: false; reason: "not_found" | "unknown_role" };
+
+/**
  * Persistence boundary for the enrollment service. Routes depend only on this
  * interface, so production uses an RLS-scoped Postgres implementation while
  * tests inject an in-memory one — mirroring the course/calendar/attendance
@@ -51,6 +59,17 @@ export interface EnrollmentStore {
     ctx: TenantContext,
     id: string,
   ): Promise<EnrollmentRecord | null>;
+
+  /**
+   * Change an enrollment's role. Returns the updated record, null when the
+   * enrollment is missing, or `unknown_role` when the role is not valid for the
+   * tenant.
+   */
+  updateEnrollmentRole(
+    ctx: TenantContext,
+    id: string,
+    role: string,
+  ): Promise<UpdateEnrollmentResult>;
 
   /** Mark an enrollment completed; returns the updated record. */
   completeEnrollment(

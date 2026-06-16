@@ -162,6 +162,112 @@ describe("course routes", () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it("updates a course (partial patch keeps other fields)", async () => {
+    const app = buildTestApp();
+    const created = await app.inject({
+      method: "POST",
+      url: "/courses",
+      headers: HEADERS,
+      payload: { title: "Physics 101", description: "Mechanics." },
+    });
+    const { course } = created.json() as { course: { id: string } };
+
+    const patched = await app.inject({
+      method: "PATCH",
+      url: `/courses/${course.id}`,
+      headers: HEADERS,
+      payload: { title: "Physics 201" },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json()).toMatchObject({
+      course: { id: course.id, title: "Physics 201", description: "Mechanics." },
+    });
+  });
+
+  it("rejects an empty title on update (400)", async () => {
+    const app = buildTestApp();
+    const created = await app.inject({
+      method: "POST",
+      url: "/courses",
+      headers: HEADERS,
+      payload: { title: "Physics 101" },
+    });
+    const { course } = created.json() as { course: { id: string } };
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/courses/${course.id}`,
+      headers: HEADERS,
+      payload: { title: "   " },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 404 when updating a missing course", async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/courses/does-not-exist",
+      headers: HEADERS,
+      payload: { title: "Nope" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("deletes a course (204) then 404 on re-fetch", async () => {
+    const app = buildTestApp();
+    const created = await app.inject({
+      method: "POST",
+      url: "/courses",
+      headers: HEADERS,
+      payload: { title: "Temporary Course" },
+    });
+    const { course } = created.json() as { course: { id: string } };
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/courses/${course.id}`,
+      headers: HEADERS,
+    });
+    expect(deleted.statusCode).toBe(204);
+
+    const fetched = await app.inject({
+      method: "GET",
+      url: `/courses/${course.id}`,
+      headers: HEADERS,
+    });
+    expect(fetched.statusCode).toBe(404);
+  });
+
+  it("returns 404 when deleting a missing course", async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/courses/does-not-exist",
+      headers: HEADERS,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("does not delete another tenant's course (404)", async () => {
+    const app = buildTestApp(createSeededMemoryStore());
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/courses/demo-course-anatomy",
+      headers: { "x-tenant-id": OTHER_TENANT.tenantId },
+    });
+    expect(res.statusCode).toBe(404);
+
+    // The demo tenant can still see its course — it was never removed.
+    const stillThere = await app.inject({
+      method: "GET",
+      url: "/courses/demo-course-anatomy",
+      headers: HEADERS,
+    });
+    expect(stillThere.statusCode).toBe(200);
+  });
+
   it("requires a tenant context (400)", async () => {
     const app = buildTestApp();
     const res = await app.inject({ method: "GET", url: "/courses" });

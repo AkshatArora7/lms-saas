@@ -6,6 +6,7 @@ import type {
   EnrollmentStatus,
   EnrollmentStore,
   NewEnrollmentInput,
+  UpdateEnrollmentResult,
 } from "./store.js";
 
 interface EnrollmentRow {
@@ -100,6 +101,29 @@ export function createPrismaStore(): EnrollmentStore {
           id,
         );
         return rows[0] ? toRecord(rows[0]) : null;
+      });
+    },
+
+    async updateEnrollmentRole(ctx, id, role) {
+      return withTenant<UpdateEnrollmentResult>(ctx, async (db) => {
+        const roleRows = await db.$queryRawUnsafe<{ id: string }[]>(
+          `SELECT id FROM role WHERE name = $1 LIMIT 1`,
+          role,
+        );
+        const roleId = roleRows[0]?.id;
+        if (!roleId) return { ok: false, reason: "unknown_role" };
+
+        const updated = await db.$executeRawUnsafe(
+          `UPDATE enrollment SET role_id = $1 WHERE id = $2`,
+          roleId,
+          id,
+        );
+        if (updated === 0) return { ok: false, reason: "not_found" };
+        const rows = await db.$queryRawUnsafe<EnrollmentRow[]>(
+          `${SELECT_JOINED} WHERE e.id = $1 LIMIT 1`,
+          id,
+        );
+        return { ok: true, enrollment: toRecord(rows[0]!) };
       });
     },
 

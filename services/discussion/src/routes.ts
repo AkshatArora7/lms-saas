@@ -150,6 +150,25 @@ export function registerDiscussionRoutes(
   );
 
   // --- Moderation ----------------------------------------------------------
+  app.patch<{ Params: { id: string }; Body: { body?: unknown } }>(
+    "/posts/:id",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const body = (req.body ?? {}) as { body?: unknown };
+      if (!isNonEmptyString(body.body)) {
+        return badRequest(reply, "body is required.");
+      }
+      const post = await deps.store.updatePost(
+        ctx,
+        req.params.id,
+        body.body.trim(),
+      );
+      if (!post) return notFound(reply, "Post not found.");
+      return reply.code(200).send({ post });
+    },
+  );
+
   app.post<{ Params: { id: string }; Body: { pinned?: unknown } }>(
     "/posts/:id/pin",
     async (req, reply) => {

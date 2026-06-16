@@ -128,6 +128,17 @@ describe.skipIf(!dbAvailable)("Outbox relay: drain + dedupe under RLS", () => {
     const messageId = randomUUID();
     const userId = randomUUID();
 
+    // notification.user_id is NOT NULL REFERENCES app_user(id), so the
+    // recipient must exist before the consumer fans out. Seed it under the
+    // tenant GUC (app_user is RLS-scoped; WITH CHECK needs current_tenant_id()).
+    await withGuc(app, tenant, async (c) => {
+      await c.query(
+        `INSERT INTO app_user (id, tenant_id, email, display_name, status)
+         VALUES ($1, $2, $3, 'Relay Recipient', 'active')`,
+        [userId, tenant, `recipient-${userId}@relay.test`],
+      );
+    });
+
     const inboxCount = async (): Promise<number | null> =>
       withGuc(app, tenant, async (c) =>
         (

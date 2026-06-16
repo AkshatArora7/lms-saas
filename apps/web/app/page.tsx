@@ -221,6 +221,9 @@ export default async function Home() {
             <Button href="/grades" size="sm" variant="secondary">
               View grades
             </Button>
+            <Button href="/attendance" size="sm" variant="secondary">
+              Attendance
+            </Button>
           </nav>
         </header>
 

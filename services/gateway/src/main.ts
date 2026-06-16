@@ -19,6 +19,12 @@ import {
   envUpstreamResolver,
   type ProxyOptions,
 } from "./proxy.js";
+import {
+  createRateLimiter,
+  rateLimitGuard,
+  type LimitResolver,
+  type RateLimiter,
+} from "./ratelimit.js";
 
 const SERVICE = "gateway";
 const log = createLogger(SERVICE);
@@ -28,6 +34,10 @@ export interface BuildAppOptions {
   config?: AppConfig;
   /** Override upstream routing (host map + HTTP client) for tests. */
   proxy?: Partial<ProxyOptions>;
+  /** Override the rate limiter (tests inject an in-memory one with a clock). */
+  rateLimiter?: RateLimiter;
+  /** Override the per-tenant budget resolver (e.g. by plan). */
+  limitFor?: LimitResolver;
 }
 
 /**
@@ -48,20 +58,32 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }));
 
   const authenticate = authGuard(config);
+  // Per-tenant rate limiting runs right after auth (it reads the resolved
+  // tenant), so one tenant cannot exhaust capacity for others.
+  const limiter = options.rateLimiter ?? createRateLimiter(config);
+  const rateLimit = rateLimitGuard({
+    limiter,
+    config,
+    ...(options.limitFor ? { limitFor: options.limitFor } : {}),
+  });
 
   // Authenticated: echoes the identity the gateway resolved from the token.
-  app.get("/whoami", { preHandler: authenticate }, async (req) => ({
-    userId: req.claims!.sub,
-    tenantId: req.tenant!.tenantId,
-    tier: req.tenant!.tier,
-    roles: req.claims!.roles,
-    scopes: req.claims!.scopes,
-  }));
+  app.get(
+    "/whoami",
+    { preHandler: [authenticate, rateLimit] },
+    async (req) => ({
+      userId: req.claims!.sub,
+      tenantId: req.tenant!.tenantId,
+      tier: req.tenant!.tier,
+      roles: req.claims!.roles,
+      scopes: req.claims!.scopes,
+    }),
+  );
 
   // Authenticated + scope-gated example, demonstrating downstream protection.
   app.get(
     "/admin/ping",
-    { preHandler: [authenticate, requireScope("users:manage")] },
+    { preHandler: [authenticate, rateLimit, requireScope("users:manage")] },
     async () => ({ ok: true }),
   );
 
@@ -71,7 +93,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     resolveUpstream: options.proxy?.resolveUpstream ?? envUpstreamResolver(),
     fetchImpl: options.proxy?.fetchImpl,
   });
-  app.all("/api/:service/*", { preHandler: authenticate }, proxyHandler);
+  app.all(
+    "/api/:service/*",
+    { preHandler: [authenticate, rateLimit] },
+    proxyHandler,
+  );
 
   return app;
 }

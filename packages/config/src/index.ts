@@ -34,6 +34,12 @@ const schema = z.object({
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),
+
+  // Rate limiting (gateway). Default per-tenant budget per fixed window; the
+  // gateway resolves the effective limit per tenant (extensible by plan). Backed
+  // by Upstash Redis when its creds are set, else an in-process limiter.
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(600),
+  RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
 });
 
 export type AppConfig = z.infer<typeof schema>;

@@ -95,6 +95,9 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `release.condition.evaluated` | - | content |
 | `report.completed` | reporting | - |
 | `report.requested` | - | reporting |
+| `role.created` | identity | - |
+| `role.deleted` | identity | - |
+| `role.updated` | identity | - |
 | `scorm.attempt.recorded` | content | - |
 | `search.reindexed` | search | - |
 | `sis.class.upserted` | sis | course |

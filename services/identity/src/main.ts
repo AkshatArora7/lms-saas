@@ -20,6 +20,8 @@ import Fastify, {
   type FastifyRequest,
 } from "fastify";
 
+import { createPrismaRbacStore } from "./rbac.prisma.js";
+import { registerRbacRoutes, type RbacRouteDeps } from "./rbac.routes.js";
 import { registerAuthRoutes, type IdentityRouteDeps } from "./routes.js";
 import { createSeededMemoryStore } from "./store.memory.js";
 import { createPrismaStore } from "./store.prisma.js";
@@ -35,6 +37,8 @@ export interface BuildAppOptions {
   now?: () => Date;
   generateId?: () => string;
   oidcExchanger?: IdentityRouteDeps["oidcExchanger"];
+  /** RBAC management store (roles & permission sets); tests inject memory. */
+  rbacStore?: RbacRouteDeps["store"];
 }
 
 /**
@@ -74,13 +78,21 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     uptime: process.uptime(),
   }));
 
+  const resolveTenant = options.resolveTenant ?? headerTenantResolver(config);
+
   registerAuthRoutes(app, {
     config,
     store: options.store ?? createPrismaStore(),
-    resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+    resolveTenant,
     now: options.now ?? (() => new Date()),
     generateId: options.generateId ?? randomUUID,
     oidcExchanger: options.oidcExchanger,
+  });
+
+  // RBAC management (roles & custom permission sets) shares the tenant resolver.
+  registerRbacRoutes(app, {
+    store: options.rbacStore ?? createPrismaRbacStore(),
+    resolveTenant,
   });
 
   return app;

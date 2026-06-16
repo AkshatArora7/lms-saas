@@ -23,6 +23,7 @@ export type EventEnvelope = z.infer<typeof EventEnvelope>;
 /** Canonical event type registry — keep in sync across services. */
 export const EVENT_TYPES = {
   TENANT_PROVISIONED: "tenant.provisioned",
+  TENANT_BRANDING_UPDATED: "tenant.branding.updated",
   USER_CREATED: "user.created",
   USER_UPDATED: "user.updated",
   USER_DEACTIVATED: "user.deactivated",

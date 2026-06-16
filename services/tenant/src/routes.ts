@@ -3,6 +3,12 @@ import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply } from "fastify";
 
 import {
+  BRANDING_THEMES,
+  type BrandingPatch,
+  type BrandingStore,
+  type BrandingTheme,
+} from "./branding.js";
+import {
   SETTING_CATALOG,
   effectiveSettings,
   validateSetting,
@@ -15,6 +21,8 @@ export interface TenantRouteDeps {
   store: TenantStore;
   /** Tenant-scoped governance settings (RLS); keyed on the path tenant id. */
   settingsStore: SettingsStore;
+  /** Tenant-scoped white-label branding (RLS); keyed on the path tenant id. */
+  brandingStore: BrandingStore;
 }
 
 const UUID_RE =
@@ -174,5 +182,75 @@ export function registerTenantRoutes(
       const value = effectiveSettings(stored)[key];
       return reply.code(200).send({ key, value });
     },
+  );
+
+  // --- White-label branding (#89) ----------------------------------------
+  app.put<{ Params: { id: string } }>(
+    "/tenants/:id/branding",
+    async (req, reply) => {
+      const { id } = req.params;
+      if (!UUID_RE.test(id)) return badRequest(reply, "tenant id must be a uuid.");
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const patch: BrandingPatch = {};
+      const strFields: [keyof BrandingPatch, string][] = [
+        ["displayName", "displayName"],
+        ["logoUrl", "logoUrl"],
+        ["faviconUrl", "faviconUrl"],
+        ["primaryColor", "primaryColor"],
+        ["secondaryColor", "secondaryColor"],
+        ["accentColor", "accentColor"],
+        ["customDomain", "customDomain"],
+        ["customCss", "customCss"],
+        ["supportEmail", "supportEmail"],
+      ];
+      for (const [key, field] of strFields) {
+        const v = body[field];
+        if (v === undefined) continue;
+        if (v !== null && typeof v !== "string") {
+          return badRequest(reply, `${field} must be a string or null.`);
+        }
+        (patch[key] as string | null) = v as string | null;
+      }
+      if (body.theme !== undefined) {
+        if (!isBrandingTheme(body.theme)) {
+          return badRequest(reply, `theme must be one of: ${BRANDING_THEMES.join(", ")}.`);
+        }
+        patch.theme = body.theme;
+      }
+      if (body.inheritParent !== undefined) {
+        if (typeof body.inheritParent !== "boolean") {
+          return badRequest(reply, "inheritParent must be a boolean.");
+        }
+        patch.inheritParent = body.inheritParent;
+      }
+      // Validate hex colours when provided.
+      for (const c of ["primaryColor", "secondaryColor", "accentColor"] as const) {
+        const v = patch[c];
+        if (typeof v === "string" && !/^#[0-9a-fA-F]{6}$/.test(v)) {
+          return badRequest(reply, `${c} must be a #rrggbb hex colour.`);
+        }
+      }
+      const branding = await deps.brandingStore.putBranding(ctxFor(id), patch);
+      return reply.code(200).send({ branding });
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/tenants/:id/branding",
+    async (req, reply) => {
+      const { id } = req.params;
+      if (!UUID_RE.test(id)) return badRequest(reply, "tenant id must be a uuid.");
+      const [effective, overrides] = await Promise.all([
+        deps.brandingStore.getEffectiveBranding(id),
+        deps.brandingStore.getOwnBranding(ctxFor(id)),
+      ]);
+      return reply.code(200).send({ branding: effective, overrides });
+    },
+  );
+}
+
+function isBrandingTheme(value: unknown): value is BrandingTheme {
+  return (
+    typeof value === "string" && (BRANDING_THEMES as readonly string[]).includes(value)
   );
 }

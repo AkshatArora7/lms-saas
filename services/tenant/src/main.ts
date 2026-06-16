@@ -12,6 +12,8 @@ import { loadConfig, type AppConfig } from "@lms/config";
 import { createLogger } from "@lms/logger";
 import Fastify, { type FastifyInstance } from "fastify";
 
+import { MemoryBrandingStore } from "./branding.memory.js";
+import { createPrismaBrandingStore } from "./branding.prisma.js";
 import { registerTenantRoutes, type TenantRouteDeps } from "./routes.js";
 import { MemorySettingsStore } from "./settings.memory.js";
 import { createPrismaSettingsStore } from "./settings.prisma.js";
@@ -26,6 +28,7 @@ export interface BuildAppOptions {
   config?: AppConfig;
   store?: TenantRouteDeps["store"];
   settingsStore?: TenantRouteDeps["settingsStore"];
+  brandingStore?: TenantRouteDeps["brandingStore"];
 }
 
 /**
@@ -48,6 +51,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     config,
     store: options.store ?? createPrismaStore(),
     settingsStore: options.settingsStore ?? createPrismaSettingsStore(),
+    brandingStore: options.brandingStore ?? createPrismaBrandingStore(),
   });
 
   return app;
@@ -74,6 +78,7 @@ async function start(): Promise<void> {
         ? {
             store: createSeededMemoryStore(),
             settingsStore: new MemorySettingsStore(),
+            brandingStore: new MemoryBrandingStore(),
           }
         : {},
     );

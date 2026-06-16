@@ -129,7 +129,7 @@ export function createPrismaStore(): TenantStore {
         };
         await tx.$executeRawUnsafe(
           `INSERT INTO event_outbox (tenant_id, type, payload)
-           VALUES ($1, $2, $3::jsonb)`,
+           VALUES ($1::uuid, $2, $3::jsonb)`,
           record.id,
           EVENT_TYPES.TENANT_PROVISIONED,
           JSON.stringify(payload),

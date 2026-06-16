@@ -22,12 +22,22 @@ First-party auth and token issuance (local password login, rotating refresh toke
 | `GET` | `/auth/me` | Introspect the bearer access token -> subject, tenant, roles, scopes. |
 | `POST` | `/sso/{provider}/callback` | Handle OIDC/SAML federated login -> link user_identity. |
 | `GET` | `/authz/check` | Evaluate permission for (subject, action, resource) via role_assignment. |
+| `GET` | `/permissions` | List the permission catalog roles can be built from. |
+| `POST` | `/roles` | Create a custom role (is_system=false). |
+| `GET` | `/roles` | List the tenant's roles (system + custom). |
+| `GET` | `/roles/{id}` | Role detail + its permission keys. |
+| `PATCH` | `/roles/{id}` | Rename a custom role (system roles are read-only). |
+| `DELETE` | `/roles/{id}` | Delete a custom role. |
+| `PUT` | `/roles/{id}/permissions` | Replace a role's permission set (catalog-validated). |
 
 ## Events published
 
 - `identity.user.authenticated`
 - `identity.role.assigned`
 - `identity.role.revoked`
+- `role.created`
+- `role.updated`
+- `role.deleted`
 
 ## Events consumed
 

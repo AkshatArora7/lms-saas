@@ -51,6 +51,21 @@ export interface NewSubmissionInput {
   blobUrl?: string | null;
 }
 
+/**
+ * Fields accepted when updating an assignment. Every field is optional — only
+ * the keys present are changed (partial update), so a caller can rename an
+ * assignment without resending its policy. `courseId` is intentionally not
+ * editable (an assignment stays with its course).
+ */
+export interface UpdateAssignmentInput {
+  title?: string;
+  instructions?: string | null;
+  dueAt?: string | null;
+  points?: number;
+  submissionType?: SubmissionType;
+  allowLate?: boolean;
+}
+
 export type SubmitResult =
   | { ok: true; submission: SubmissionRecord; resubmitted: boolean }
   | {
@@ -79,6 +94,19 @@ export interface AssignmentStore {
     ctx: TenantContext,
     courseId: string,
   ): Promise<AssignmentRecord[]>;
+
+  /**
+   * Apply a partial update to an assignment. Returns the updated record, or
+   * null if no assignment with that id exists for the tenant.
+   */
+  updateAssignment(
+    ctx: TenantContext,
+    id: string,
+    input: UpdateAssignmentInput,
+  ): Promise<AssignmentRecord | null>;
+
+  /** Delete an assignment; returns true if a row was removed, false otherwise. */
+  deleteAssignment(ctx: TenantContext, id: string): Promise<boolean>;
 
   /**
    * Submit (or resubmit) on behalf of a user. Flags `is_late` when past the due

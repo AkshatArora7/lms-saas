@@ -268,6 +268,58 @@ describe("moderation", () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it("edits a post body (200)", async () => {
+    const app = buildTestApp();
+    const { forum } = (await createForum(app)).json() as {
+      forum: { id: string };
+    };
+    const { topic } = (await createTopic(app, forum.id)).json() as {
+      topic: { id: string };
+    };
+    const post = await createPost(app, topic.id, { body: "original" });
+    const postId = (post.json() as { post: { id: string } }).post.id;
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/posts/${postId}`,
+      headers: HEADERS,
+      payload: { body: "edited" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ post: { id: postId, body: "edited" } });
+  });
+
+  it("requires a body when editing a post (400)", async () => {
+    const app = buildTestApp();
+    const { forum } = (await createForum(app)).json() as {
+      forum: { id: string };
+    };
+    const { topic } = (await createTopic(app, forum.id)).json() as {
+      topic: { id: string };
+    };
+    const post = await createPost(app, topic.id, { body: "original" });
+    const postId = (post.json() as { post: { id: string } }).post.id;
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/posts/${postId}`,
+      headers: HEADERS,
+      payload: { body: "   " },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 404 editing an unknown post", async () => {
+    const app = buildTestApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/posts/missing",
+      headers: HEADERS,
+      payload: { body: "edited" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
 });
 
 describe("graded participation", () => {

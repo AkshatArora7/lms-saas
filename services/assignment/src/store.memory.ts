@@ -9,6 +9,7 @@ import type {
   NewSubmissionInput,
   SubmissionRecord,
   SubmitResult,
+  UpdateAssignmentInput,
 } from "./store.js";
 
 /** The demo tenant the local dev seed and the web BFFs agree on. */
@@ -73,6 +74,37 @@ export class MemoryAssignmentStore implements AssignmentStore {
     return this.assignments.filter(
       (a) => a.tenantId === ctx.tenantId && a.courseId === courseId,
     );
+  }
+
+  async updateAssignment(
+    ctx: TenantContext,
+    id: string,
+    input: UpdateAssignmentInput,
+  ): Promise<AssignmentRecord | null> {
+    const assignment = this.assignments.find(
+      (a) => a.id === id && a.tenantId === ctx.tenantId,
+    );
+    if (!assignment) return null;
+    if (input.title !== undefined) assignment.title = input.title;
+    if (input.instructions !== undefined)
+      assignment.instructions = input.instructions;
+    if (input.dueAt !== undefined) assignment.dueAt = input.dueAt;
+    if (input.points !== undefined) assignment.points = input.points;
+    if (input.submissionType !== undefined)
+      assignment.submissionType = input.submissionType;
+    if (input.allowLate !== undefined) assignment.allowLate = input.allowLate;
+    return assignment;
+  }
+
+  async deleteAssignment(ctx: TenantContext, id: string): Promise<boolean> {
+    const index = this.assignments.findIndex(
+      (a) => a.id === id && a.tenantId === ctx.tenantId,
+    );
+    if (index === -1) return false;
+    this.assignments.splice(index, 1);
+    // Cascade: drop submissions for the removed assignment.
+    this.submissions = this.submissions.filter((s) => s.assignmentId !== id);
+    return true;
   }
 
   async submit(
@@ -155,7 +187,7 @@ export class MemoryAssignmentStore implements AssignmentStore {
   }
 }
 
-/** Build a MemoryAssignmentStore pre-seeded with a demo assignment. */
+/** Build a MemoryAssignmentStore pre-seeded with demo assignments. */
 export function createSeededMemoryStore(
   generateId: () => string = randomUUID,
   now: () => Date = () => new Date(),
@@ -172,6 +204,32 @@ export function createSeededMemoryStore(
     submissionType: "text",
     allowLate: true,
     createdAt: new Date("2026-01-01T00:00:00.000Z").toISOString(),
+  });
+  // Assignments under a taught course (matches the teaching dashboard's demo
+  // course ids) so the instructor management screen has a real happy path.
+  store.seedAssignment({
+    id: "demo-alg-quiz-1",
+    tenantId: DEMO_TENANT_ID,
+    courseId: "alg-101",
+    title: "Linear Equations Quiz",
+    instructions: "Complete problems 1-20 in chapter 3.",
+    dueAt: new Date("2026-10-15T23:59:00.000Z").toISOString(),
+    points: 50,
+    submissionType: "file",
+    allowLate: false,
+    createdAt: new Date("2026-09-01T00:00:00.000Z").toISOString(),
+  });
+  store.seedAssignment({
+    id: "demo-alg-project-1",
+    tenantId: DEMO_TENANT_ID,
+    courseId: "alg-101",
+    title: "Real-World Functions Project",
+    instructions: "Model a real-world scenario with a linear function.",
+    dueAt: new Date("2026-11-30T23:59:00.000Z").toISOString(),
+    points: 100,
+    submissionType: "url",
+    allowLate: true,
+    createdAt: new Date("2026-09-15T00:00:00.000Z").toISOString(),
   });
   return store;
 }

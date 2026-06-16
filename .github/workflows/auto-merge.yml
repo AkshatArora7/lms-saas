@@ -1,0 +1,42 @@
+name: Auto-merge
+
+# Tells GitHub to merge a PR automatically once all required status checks
+# pass, so completed work flows to `main` with no manual click.
+#
+# Prerequisites (owner / admin must configure once):
+#   1. Repo setting "Allow auto-merge"            -> already enabled
+#   2. A branch protection rule or ruleset on `main` with a required check
+#      ("Lint . Typecheck . Build . Test"), "Require branches up to date" on
+#   3. (recommended) "Automatically delete head branches"
+# Without #2 there is nothing for auto-merge to wait on, so this workflow
+# logs a warning and is a no-op rather than failing.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+# Least-privilege: only what enabling auto-merge requires.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  enable-auto-merge:
+    # Skip drafts; only act on PRs targeting main.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge (squash)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          if ! gh pr merge "$PR_URL" --auto --squash; then
+            echo "::warning::Could not enable auto-merge. Ensure 'Allow auto-merge' is on and main has a required status check (branch protection or ruleset)."
+          fi

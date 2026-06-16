@@ -7,6 +7,7 @@ WORKDIR /app
 FROM base AS build
 COPY . .
 RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @lms/db generate
 RUN pnpm --filter "@lms/service-assessment..." build
 
 FROM base AS runtime

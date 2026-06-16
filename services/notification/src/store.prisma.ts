@@ -97,7 +97,7 @@ async function insertNotification(
   const inserted = await db.$queryRawUnsafe<NotificationRow[]>(
     `INSERT INTO notification
        (tenant_id, user_id, category, channel, title, body, data, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+     VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8)
      RETURNING id, tenant_id, user_id, category, channel, title, body,
                data, status, created_at, read_at`,
     tenantId,
@@ -123,14 +123,14 @@ export function createPrismaStore(): NotificationStore {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<NotificationRow[]>(
           `${SELECT_NOTIFICATION}
-            WHERE user_id = $1 AND channel = 'in_app'
+            WHERE user_id = $1::uuid AND channel = 'in_app'
               ${opts.unreadOnly ? "AND read_at IS NULL" : ""}
             ORDER BY created_at DESC`,
           userId,
         );
         const unread = await db.$queryRawUnsafe<{ count: bigint | number }[]>(
           `SELECT COUNT(*)::int AS count FROM notification
-            WHERE user_id = $1 AND channel = 'in_app' AND read_at IS NULL`,
+            WHERE user_id = $1::uuid AND channel = 'in_app' AND read_at IS NULL`,
           userId,
         );
         return {
@@ -183,7 +183,7 @@ export function createPrismaStore(): NotificationStore {
           `UPDATE notification
               SET read_at = COALESCE(read_at, now()),
                   status = 'read'
-            WHERE id = $1 AND user_id = $2
+            WHERE id = $1::uuid AND user_id = $2::uuid
             RETURNING id, tenant_id, user_id, category, channel, title, body,
                       data, status, created_at, read_at`,
           notificationId,
@@ -198,7 +198,7 @@ export function createPrismaStore(): NotificationStore {
         return db.$executeRawUnsafe(
           `UPDATE notification
               SET read_at = now(), status = 'read'
-            WHERE user_id = $1 AND channel = 'in_app' AND read_at IS NULL`,
+            WHERE user_id = $1::uuid AND channel = 'in_app' AND read_at IS NULL`,
           userId,
         );
       });
@@ -209,7 +209,7 @@ export function createPrismaStore(): NotificationStore {
         const rows = await db.$queryRawUnsafe<PreferenceRow[]>(
           `SELECT user_id, channel, category, is_enabled
              FROM notification_preference
-            WHERE user_id = $1
+            WHERE user_id = $1::uuid
             ORDER BY category, channel`,
           userId,
         );
@@ -223,7 +223,7 @@ export function createPrismaStore(): NotificationStore {
           await db.$executeRawUnsafe(
             `INSERT INTO notification_preference
                (tenant_id, user_id, channel, category, is_enabled)
-             VALUES ($1, $2, $3, $4, $5)
+             VALUES ($1::uuid, $2::uuid, $3, $4, $5)
              ON CONFLICT (user_id, channel, category)
              DO UPDATE SET is_enabled = EXCLUDED.is_enabled`,
             ctx.tenantId,
@@ -236,7 +236,7 @@ export function createPrismaStore(): NotificationStore {
         const rows = await db.$queryRawUnsafe<PreferenceRow[]>(
           `SELECT user_id, channel, category, is_enabled
              FROM notification_preference
-            WHERE user_id = $1
+            WHERE user_id = $1::uuid
             ORDER BY category, channel`,
           userId,
         );
@@ -249,7 +249,7 @@ export function createPrismaStore(): NotificationStore {
         const rows = await db.$queryRawUnsafe<NotificationRow[]>(
           `UPDATE notification
               SET status = 'sent'
-            WHERE user_id = $1 AND channel <> 'in_app' AND status = 'queued'
+            WHERE user_id = $1::uuid AND channel <> 'in_app' AND status = 'queued'
             RETURNING id, tenant_id, user_id, category, channel, title, body,
                       data, status, created_at, read_at`,
           userId,

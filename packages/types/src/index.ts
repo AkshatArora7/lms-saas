@@ -23,6 +23,12 @@ export interface Tenant {
 export interface TenantContext {
   tenantId: string;
   tier: TenantTier;
+  /**
+   * The owning parent tenant (district / university) for a sub-tenant, or null
+   * for a top-level tenant. Lets downstream authorization reason about the
+   * tenant hierarchy without an extra control-plane lookup.
+   */
+  parentTenantId?: string | null;
   /** Resolved DB URL (pool = shared; silo = dedicated). */
   databaseUrl: string;
 }

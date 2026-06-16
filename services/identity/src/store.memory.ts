@@ -21,6 +21,7 @@ export class MemoryStore implements IdentityStore {
   private roles = new Map<string, RolesAndScopes>();
   private providers = new Map<string, IdentityProviderRecord>();
   private identities = new Map<string, string>(); // `${providerId}:${subject}` -> userId
+  private parents = new Map<string, string>(); // tenantId -> parentTenantId
   tokens: RefreshRecord[] = [];
   private seq = 0;
 
@@ -37,6 +38,10 @@ export class MemoryStore implements IdentityStore {
     this.providers.set(provider.id, provider);
   }
 
+  seedParent(tenantId: string, parentTenantId: string): void {
+    this.parents.set(tenantId, parentTenantId);
+  }
+
   async findUserByEmail(
     _ctx: TenantContext,
     email: string,
@@ -49,6 +54,10 @@ export class MemoryStore implements IdentityStore {
     userId: string,
   ): Promise<RolesAndScopes> {
     return this.roles.get(userId) ?? { roles: [], scopes: [] };
+  }
+
+  async getParentTenantId(ctx: TenantContext): Promise<string | null> {
+    return this.parents.get(ctx.tenantId) ?? ctx.parentTenantId ?? null;
   }
 
   async insertRefreshToken(

@@ -24,6 +24,7 @@ class MemoryStore implements IdentityStore {
   private roles = new Map<string, RolesAndScopes>();
   private providers = new Map<string, IdentityProviderRecord>();
   private identities = new Map<string, string>();
+  private parents = new Map<string, string>();
   tokens: RefreshRecord[] = [];
   private seq = 0;
 
@@ -40,6 +41,10 @@ class MemoryStore implements IdentityStore {
     this.providers.set(provider.id, provider);
   }
 
+  seedParent(tenantId: string, parentTenantId: string): void {
+    this.parents.set(tenantId, parentTenantId);
+  }
+
   async findUserByEmail(
     _ctx: TenantContext,
     email: string,
@@ -54,6 +59,10 @@ class MemoryStore implements IdentityStore {
     return this.roles.get(userId) ?? { roles: [], scopes: [] };
   }
 
+  async getParentTenantId(ctx: TenantContext): Promise<string | null> {
+    return this.parents.get(ctx.tenantId) ?? ctx.parentTenantId ?? null;
+  }
+
   async insertRefreshToken(
     _ctx: TenantContext,
     rec: NewRefreshRecord,
@@ -62,10 +71,15 @@ class MemoryStore implements IdentityStore {
   }
 
   async findRefreshByHash(
-    _ctx: TenantContext,
+    ctx: TenantContext,
     tokenHash: string,
   ): Promise<RefreshRecord | null> {
-    return this.tokens.find((t) => t.tokenHash === tokenHash) ?? null;
+    // Mirror RLS: a tenant can only ever see its own refresh-token rows.
+    return (
+      this.tokens.find(
+        (t) => t.tokenHash === tokenHash && t.tenantId === ctx.tenantId,
+      ) ?? null
+    );
   }
 
   async revokeRefreshToken(
@@ -211,8 +225,34 @@ describe("identity service", () => {
     const claims = me.json();
     expect(claims.userId).toBe("user-active");
     expect(claims.tenantId).toBe(TENANT_ID);
+    expect(claims.parentTenantId).toBeNull();
     expect(claims.roles).toContain("org_admin");
     expect(claims.scopes).toContain("discussions:posts:manage");
+
+    await app.close();
+  });
+
+  it("carries the owning parent tenant in the access token for a sub-tenant", async () => {
+    const store = await makeStore();
+    const PARENT_ID = "22222222-2222-2222-2222-222222222222";
+    store.seedParent(TENANT_ID, PARENT_ID);
+    const app = buildWithStore(store);
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      headers: { "x-tenant-id": TENANT_ID },
+      payload: { email: "teacher@school.test", password: "correct horse battery" },
+    });
+    expect(login.statusCode).toBe(200);
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/auth/me",
+      headers: { authorization: `Bearer ${login.json().accessToken}` },
+    });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().parentTenantId).toBe(PARENT_ID);
 
     await app.close();
   });

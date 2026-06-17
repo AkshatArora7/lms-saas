@@ -9,6 +9,19 @@ export interface CourseRecord {
   isPublished: boolean;
   startDate: string | null;
   endDate: string | null;
+  /** The org_unit (course offering) backing this course. */
+  orgUnitId: string;
+  /**
+   * Provenance: when a course was copied, the org_unit it was templated from
+   * (the source offering). Null for originals. Enables "copied from" tracking.
+   */
+  templateId: string | null;
+}
+
+/** Options for copying a course into a new offering. */
+export interface CopyCourseInput {
+  /** Override the copy's title (defaults to "<source title> (Copy)"). */
+  title?: string;
 }
 
 /** Fields accepted when creating a course. */
@@ -65,4 +78,16 @@ export interface CourseStore {
 
   /** Delete a course; returns true if a row was removed, false if none matched. */
   deleteCourse(ctx: TenantContext, id: string): Promise<boolean>;
+
+  /**
+   * Copy a course into a new, unpublished offering within the tenant, recording
+   * the source offering as the copy's `templateId` (provenance). The copy is a
+   * fully independent row — editable without affecting the source. Returns the
+   * new course, or null if the source doesn't exist for the tenant.
+   */
+  copyCourse(
+    ctx: TenantContext,
+    sourceId: string,
+    input?: CopyCourseInput,
+  ): Promise<CourseRecord | null>;
 }

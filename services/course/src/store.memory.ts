@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { TenantContext } from "@lms/types";
 
 import type {
+  CopyCourseInput,
   CourseRecord,
   CourseStore,
   NewCourseInput,
@@ -50,6 +51,8 @@ export class MemoryCourseStore implements CourseStore {
       isPublished: false,
       startDate: input.startDate ?? null,
       endDate: input.endDate ?? null,
+      orgUnitId: this.generateId(),
+      templateId: null,
     };
     this.courses.push(course);
     return course;
@@ -91,6 +94,30 @@ export class MemoryCourseStore implements CourseStore {
     this.courses.splice(index, 1);
     return true;
   }
+
+  async copyCourse(
+    ctx: TenantContext,
+    sourceId: string,
+    input: CopyCourseInput = {},
+  ): Promise<CourseRecord | null> {
+    const source = this.courses.find(
+      (c) => c.id === sourceId && c.tenantId === ctx.tenantId,
+    );
+    if (!source) return null;
+    const copy: CourseRecord = {
+      id: this.generateId(),
+      tenantId: ctx.tenantId,
+      title: input.title ?? `${source.title} (Copy)`,
+      description: source.description,
+      isPublished: false,
+      startDate: source.startDate,
+      endDate: source.endDate,
+      orgUnitId: this.generateId(),
+      templateId: source.orgUnitId,
+    };
+    this.courses.push(copy);
+    return copy;
+  }
 }
 
 /** The demo tenant the local dev seed and the web BFFs agree on. */
@@ -109,6 +136,8 @@ export function createSeededMemoryStore(
     isPublished: true,
     startDate: null,
     endDate: null,
+    orgUnitId: "demo-ou-anatomy",
+    templateId: null,
   });
   store.seed({
     id: "demo-course-algebra",
@@ -118,6 +147,8 @@ export function createSeededMemoryStore(
     isPublished: false,
     startDate: null,
     endDate: null,
+    orgUnitId: "demo-ou-algebra",
+    templateId: null,
   });
   return store;
 }

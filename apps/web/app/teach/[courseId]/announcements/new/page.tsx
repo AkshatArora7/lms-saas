@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   Field,
-  Inline,
   Input,
   PageHeader,
   Stack,
@@ -17,6 +16,72 @@ import { getSession } from "../../../../lib/auth";
 import { canTeach, getTaughtCourses } from "../../../../lib/teaching";
 import SignOutButton from "../../../../sign-out-button";
 import { createAnnouncementAction } from "../actions";
+
+const formCss = `
+.asg-back {
+  align-self: flex-start;
+}
+.asg-form-card {
+  padding: var(--lms-space-5);
+}
+.asg-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-5);
+}
+.asg-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-4);
+}
+.asg-section + .asg-section {
+  border-top: 1px solid var(--lms-border);
+  padding-top: var(--lms-space-5);
+}
+.asg-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-1);
+}
+.asg-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+.asg-section-hint {
+  color: var(--lms-text-muted);
+  font-size: 0.875rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.asg-grid-2 {
+  display: grid;
+  gap: var(--lms-space-4);
+  grid-template-columns: 1fr;
+}
+@media (min-width: 600px) {
+  .asg-grid-2 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.asg-actionbar {
+  border-top: 1px solid var(--lms-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lms-space-2);
+  justify-content: flex-end;
+  padding-top: var(--lms-space-4);
+}
+@media (max-width: 599px) {
+  .asg-actionbar {
+    justify-content: stretch;
+  }
+  .asg-actionbar .lms-btn {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+}
+`;
 
 export default async function NewAnnouncement({
   params,
@@ -58,9 +123,10 @@ export default async function NewAnnouncement({
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
+      <style>{formCss}</style>
       <Stack gap={4}>
-        <Button href={base} size="sm" variant="ghost">
-          {"<- Back to announcements"}
+        <Button className="asg-back" href={base} size="sm" variant="ghost">
+          ← Back to announcements
         </Button>
 
         <PageHeader
@@ -70,10 +136,18 @@ export default async function NewAnnouncement({
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
 
-        <Card>
-          <form action={createAnnouncementAction}>
+        <Card className="asg-form-card">
+          <form action={createAnnouncementAction} className="asg-form">
             <input name="courseId" type="hidden" value={courseId} />
-            <Stack gap={4}>
+
+            <section className="asg-section">
+              <div className="asg-section-head">
+                <h2 className="asg-section-title">Details</h2>
+                <p className="asg-section-hint">
+                  Give the announcement a clear title and tell learners what
+                  they need to know.
+                </p>
+              </div>
               <Field htmlFor="title" label="Title" required>
                 <Input
                   name="title"
@@ -89,7 +163,17 @@ export default async function NewAnnouncement({
                   rows={4}
                 />
               </Field>
-              <Inline gap={3}>
+            </section>
+
+            <section className="asg-section">
+              <div className="asg-section-head">
+                <h2 className="asg-section-title">Scheduling</h2>
+                <p className="asg-section-hint">
+                  Choose when this announcement goes live and when it should
+                  stop showing.
+                </p>
+              </div>
+              <div className="asg-grid-2">
                 <Field
                   htmlFor="publishAt"
                   label="Publish at"
@@ -97,21 +181,18 @@ export default async function NewAnnouncement({
                 >
                   <Input name="publishAt" type="datetime-local" />
                 </Field>
-                <Field
-                  htmlFor="expiresAt"
-                  label="Expires at"
-                  help="Optional"
-                >
+                <Field htmlFor="expiresAt" label="Expires at" help="Optional">
                   <Input name="expiresAt" type="datetime-local" />
                 </Field>
-              </Inline>
-              <Inline gap={2}>
-                <Button type="submit">Post announcement</Button>
-                <Button href={base} variant="ghost">
-                  Cancel
-                </Button>
-              </Inline>
-            </Stack>
+              </div>
+            </section>
+
+            <div className="asg-actionbar">
+              <Button href={base} variant="ghost">
+                Cancel
+              </Button>
+              <Button type="submit">Post announcement</Button>
+            </div>
           </form>
         </Card>
       </Stack>

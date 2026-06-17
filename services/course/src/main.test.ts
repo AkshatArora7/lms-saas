@@ -275,3 +275,86 @@ describe("course routes", () => {
     expect(res.json()).toMatchObject({ error: "tenant_required" });
   });
 });
+
+describe("course copy (#28)", () => {
+  it("copies a course into a new, unpublished offering with provenance", async () => {
+    const app = buildTestApp(createSeededMemoryStore());
+    const copy = await app.inject({
+      method: "POST",
+      url: "/courses/demo-course-algebra/copy",
+      headers: HEADERS,
+      payload: {},
+    });
+    expect(copy.statusCode).toBe(201);
+    const c = copy.json().course;
+    expect(c.id).not.toBe("demo-course-algebra");
+    expect(c.title).toBe("Algebra I (Copy)");
+    expect(c.isPublished).toBe(false); // copy starts as a draft
+    expect(c.templateId).toBe("demo-ou-algebra"); // provenance -> source offering
+    expect(c.description).toBe("Introductory algebra."); // content carried over
+  });
+
+  it("accepts a title override and leaves the source unchanged (local edits ok)", async () => {
+    const app = buildTestApp(createSeededMemoryStore());
+    const copy = (
+      await app.inject({
+        method: "POST",
+        url: "/courses/demo-course-anatomy/copy",
+        headers: HEADERS,
+        payload: { title: "Anatomy (Lincoln High)" },
+      })
+    ).json().course;
+    expect(copy.title).toBe("Anatomy (Lincoln High)");
+
+    // Editing the copy does not affect the source.
+    await app.inject({
+      method: "PATCH",
+      url: `/courses/${copy.id}`,
+      headers: HEADERS,
+      payload: { description: "Localized for Lincoln." },
+    });
+    const source = (
+      await app.inject({
+        method: "GET",
+        url: "/courses/demo-course-anatomy",
+        headers: HEADERS,
+      })
+    ).json().course;
+    expect(source.description).toBe("Foundations of human anatomy.");
+  });
+
+  it("400s a blank title override and 404s an unknown source", async () => {
+    const app = buildTestApp(createSeededMemoryStore());
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/courses/demo-course-algebra/copy",
+          headers: HEADERS,
+          payload: { title: "   " },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/courses/does-not-exist/copy",
+          headers: HEADERS,
+          payload: {},
+        })
+      ).statusCode,
+    ).toBe(404);
+  });
+
+  it("does not copy across tenants (source invisible to another tenant)", async () => {
+    const app = buildTestApp(createSeededMemoryStore());
+    const res = await app.inject({
+      method: "POST",
+      url: "/courses/demo-course-algebra/copy",
+      headers: { "x-tenant-id": OTHER_TENANT.tenantId },
+      payload: {},
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});

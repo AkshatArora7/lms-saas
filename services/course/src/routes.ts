@@ -110,6 +110,34 @@ export function registerCourseRoutes(
     },
   );
 
+  // Copy a course into a new, independently-editable offering (provenance via
+  // templateId). A district lead can re-copy per target school.
+  app.post<{ Params: { id: string } }>(
+    "/courses/:id/copy",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const body = (req.body ?? {}) as { title?: unknown };
+      if (
+        body.title !== undefined &&
+        (typeof body.title !== "string" || body.title.trim().length === 0)
+      ) {
+        return reply
+          .code(400)
+          .send({ error: "invalid_request", message: "title must be a non-empty string." });
+      }
+      const course = await deps.store.copyCourse(ctx, req.params.id, {
+        ...(typeof body.title === "string" ? { title: body.title.trim() } : {}),
+      });
+      if (!course) {
+        return reply
+          .code(404)
+          .send({ error: "not_found", message: "Source course not found." });
+      }
+      return reply.code(201).send({ course });
+    },
+  );
+
   app.patch<{ Params: { id: string } }>(
     "/courses/:id",
     async (req, reply) => {

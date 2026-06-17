@@ -33,7 +33,8 @@ DECLARE
     'usage_meter','tenant_setting','tenant_branding',
     'bell_schedule','schedule_period','timetable_entry',
     'attendance_code','attendance_session','attendance_record',
-    'self_registration_policy','self_registration_request'
+    'self_registration_policy','self_registration_request',
+    'submission_annotation'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

@@ -147,13 +147,16 @@ SERVICES = [
     {
         "name": "assignment", "port": 4007, "data": "Postgres + Blob",
         "resp": "Assignments, submissions, late/penalty policy, plagiarism integration hooks, file handling.",
-        "tables": ["assignment", "submission"],
+        "tables": ["assignment", "submission", "submission_annotation"],
         "endpoints": [
             ("POST", "/assignments", "Create assignment with due/late policy."),
             ("POST", "/assignments/{id}/submissions", "Submit (file -> Blob, emits submission.created)."),
             ("GET", "/assignments/{id}/submissions", "List submissions for grading."),
+            ("POST", "/submissions/{id}/annotations", "Add inline feedback (anchored comment)."),
+            ("GET", "/submissions/{id}/annotations", "List annotations (released=true for the learner view)."),
+            ("POST", "/submissions/{id}/feedback/release", "Release feedback -> learner notified (submission.feedback_released)."),
         ],
-        "publishes": ["assignment.created", "submission.created", "submission.late"],
+        "publishes": ["assignment.created", "submission.created", "submission.late", "submission.feedback_released"],
         "consumes": ["grading.graded (reflect status)", "plagiarism.report.ready"],
         "deps": ["Vercel Blob (uploads)", "grading (gradebook line item)", "rubric (attached rubric)"],
         "notes": "Submissions stored in Blob; metadata in Postgres. Plagiarism is an async hook.",

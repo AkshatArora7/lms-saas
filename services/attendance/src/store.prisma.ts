@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { withTenant } from "@lms/db";
 
+import { attendanceEvent } from "./events.js";
 import {
   DEFAULT_ATTENDANCE_CODES,
   type AttendanceCategory,
@@ -253,7 +254,36 @@ export function createPrismaStore(
           id,
         );
         const row = rows[0];
-        return row ? toSession(row) : null;
+        if (!row) return null;
+
+        // Emit an outbox event for each absent/tardy record so the relay ->
+        // notification path informs the learner (preferences applied there).
+        const flagged = await db.$queryRawUnsafe<
+          { user_id: string; code: string; category: "absent" | "tardy" }[]
+        >(
+          `SELECT r.user_id, r.code, c.category
+             FROM attendance_record r
+             JOIN attendance_code c
+               ON c.tenant_id = r.tenant_id AND c.code = r.code
+            WHERE r.session_id = $1 AND c.category IN ('absent','tardy')`,
+          id,
+        );
+        for (const r of flagged) {
+          const event = attendanceEvent(id, row.org_unit_id, {
+            userId: r.user_id,
+            code: r.code,
+            category: r.category,
+          });
+          await db.$executeRawUnsafe(
+            `INSERT INTO event_outbox (tenant_id, type, org_unit_id, payload)
+             VALUES ($1::uuid, $2, $3::uuid, $4::jsonb)`,
+            ctx.tenantId,
+            event.type,
+            row.org_unit_id,
+            JSON.stringify(event.payload),
+          );
+        }
+        return toSession(row);
       });
     },
 

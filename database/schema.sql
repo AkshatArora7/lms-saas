@@ -368,6 +368,35 @@ CREATE TABLE IF NOT EXISTS enrollment (
 CREATE INDEX IF NOT EXISTS ix_enrollment_ou ON enrollment(org_unit_id);
 CREATE INDEX IF NOT EXISTS ix_enrollment_user ON enrollment(user_id);
 
+-- Per-section self-registration policy: whether learners may self-enroll, if
+-- approval is required, and an optional seat capacity (over which requests
+-- wait-list as 'pending').
+CREATE TABLE IF NOT EXISTS self_registration_policy (
+  tenant_id         uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  org_unit_id       uuid NOT NULL REFERENCES org_unit(id) ON DELETE CASCADE,
+  is_open           boolean NOT NULL DEFAULT false,
+  requires_approval boolean NOT NULL DEFAULT false,
+  capacity          integer,
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, org_unit_id)
+);
+
+-- A learner's self-registration request for a section (one per user/section).
+CREATE TABLE IF NOT EXISTS self_registration_request (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  org_unit_id uuid NOT NULL REFERENCES org_unit(id) ON DELETE CASCADE,
+  user_id     uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  status      text NOT NULL DEFAULT 'pending'
+                 CHECK (status IN ('pending','approved','denied')),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  decided_at  timestamptz,
+  decided_by  uuid,
+  UNIQUE (tenant_id, org_unit_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS ix_self_reg_request_ou
+  ON self_registration_request(org_unit_id, status);
+
 -- ============================================================================
 -- ASSESSMENT — quizzes, question library, attempts
 -- ============================================================================
@@ -489,6 +518,43 @@ CREATE TABLE IF NOT EXISTS submission (
   submitted_at timestamptz NOT NULL DEFAULT now(),
   is_late      boolean NOT NULL DEFAULT false,
   UNIQUE (assignment_id, user_id)
+);
+
+-- Inline feedback/annotations on a submission. `anchor` locates the comment
+-- (page/line/range/quoted text); `released` gates visibility to the learner so
+-- feedback can be drafted privately and released together with the grade.
+CREATE TABLE IF NOT EXISTS submission_annotation (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  submission_id uuid NOT NULL REFERENCES submission(id) ON DELETE CASCADE,
+  author_id     uuid REFERENCES app_user(id) ON DELETE SET NULL,
+  body          text NOT NULL,
+  anchor        jsonb NOT NULL DEFAULT '{}'::jsonb,
+  released      boolean NOT NULL DEFAULT false,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_submission_annotation_sub
+  ON submission_annotation(submission_id);
+
+-- Group sets for group assignments: named groups under an assignment, with
+-- membership. A learner may belong to at most one group per assignment
+-- (enforced in the service).
+CREATE TABLE IF NOT EXISTS assignment_group (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  assignment_id uuid NOT NULL REFERENCES assignment(id) ON DELETE CASCADE,
+  name          text NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_assignment_group_assignment
+  ON assignment_group(assignment_id);
+
+CREATE TABLE IF NOT EXISTS assignment_group_member (
+  tenant_id  uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  group_id   uuid NOT NULL REFERENCES assignment_group(id) ON DELETE CASCADE,
+  user_id    uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  added_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (group_id, user_id)
 );
 
 -- ============================================================================

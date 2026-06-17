@@ -10,7 +10,7 @@ Assignments, submissions, late/penalty policy, plagiarism integration hooks, fil
 
 ## Owned tables
 
-`assignment`, `submission`
+`assignment`, `submission`, `submission_annotation`, `assignment_group`, `assignment_group_member`
 
 ## Key endpoints
 
@@ -19,12 +19,18 @@ Assignments, submissions, late/penalty policy, plagiarism integration hooks, fil
 | `POST` | `/assignments` | Create assignment with due/late policy. |
 | `POST` | `/assignments/{id}/submissions` | Submit (file -> Blob, emits submission.created). |
 | `GET` | `/assignments/{id}/submissions` | List submissions for grading. |
+| `POST` | `/submissions/{id}/annotations` | Add inline feedback (anchored comment). |
+| `GET` | `/submissions/{id}/annotations` | List annotations (released=true for the learner view). |
+| `POST` | `/submissions/{id}/feedback/release` | Release feedback -> learner notified (submission.feedback_released). |
+| `POST` | `/assignments/{id}/groups` | Create a group; manage membership (one group per learner). |
+| `GET` | `/assignments/{id}/groups/for-user/{userId}` | Resolve a learner's group for group submission. |
 
 ## Events published
 
 - `assignment.created`
 - `submission.created`
 - `submission.late`
+- `submission.feedback_released`
 
 ## Events consumed
 

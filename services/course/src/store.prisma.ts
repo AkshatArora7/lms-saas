@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { withTenant } from "@lms/db";
 
 import type {
+  CopyCourseInput,
   CourseRecord,
   CourseStore,
   NewCourseInput,
@@ -17,6 +18,8 @@ interface CourseRow {
   is_published: boolean;
   start_date: Date | null;
   end_date: Date | null;
+  org_unit_id: string;
+  template_id: string | null;
 }
 
 function toRecord(row: CourseRow): CourseRecord {
@@ -28,10 +31,12 @@ function toRecord(row: CourseRow): CourseRecord {
     isPublished: row.is_published,
     startDate: row.start_date ? row.start_date.toISOString() : null,
     endDate: row.end_date ? row.end_date.toISOString() : null,
+    orgUnitId: row.org_unit_id,
+    templateId: row.template_id,
   };
 }
 
-const SELECT_COLUMNS = `id, tenant_id, title, description, is_published, start_date, end_date`;
+const SELECT_COLUMNS = `id, tenant_id, title, description, is_published, start_date, end_date, org_unit_id, template_id`;
 
 /**
  * Postgres-backed course store. Every call runs through `withTenant`, so all
@@ -148,6 +153,44 @@ export function createPrismaStore(
           id,
         );
         return affected > 0;
+      });
+    },
+
+    async copyCourse(ctx, sourceId, input: CopyCourseInput = {}) {
+      return withTenant(ctx, async (db) => {
+        const sourceRows = await db.$queryRawUnsafe<CourseRow[]>(
+          `SELECT ${SELECT_COLUMNS} FROM course WHERE id = $1 LIMIT 1`,
+          sourceId,
+        );
+        const source = sourceRows[0];
+        if (!source) return null;
+
+        const title = input.title ?? `${source.title} (Copy)`;
+        // New offering org_unit; the copy's template_id records provenance
+        // (the source offering it was copied from).
+        const orgUnitId = generateId();
+        await db.$executeRawUnsafe(
+          `INSERT INTO org_unit (id, tenant_id, type, name)
+           VALUES ($1, $2, 'course_offering', $3)`,
+          orgUnitId,
+          ctx.tenantId,
+          title,
+        );
+        const rows = await db.$queryRawUnsafe<CourseRow[]>(
+          `INSERT INTO course
+             (tenant_id, org_unit_id, template_id, title, description,
+              start_date, end_date, is_published)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, false)
+           RETURNING ${SELECT_COLUMNS}`,
+          ctx.tenantId,
+          orgUnitId,
+          source.org_unit_id,
+          title,
+          source.description,
+          source.start_date,
+          source.end_date,
+        );
+        return toRecord(rows[0]!);
       });
     },
   };

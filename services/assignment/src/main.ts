@@ -18,6 +18,13 @@ import Fastify, {
   type FastifyRequest,
 } from "fastify";
 
+import { createPrismaAnnotationStore } from "./annotations.prisma.js";
+import {
+  registerAnnotationRoutes,
+  type AnnotationRouteDeps,
+} from "./annotations.routes.js";
+import { createPrismaGroupStore } from "./groups.prisma.js";
+import { registerGroupRoutes, type GroupRouteDeps } from "./groups.routes.js";
 import {
   registerAssignmentRoutes,
   type AssignmentRouteDeps,
@@ -28,11 +35,15 @@ import { createPrismaStore } from "./store.prisma.js";
 const SERVICE = "assignment";
 const log = createLogger(SERVICE);
 
-/** Overridable dependencies — tests inject an in-memory store. */
+/** Overridable dependencies — tests inject in-memory stores. */
 export interface BuildAppOptions {
   config?: AppConfig;
   store?: AssignmentRouteDeps["store"];
   resolveTenant?: AssignmentRouteDeps["resolveTenant"];
+  /** Inline-feedback annotation store; tests inject memory. */
+  annotationStore?: AnnotationRouteDeps["store"];
+  /** Group-assignment store; tests inject memory. */
+  groupStore?: GroupRouteDeps["store"];
 }
 
 /**
@@ -72,10 +83,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     uptime: process.uptime(),
   }));
 
+  const resolveTenant = options.resolveTenant ?? headerTenantResolver(config);
+
   registerAssignmentRoutes(app, {
     config,
     store: options.store ?? createPrismaStore(),
-    resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+    resolveTenant,
+  });
+
+  registerAnnotationRoutes(app, {
+    store: options.annotationStore ?? createPrismaAnnotationStore(),
+    resolveTenant,
+  });
+
+  registerGroupRoutes(app, {
+    store: options.groupStore ?? createPrismaGroupStore(),
+    resolveTenant,
   });
 
   return app;

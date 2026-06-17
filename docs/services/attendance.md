@@ -19,7 +19,7 @@ Class attendance and participation: per-tenant attendance codes, attendance sess
 | `POST` | `/codes` | Define/seed per-tenant attendance codes and categories. |
 | `POST` | `/sessions` | Open an attendance session for a section meeting (roster from enrollment/timetable). |
 | `PUT` | `/sessions/{id}/records` | Mark each student present/absent/tardy/excused; edit until finalized. |
-| `POST` | `/sessions/{id}/finalize` | Finalize a session (locks records). |
+| `POST` | `/sessions/{id}/finalize` | Finalize a session (locks records); emits attendance.flagged per absent/tardy. |
 | `GET` | `/sections/{id}/attendance/summary` | Attendance rates and chronic-absence flags. |
 | `GET` | `/users/{id}/attendance` | A student's attendance history. |
 
@@ -27,6 +27,7 @@ Class attendance and participation: per-tenant attendance codes, attendance sess
 
 - `attendance.marked`
 - `attendance.session.finalized`
+- `attendance.flagged`
 
 ## Events consumed
 

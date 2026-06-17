@@ -253,3 +253,47 @@ describe("attendance summaries and history", () => {
     expect(res.json()).toMatchObject({ error: "tenant_required" });
   });
 });
+
+describe("absence/tardy notifications (#191)", () => {
+  it("emits a flagged event per absent/tardy record on finalize", async () => {
+    const store = createSeededMemoryStore();
+    const app = buildApp({ config, store, resolveTenant });
+    const session = (await openSession(app)).json().session;
+
+    await app.inject({
+      method: "PUT",
+      url: `/sessions/${session.id}/records`,
+      headers: HEADERS,
+      payload: {
+        records: [
+          { userId: "stu-present", code: "P" },
+          { userId: "stu-absent", code: "A" },
+          { userId: "stu-tardy", code: "T", minutesLate: 5 },
+        ],
+      },
+    });
+
+    // No events before finalize.
+    expect(store.emittedEvents()).toHaveLength(0);
+
+    const finalized = await app.inject({
+      method: "POST",
+      url: `/sessions/${session.id}/finalize`,
+      headers: HEADERS,
+    });
+    expect(finalized.statusCode).toBe(200);
+
+    const events = store.emittedEvents();
+    expect(events).toHaveLength(2); // absent + tardy (present is not flagged)
+    expect(events.every((e) => e.type === "attendance.flagged")).toBe(true);
+    const byUser = Object.fromEntries(
+      events.map((e) => [e.payload.userId, e.payload]),
+    );
+    expect(byUser["stu-absent"]).toMatchObject({
+      category: "absent",
+      recipientIds: ["stu-absent"],
+    });
+    expect(byUser["stu-tardy"]).toMatchObject({ category: "tardy" });
+    expect(byUser["stu-present"]).toBeUndefined();
+  });
+});

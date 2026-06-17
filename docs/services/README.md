@@ -12,10 +12,10 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [identity](identity.md) | 4001 | Postgres | `app_user (credential join)`, `user_credential`, `refresh_token`, `identity_provider`, `user_identity`, `role`, `permission`, `role_permission`, `role_assignment` |
 | [tenant](tenant.md) | 4002 | control-plane DB | `tenant`, `plan`, `subscription`, `tenant_setting`, `tenant_branding` |
 | [user-org](user-org.md) | 4003 | Postgres (read-heavy) | `app_user`, `org_unit`, `academic_session` |
-| [enrollment](enrollment.md) | 4004 | Postgres | `enrollment` |
+| [enrollment](enrollment.md) | 4004 | Postgres | `enrollment`, `self_registration_policy`, `self_registration_request` |
 | [course](course.md) | 4005 | Postgres | `course`, `release_condition` |
 | [content](content.md) | 4006 | JSONB + Blob | `content_module`, `content_topic`, `content_completion`, `release_condition`, `scorm_package`, `xapi_statement` |
-| [assignment](assignment.md) | 4007 | Postgres + Blob | `assignment`, `submission` |
+| [assignment](assignment.md) | 4007 | Postgres + Blob | `assignment`, `submission`, `submission_annotation`, `assignment_group`, `assignment_group_member` |
 | [assessment](assessment.md) | 4008 | JSONB (write-heavy) | `question_library`, `question`, `quiz`, `quiz_section`, `quiz_question`, `quiz_attempt`, `quiz_response` |
 | [grading](grading.md) | 4009 | Postgres | `grade_scheme`, `grade_category`, `grade_item`, `grade` |
 | [discussion](discussion.md) | 4010 | JSONB | `discussion_forum`, `discussion_topic`, `discussion_post` |
@@ -50,6 +50,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `assignment.created` | assignment | notification |
 | `assignment.created (create line item)` | - | grading |
 | `assignment.created (due-date sync)` | - | calendar |
+| `attendance.flagged` | attendance | - |
 | `attendance.marked` | attendance | - |
 | `attendance.session.finalized` | attendance | - |
 | `billing.seat.rejected` | - | enrollment |
@@ -101,6 +102,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `sis.org.upserted` | sis | user-org |
 | `sis.user.upserted` | sis | user-org |
 | `submission.created` | assignment | grading, analytics |
+| `submission.feedback_released` | assignment | - |
 | `submission.late` | assignment | - |
 | `tenant.activated` | tenant | billing |
 | `tenant.branding.updated` | tenant | - |

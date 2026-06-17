@@ -10,7 +10,7 @@ Enrollments and section roles with full lifecycle (active/completed/dropped) per
 
 ## Owned tables
 
-`enrollment`
+`enrollment`, `self_registration_policy`, `self_registration_request`
 
 ## Key endpoints
 
@@ -19,6 +19,10 @@ Enrollments and section roles with full lifecycle (active/completed/dropped) per
 | `POST` | `/enrollments` | Enroll a user in a section with a role (starts saga). |
 | `DELETE` | `/enrollments/{id}` | Drop/withdraw (lifecycle transition). |
 | `GET` | `/sections/{id}/roster` | Active roster for a section. |
+| `PUT` | `/sections/{id}/registration-policy` | Set self-registration: open, approval, capacity. |
+| `POST` | `/sections/{id}/self-register` | Learner self-enroll (immediate, or pending approval/wait-list). |
+| `GET` | `/sections/{id}/registration-requests` | List self-registration requests (filter by status). |
+| `POST` | `/registration-requests/{id}/decide` | Approve (enrolls if seats remain) or deny a request. |
 
 ## Events published
 

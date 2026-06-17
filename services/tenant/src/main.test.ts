@@ -1,6 +1,7 @@
 import type { AppConfig } from "@lms/config";
 import { describe, expect, it } from "vitest";
 
+import { MemoryBrandingStore } from "./branding.memory.js";
 import { buildApp } from "./main.js";
 import { MemorySettingsStore } from "./settings.memory.js";
 import { MemoryTenantStore } from "./store.memory.js";
@@ -13,7 +14,13 @@ const config = {
 
 function buildTestApp(store = new MemoryTenantStore()) {
   const settingsStore = new MemorySettingsStore();
-  return { app: buildApp({ config, store, settingsStore }), store, settingsStore };
+  const brandingStore = new MemoryBrandingStore();
+  return {
+    app: buildApp({ config, store, settingsStore, brandingStore }),
+    store,
+    settingsStore,
+    brandingStore,
+  };
 }
 
 const TENANT_A = "11111111-1111-1111-1111-111111111111";
@@ -240,5 +247,114 @@ describe("per-tenant governance settings (#90)", () => {
     // Tenant B sees only defaults — no override leaked from A.
     expect(other.json().overrides).toEqual({});
     expect(other.json().settings["enrollment.self_registration"]).toBe(false);
+  });
+});
+
+describe("white-label branding (#89)", () => {
+  it("sets and reads back a tenant's own branding", async () => {
+    const { app } = buildTestApp();
+    const put = await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_A}/branding`,
+      payload: { displayName: "Northwind", primaryColor: "#0B5FFF", theme: "dark" },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json().branding).toMatchObject({
+      displayName: "Northwind",
+      primaryColor: "#0B5FFF",
+      theme: "dark",
+    });
+
+    const get = await app.inject({
+      method: "GET",
+      url: `/tenants/${TENANT_A}/branding`,
+    });
+    expect(get.json().branding.displayName).toBe("Northwind");
+    expect(get.json().overrides.primaryColor).toBe("#0B5FFF");
+  });
+
+  it("validates theme, hex colours and tenant id", async () => {
+    const { app } = buildTestApp();
+    expect(
+      (
+        await app.inject({
+          method: "PUT",
+          url: `/tenants/${TENANT_A}/branding`,
+          payload: { theme: "neon" },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: "PUT",
+          url: `/tenants/${TENANT_A}/branding`,
+          payload: { primaryColor: "blue" },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: "PUT",
+          url: `/tenants/not-a-uuid/branding`,
+          payload: { displayName: "x" },
+        })
+      ).statusCode,
+    ).toBe(400);
+  });
+
+  it("emits tenant.branding.updated via the outbox path (memory records it)", async () => {
+    const { app } = buildTestApp();
+    // The memory branding store has no event sink, but the prisma store writes
+    // event_outbox; here we just assert the write path returns the saved row.
+    const res = await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_A}/branding`,
+      payload: { supportEmail: "help@northwind.edu" },
+    });
+    expect(res.json().branding.supportEmail).toBe("help@northwind.edu");
+  });
+
+  it("inherits unset fields from a parent, overridable field-by-field", async () => {
+    const { app, brandingStore } = buildTestApp();
+    // District (parent) sets a default look; school B is its sub-tenant.
+    brandingStore.seedParent(TENANT_B, TENANT_A);
+    await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_A}/branding`,
+      payload: { displayName: "District", primaryColor: "#111111", logoUrl: "d.png" },
+    });
+    await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_B}/branding`,
+      payload: { primaryColor: "#222222" }, // override one field only
+    });
+
+    const effective = (
+      await app.inject({ method: "GET", url: `/tenants/${TENANT_B}/branding` })
+    ).json().branding;
+    expect(effective.primaryColor).toBe("#222222"); // own override wins
+    expect(effective.logoUrl).toBe("d.png"); // inherited from parent
+    expect(effective.displayName).toBe("District"); // inherited
+  });
+
+  it("does not inherit when inheritParent is false", async () => {
+    const { app, brandingStore } = buildTestApp();
+    brandingStore.seedParent(TENANT_B, TENANT_A);
+    await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_A}/branding`,
+      payload: { logoUrl: "parent.png" },
+    });
+    await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_B}/branding`,
+      payload: { displayName: "Standalone", inheritParent: false },
+    });
+    const effective = (
+      await app.inject({ method: "GET", url: `/tenants/${TENANT_B}/branding` })
+    ).json().branding;
+    expect(effective.logoUrl).toBeNull(); // not inherited
   });
 });

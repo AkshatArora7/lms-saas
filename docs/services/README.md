@@ -14,7 +14,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [user-org](user-org.md) | 4003 | Postgres (read-heavy) | `app_user`, `org_unit`, `academic_session` |
 | [enrollment](enrollment.md) | 4004 | Postgres | `enrollment` |
 | [course](course.md) | 4005 | Postgres | `course`, `release_condition` |
-| [content](content.md) | 4006 | JSONB + Blob | `content_module`, `content_topic`, `content_completion`, `scorm_package`, `xapi_statement` |
+| [content](content.md) | 4006 | JSONB + Blob | `content_module`, `content_topic`, `content_completion`, `release_condition`, `scorm_package`, `xapi_statement` |
 | [assignment](assignment.md) | 4007 | Postgres + Blob | `assignment`, `submission` |
 | [assessment](assessment.md) | 4008 | JSONB (write-heavy) | `question_library`, `question`, `quiz`, `quiz_section`, `quiz_question`, `quiz_attempt`, `quiz_response` |
 | [grading](grading.md) | 4009 | Postgres | `grade_scheme`, `grade_category`, `grade_item`, `grade` |
@@ -46,20 +46,20 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `* (republishes any event_outbox row to consumers)` | relay | - |
 | `ai.answer.generated` | ai | - |
 | `analytics.atrisk.flagged` | analytics | - |
-| `announcement.published` | announcement | notification, calendar |
-| `assignment.created` | assignment | notification, calendar |
+| `announcement.published` | announcement | notification |
+| `assignment.created` | assignment | notification |
 | `assignment.created (create line item)` | - | grading |
+| `assignment.created (due-date sync)` | - | calendar |
 | `attendance.marked` | attendance | - |
 | `attendance.session.finalized` | attendance | - |
 | `billing.seat.rejected` | - | enrollment |
 | `billing.seat.reserved` | - | enrollment |
 | `billing.subscription.changed` | billing | - |
 | `billing.subscription.changed (entitlements)` | - | tenant |
-| `calendar.event.created` | calendar | - |
-| `content.completed` | content | analytics, search |
+| `content.completed` | - | analytics, search |
 | `content.completed (reindex)` | - | ai |
 | `content.created` | - | search |
-| `content.viewed` | content | analytics, ai |
+| `content.viewed` | - | analytics, ai |
 | `course.copied` | course | - |
 | `course.copied (clone module tree)` | - | content |
 | `course.copied (clone quizzes)` | - | assessment |
@@ -90,13 +90,11 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `quiz.attempt.started` | assessment | calendar |
 | `quiz.attempt.submitted` | assessment | analytics |
 | `quiz.graded` | assessment | grading |
-| `release.condition.evaluated` | - | content |
 | `report.completed` | reporting | - |
 | `report.requested` | - | reporting |
 | `role.created` | identity | - |
 | `role.deleted` | identity | - |
 | `role.updated` | identity | - |
-| `scorm.attempt.recorded` | content | - |
 | `search.reindexed` | search | - |
 | `sis.class.upserted` | sis | course |
 | `sis.enrollment.upserted` | sis | enrollment |
@@ -131,7 +129,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | user-org | identity, sis |
 | enrollment | billing, course, user-org |
 | course | content, user-org |
-| content | analytics, course |
+| content | analytics |
 | assignment | grading, rubric |
 | assessment | grading, rubric |
 | grading | assessment, assignment, lti, sis |

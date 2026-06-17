@@ -10,37 +10,35 @@ Course content tree (modules/lessons/topics), completion tracking, SCORM/xAPI pa
 
 ## Owned tables
 
-`content_module`, `content_topic`, `content_completion`, `scorm_package`, `xapi_statement`
+`content_module`, `content_topic`, `content_completion`, `release_condition`, `scorm_package`, `xapi_statement`
 
 ## Key endpoints
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/courses/{id}/modules` | Ordered module/topic tree. |
-| `POST` | `/topics/{id}/complete` | Record completion (emits content.completed). |
-| `POST` | `/scorm/packages` | Ingest a SCORM package -> Blob + manifest. |
-| `POST` | `/xapi/statements` | Receive xAPI statements (forward to analytics LRS). |
+| `POST` | `/uploads` | Signed direct-to-Blob upload URL (type/size validated, tenant-namespaced key). |
+| `POST` | `/courses/{courseId}/modules` | Create a module. |
+| `GET` | `/courses/{courseId}/modules` | Ordered modules for a course. |
+| `GET` | `/modules/{id}` | Module with its ordered topics. |
+| `POST` | `/modules/{id}/topics` | Add a topic (html/file/link/scorm/lti/video). |
+| `POST` | `/courses/{courseId}/release-conditions` | Availability/prerequisite rule (boolean tree). |
 
 ## Events published
 
-- `content.viewed`
-- `content.completed`
-- `scorm.attempt.recorded`
+_None_
 
 ## Events consumed
 
 - `course.copied (clone module tree)`
-- `release.condition.evaluated`
 
 ## Dependencies
 
 - Vercel Blob (package/media storage)
 - analytics (xAPI forward)
-- course (release rules)
 
 ## Notes
 
-Large binaries in Blob; structure/metadata in JSONB. xAPI statements are mirrored to analytics.
+Modules/topics ordered by position; availability/prerequisites modelled via release_condition. Large binaries upload direct-to-Blob via signed URLs (tenant-namespaced keys). Draft/published state, virus scanning, per-plan size limits, SCORM/xAPI ingestion and completion tracking are tracked follow-ups.
 
 ## Cross-cutting
 

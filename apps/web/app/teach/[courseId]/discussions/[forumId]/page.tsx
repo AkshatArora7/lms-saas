@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   EmptyState,
-  Inline,
   PageHeader,
   Stack,
 } from "@lms/ui";
@@ -15,6 +14,39 @@ import { getSession } from "../../../../lib/auth";
 import { canTeach, getTaughtCourses } from "../../../../lib/teaching";
 import { listForums, listTopics } from "../../../../lib/discussions-api";
 import SignOutButton from "../../../../sign-out-button";
+
+const topicsCss = `
+.td-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.td-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lms-space-2) var(--lms-space-3);
+  justify-content: space-between;
+}
+.td-main {
+  min-width: 0;
+}
+.td-title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.td-desc {
+  color: var(--lms-text-muted);
+  margin: var(--lms-space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+`;
 
 export default async function ForumTopicsPage({
   params,
@@ -30,14 +62,19 @@ export default async function ForumTopicsPage({
   if (!canTeach(session.roles)) {
     return (
       <AppShell brand={brand} actions={<SignOutButton />}>
-        <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot manage discussions."
-        />
-        <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold a teaching role.
-        </Alert>
+        <Stack gap={4}>
+          <Button href="/teach" size="sm" variant="ghost">
+            ← Back to teaching
+          </Button>
+          <PageHeader
+            title="Discussions"
+            subtitle="Manage the topics in this forum."
+          />
+          <Alert tone="info">
+            Discussions are available to instructors. Your account does not
+            currently hold a teaching role.
+          </Alert>
+        </Stack>
       </AppShell>
     );
   }
@@ -66,18 +103,17 @@ export default async function ForumTopicsPage({
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
+      <style>{topicsCss}</style>
       <Stack gap={4}>
         <Button href={discussionsBase} size="sm" variant="ghost">
-          {"<- Back to forums"}
+          ← Back to forums
         </Button>
 
-        <Inline gap={3} align="center" justify="space-between">
-          <PageHeader
-            title={forum ? forum.title : "Forum"}
-            subtitle={`Topics in ${course.title}.`}
-          />
-          <Button href={`${base}/new`}>New topic</Button>
-        </Inline>
+        <PageHeader
+          title={forum ? forum.title : "Forum"}
+          subtitle={`Topics in ${course.title}.`}
+          actions={<Button href={`${base}/new`}>New topic</Button>}
+        />
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
 
@@ -87,32 +123,30 @@ export default async function ForumTopicsPage({
           <Alert tone="warning">{topicsResult.error}</Alert>
         ) : topicsResult.topics.length === 0 ? (
           <EmptyState
+            icon="💬"
             title="No topics yet"
             description="Create a topic to start a thread."
           />
         ) : (
-          <Stack gap={3}>
+          <ul className="td-list">
             {topicsResult.topics.map((topic) => (
-              <Card key={topic.id}>
-                <Inline gap={3} align="center" justify="space-between">
-                  <Stack gap={1}>
-                    <strong style={{ fontSize: 16 }}>{topic.title}</strong>
-                    {topic.description ? (
-                      <span style={{ color: "var(--lms-text-muted)" }}>
-                        {topic.description}
-                      </span>
-                    ) : null}
-                  </Stack>
-                  <Button
-                    href={`${base}/${topic.id}`}
-                    variant="secondary"
-                  >
-                    Open thread
-                  </Button>
-                </Inline>
-              </Card>
+              <li key={topic.id}>
+                <Card>
+                  <div className="td-row">
+                    <div className="td-main">
+                      <h2 className="td-title">{topic.title}</h2>
+                      {topic.description ? (
+                        <p className="td-desc">{topic.description}</p>
+                      ) : null}
+                    </div>
+                    <Button href={`${base}/${topic.id}`} variant="secondary">
+                      Open thread
+                    </Button>
+                  </div>
+                </Card>
+              </li>
             ))}
-          </Stack>
+          </ul>
         )}
       </Stack>
     </AppShell>

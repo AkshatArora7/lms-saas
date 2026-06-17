@@ -23,6 +23,8 @@ import {
   registerAnnotationRoutes,
   type AnnotationRouteDeps,
 } from "./annotations.routes.js";
+import { createPrismaGroupStore } from "./groups.prisma.js";
+import { registerGroupRoutes, type GroupRouteDeps } from "./groups.routes.js";
 import {
   registerAssignmentRoutes,
   type AssignmentRouteDeps,
@@ -40,6 +42,8 @@ export interface BuildAppOptions {
   resolveTenant?: AssignmentRouteDeps["resolveTenant"];
   /** Inline-feedback annotation store; tests inject memory. */
   annotationStore?: AnnotationRouteDeps["store"];
+  /** Group-assignment store; tests inject memory. */
+  groupStore?: GroupRouteDeps["store"];
 }
 
 /**
@@ -89,6 +93,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   registerAnnotationRoutes(app, {
     store: options.annotationStore ?? createPrismaAnnotationStore(),
+    resolveTenant,
+  });
+
+  registerGroupRoutes(app, {
+    store: options.groupStore ?? createPrismaGroupStore(),
     resolveTenant,
   });
 

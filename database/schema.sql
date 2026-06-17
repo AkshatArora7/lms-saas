@@ -536,6 +536,27 @@ CREATE TABLE IF NOT EXISTS submission_annotation (
 CREATE INDEX IF NOT EXISTS ix_submission_annotation_sub
   ON submission_annotation(submission_id);
 
+-- Group sets for group assignments: named groups under an assignment, with
+-- membership. A learner may belong to at most one group per assignment
+-- (enforced in the service).
+CREATE TABLE IF NOT EXISTS assignment_group (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  assignment_id uuid NOT NULL REFERENCES assignment(id) ON DELETE CASCADE,
+  name          text NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_assignment_group_assignment
+  ON assignment_group(assignment_id);
+
+CREATE TABLE IF NOT EXISTS assignment_group_member (
+  tenant_id  uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  group_id   uuid NOT NULL REFERENCES assignment_group(id) ON DELETE CASCADE,
+  user_id    uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  added_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (group_id, user_id)
+);
+
 -- ============================================================================
 -- GRADEBOOK
 -- ============================================================================

@@ -147,7 +147,7 @@ SERVICES = [
     {
         "name": "assignment", "port": 4007, "data": "Postgres + Blob",
         "resp": "Assignments, submissions, late/penalty policy, plagiarism integration hooks, file handling.",
-        "tables": ["assignment", "submission", "submission_annotation"],
+        "tables": ["assignment", "submission", "submission_annotation", "assignment_group", "assignment_group_member"],
         "endpoints": [
             ("POST", "/assignments", "Create assignment with due/late policy."),
             ("POST", "/assignments/{id}/submissions", "Submit (file -> Blob, emits submission.created)."),
@@ -155,6 +155,8 @@ SERVICES = [
             ("POST", "/submissions/{id}/annotations", "Add inline feedback (anchored comment)."),
             ("GET", "/submissions/{id}/annotations", "List annotations (released=true for the learner view)."),
             ("POST", "/submissions/{id}/feedback/release", "Release feedback -> learner notified (submission.feedback_released)."),
+            ("POST", "/assignments/{id}/groups", "Create a group; manage membership (one group per learner)."),
+            ("GET", "/assignments/{id}/groups/for-user/{userId}", "Resolve a learner's group for group submission."),
         ],
         "publishes": ["assignment.created", "submission.created", "submission.late", "submission.feedback_released"],
         "consumes": ["grading.graded (reflect status)", "plagiarism.report.ready"],

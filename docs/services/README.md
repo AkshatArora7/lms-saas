@@ -15,7 +15,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [enrollment](enrollment.md) | 4004 | Postgres | `enrollment`, `self_registration_policy`, `self_registration_request` |
 | [course](course.md) | 4005 | Postgres | `course`, `release_condition` |
 | [content](content.md) | 4006 | JSONB + Blob | `content_module`, `content_topic`, `content_completion`, `release_condition`, `scorm_package`, `xapi_statement` |
-| [assignment](assignment.md) | 4007 | Postgres + Blob | `assignment`, `submission`, `submission_annotation` |
+| [assignment](assignment.md) | 4007 | Postgres + Blob | `assignment`, `submission`, `submission_annotation`, `assignment_group`, `assignment_group_member` |
 | [assessment](assessment.md) | 4008 | JSONB (write-heavy) | `question_library`, `question`, `quiz`, `quiz_section`, `quiz_question`, `quiz_attempt`, `quiz_response` |
 | [grading](grading.md) | 4009 | Postgres | `grade_scheme`, `grade_category`, `grade_item`, `grade` |
 | [discussion](discussion.md) | 4010 | JSONB | `discussion_forum`, `discussion_topic`, `discussion_post` |

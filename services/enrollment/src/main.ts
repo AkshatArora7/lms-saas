@@ -22,6 +22,11 @@ import {
   registerEnrollmentRoutes,
   type EnrollmentRouteDeps,
 } from "./routes.js";
+import { createPrismaSelfRegStore } from "./selfreg.prisma.js";
+import {
+  registerSelfRegRoutes,
+  type SelfRegRouteDeps,
+} from "./selfreg.routes.js";
 import { createSeededMemoryStore } from "./store.memory.js";
 import { createPrismaStore } from "./store.prisma.js";
 
@@ -33,6 +38,8 @@ export interface BuildAppOptions {
   config?: AppConfig;
   store?: EnrollmentRouteDeps["store"];
   resolveTenant?: EnrollmentRouteDeps["resolveTenant"];
+  /** Self-registration store (policy + approval/waitlist); tests inject memory. */
+  selfRegStore?: SelfRegRouteDeps["store"];
 }
 
 /**
@@ -72,10 +79,17 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     uptime: process.uptime(),
   }));
 
+  const resolveTenant = options.resolveTenant ?? headerTenantResolver(config);
+
   registerEnrollmentRoutes(app, {
     config,
     store: options.store ?? createPrismaStore(),
-    resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+    resolveTenant,
+  });
+
+  registerSelfRegRoutes(app, {
+    store: options.selfRegStore ?? createPrismaSelfRegStore(),
+    resolveTenant,
   });
 
   return app;

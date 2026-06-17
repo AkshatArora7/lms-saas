@@ -32,7 +32,8 @@ DECLARE
     'ai_message','caliper_event','engagement_summary','sis_id_map','invoice',
     'usage_meter','tenant_setting','tenant_branding',
     'bell_schedule','schedule_period','timetable_entry',
-    'attendance_code','attendance_session','attendance_record'
+    'attendance_code','attendance_session','attendance_record',
+    'self_registration_policy','self_registration_request'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

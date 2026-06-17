@@ -520,6 +520,22 @@ CREATE TABLE IF NOT EXISTS submission (
   UNIQUE (assignment_id, user_id)
 );
 
+-- Inline feedback/annotations on a submission. `anchor` locates the comment
+-- (page/line/range/quoted text); `released` gates visibility to the learner so
+-- feedback can be drafted privately and released together with the grade.
+CREATE TABLE IF NOT EXISTS submission_annotation (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  submission_id uuid NOT NULL REFERENCES submission(id) ON DELETE CASCADE,
+  author_id     uuid REFERENCES app_user(id) ON DELETE SET NULL,
+  body          text NOT NULL,
+  anchor        jsonb NOT NULL DEFAULT '{}'::jsonb,
+  released      boolean NOT NULL DEFAULT false,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_submission_annotation_sub
+  ON submission_annotation(submission_id);
+
 -- ============================================================================
 -- GRADEBOOK
 -- ============================================================================

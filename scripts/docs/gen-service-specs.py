@@ -97,11 +97,15 @@ SERVICES = [
     {
         "name": "enrollment", "port": 4004, "data": "Postgres",
         "resp": "Enrollments and section roles with full lifecycle (active/completed/dropped) per OneRoster enrollments; drives the enroll+billing saga.",
-        "tables": ["enrollment"],
+        "tables": ["enrollment", "self_registration_policy", "self_registration_request"],
         "endpoints": [
             ("POST", "/enrollments", "Enroll a user in a section with a role (starts saga)."),
             ("DELETE", "/enrollments/{id}", "Drop/withdraw (lifecycle transition)."),
             ("GET", "/sections/{id}/roster", "Active roster for a section."),
+            ("PUT", "/sections/{id}/registration-policy", "Set self-registration: open, approval, capacity."),
+            ("POST", "/sections/{id}/self-register", "Learner self-enroll (immediate, or pending approval/wait-list)."),
+            ("GET", "/sections/{id}/registration-requests", "List self-registration requests (filter by status)."),
+            ("POST", "/registration-requests/{id}/decide", "Approve (enrolls if seats remain) or deny a request."),
         ],
         "publishes": ["enrollment.created", "enrollment.dropped", "enrollment.completed"],
         "consumes": ["sis.enrollment.upserted", "billing.seat.reserved", "billing.seat.rejected"],

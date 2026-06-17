@@ -368,6 +368,35 @@ CREATE TABLE IF NOT EXISTS enrollment (
 CREATE INDEX IF NOT EXISTS ix_enrollment_ou ON enrollment(org_unit_id);
 CREATE INDEX IF NOT EXISTS ix_enrollment_user ON enrollment(user_id);
 
+-- Per-section self-registration policy: whether learners may self-enroll, if
+-- approval is required, and an optional seat capacity (over which requests
+-- wait-list as 'pending').
+CREATE TABLE IF NOT EXISTS self_registration_policy (
+  tenant_id         uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  org_unit_id       uuid NOT NULL REFERENCES org_unit(id) ON DELETE CASCADE,
+  is_open           boolean NOT NULL DEFAULT false,
+  requires_approval boolean NOT NULL DEFAULT false,
+  capacity          integer,
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, org_unit_id)
+);
+
+-- A learner's self-registration request for a section (one per user/section).
+CREATE TABLE IF NOT EXISTS self_registration_request (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  org_unit_id uuid NOT NULL REFERENCES org_unit(id) ON DELETE CASCADE,
+  user_id     uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  status      text NOT NULL DEFAULT 'pending'
+                 CHECK (status IN ('pending','approved','denied')),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  decided_at  timestamptz,
+  decided_by  uuid,
+  UNIQUE (tenant_id, org_unit_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS ix_self_reg_request_ou
+  ON self_registration_request(org_unit_id, status);
+
 -- ============================================================================
 -- ASSESSMENT — quizzes, question library, attempts
 -- ============================================================================

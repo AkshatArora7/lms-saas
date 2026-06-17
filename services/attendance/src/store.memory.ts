@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { TenantContext } from "@lms/types";
 
+import { attendanceEvent, type AttendanceEvent } from "./events.js";
 import {
   DEFAULT_ATTENDANCE_CODES,
   type AttendanceCategory,
@@ -32,6 +33,7 @@ export class MemoryAttendanceStore implements AttendanceStore {
   private codes: AttendanceCodeRecord[] = [];
   private sessions: AttendanceSessionRecord[] = [];
   private records: AttendanceRecordRecord[] = [];
+  private emitted: AttendanceEvent[] = [];
 
   constructor(private readonly generateId: () => string = randomUUID) {}
 
@@ -180,7 +182,25 @@ export class MemoryAttendanceStore implements AttendanceStore {
     );
     if (!session) return null;
     session.status = "finalized";
+    // Emit a flagged event for each absent/tardy record in the session.
+    for (const r of this.records.filter((x) => x.sessionId === id)) {
+      const category = this.codeCategory(ctx.tenantId, r.code);
+      if (category === "absent" || category === "tardy") {
+        this.emitted.push(
+          attendanceEvent(id, session.orgUnitId, {
+            userId: r.userId,
+            code: r.code,
+            category,
+          }),
+        );
+      }
+    }
     return session;
+  }
+
+  /** Outbox events emitted on finalize (for test assertions). */
+  emittedEvents(): AttendanceEvent[] {
+    return this.emitted;
   }
 
   async sectionSummary(

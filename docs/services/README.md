@@ -50,6 +50,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `assignment.created` | assignment | notification |
 | `assignment.created (create line item)` | - | grading |
 | `assignment.created (due-date sync)` | - | calendar |
+| `attendance.flagged` | attendance | - |
 | `attendance.marked` | attendance | - |
 | `attendance.session.finalized` | attendance | - |
 | `billing.seat.rejected` | - | enrollment |

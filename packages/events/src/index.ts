@@ -39,6 +39,7 @@ export const EVENT_TYPES = {
   QUIZ_ATTEMPT_GRADED: "quiz.attempt_graded",
   GRADE_RELEASED: "grade.released",
   SUBMISSION_FEEDBACK_RELEASED: "submission.feedback_released",
+  ATTENDANCE_FLAGGED: "attendance.flagged",
   DISCUSSION_POST_CREATED: "discussion.post_created",
 } as const;
 

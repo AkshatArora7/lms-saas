@@ -204,7 +204,12 @@ export function getCourseDetail(
 
 export interface ContentItemView {
   course: Pick<CourseDetail, "id" | "title" | "code">;
-  module: Pick<CourseModule, "id" | "title">;
+  /**
+   * The item's module, including its full ordered item list so the content
+   * surface can render within-module navigation (position, prev/next siblings,
+   * and the "In this module" rail).
+   */
+  module: Pick<CourseModule, "id" | "title" | "items">;
   item: ContentItem;
 }
 
@@ -225,7 +230,7 @@ export function getContentItem(
     if (item) {
       return {
         course: { id: course.id, title: course.title, code: course.code },
-        module: { id: module.id, title: module.title },
+        module: { id: module.id, title: module.title, items: module.items },
         item,
       };
     }

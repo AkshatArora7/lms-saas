@@ -136,7 +136,7 @@ export default async function CourseAssignments({
       <style>{assignmentsCss}</style>
       <Stack gap={4}>
         <Button href="/teach" size="sm" variant="ghost">
-          {"<- Back to teaching"}
+          ← Back to teaching
         </Button>
 
         <PageHeader

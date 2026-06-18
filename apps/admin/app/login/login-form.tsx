@@ -15,45 +15,265 @@ import { useState } from "react";
 
 import type { Brand } from "@lms/ui";
 
-const loginRoot: React.CSSProperties = {
-  display: "grid",
-  minHeight: "100vh",
-  padding: "clamp(16px, 5vw, 32px)",
-  placeItems: "center",
-};
+/**
+ * Flagship white-label admin sign-in. A full-height split screen: an
+ * accent-tinted showcase panel (brand identity + administrator value
+ * highlights) beside a centered form card. Every colour, radius and space
+ * resolves from tenant theme tokens (var(--lms-*)) so the same markup renders
+ * correctly for any brand. The layout collapses to a single centered column on
+ * phones (no horizontal overflow at 360px): the gradient panel and value list
+ * drop away, leaving a compact brand header above the form. Text on the accent
+ * gradient uses --lms-accent-contrast for guaranteed legibility, and the brand
+ * name is carried as supporting text so the form's "Welcome back" stays the
+ * single page <h1>.
+ */
+const loginCss = `
+.login-split {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-width: 0;
+}
+.login-brand-compact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--lms-space-2);
+  text-align: center;
+  padding: var(--lms-space-6) clamp(16px, 5vw, 32px) 0;
+}
+.login-brand-compact__name {
+  margin: 0;
+  font-size: clamp(1.25rem, 6vw, 1.6rem);
+  font-weight: 700;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.login-brand-compact__tagline {
+  margin: 0;
+  color: var(--lms-text-muted);
+  overflow-wrap: anywhere;
+}
+.login-showcase {
+  display: none;
+}
+.login-form-panel {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 5vw, 40px);
+  min-width: 0;
+}
+.login-card {
+  width: 100%;
+  max-width: 440px;
+}
+.login-welcome {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-1);
+}
+.login-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 5vw, 1.9rem);
+  font-weight: 700;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.login-subtitle {
+  margin: 0;
+  color: var(--lms-text-muted);
+  overflow-wrap: anywhere;
+}
+.login-hint {
+  margin: 0;
+  color: var(--lms-text-muted);
+  font-size: 13px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
 
-const loginCard: React.CSSProperties = {
-  width: "100%",
-  maxWidth: 420,
-};
+@media (min-width: 641px) {
+  .login-split {
+    flex-direction: row;
+  }
+  .login-brand-compact {
+    display: none;
+  }
+  .login-showcase {
+    flex: 1 1 55%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--lms-space-6);
+    padding: clamp(32px, 5vw, 64px);
+    background: linear-gradient(135deg, var(--lms-accent), var(--lms-accent-hover));
+    color: var(--lms-accent-contrast);
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .login-showcase::before {
+    content: "";
+    position: absolute;
+    inset: auto -20% -30% auto;
+    width: 60%;
+    height: 60%;
+    border-radius: var(--lms-radius-pill);
+    background: var(--lms-accent-soft);
+    opacity: 0.35;
+    filter: blur(80px);
+    pointer-events: none;
+  }
+  .login-showcase > * {
+    position: relative;
+    z-index: 1;
+  }
+  .login-form-panel {
+    flex: 1 1 45%;
+  }
+}
 
-const centered: React.CSSProperties = {
-  alignItems: "center",
-  display: "flex",
-  flexDirection: "column",
-  gap: "var(--lms-space-2)",
-  textAlign: "center",
-};
+.login-showcase__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--lms-space-3);
+  min-width: 0;
+}
+.login-showcase__name {
+  margin: 0;
+  font-size: clamp(1.25rem, 2.5vw, 1.6rem);
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.login-showcase__lead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-3);
+}
+.login-showcase__headline {
+  margin: 0;
+  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  font-weight: 700;
+  line-height: 1.1;
+  max-width: 16ch;
+  overflow-wrap: anywhere;
+}
+.login-showcase__tagline {
+  margin: 0;
+  font-size: clamp(1rem, 1.4vw, 1.15rem);
+  line-height: 1.5;
+  max-width: 40ch;
+  opacity: 0.9;
+  overflow-wrap: anywhere;
+}
+.login-highlights {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-4);
+}
+.login-highlights li {
+  display: flex;
+  align-items: center;
+  gap: var(--lms-space-3);
+  min-width: 0;
+}
+.login-highlight__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--lms-radius-md);
+  background: var(--lms-accent-soft);
+  color: var(--lms-accent);
+}
+.login-highlight__icon svg {
+  width: 20px;
+  height: 20px;
+}
+.login-showcase__footnote {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
 
-const title: React.CSSProperties = {
-  fontSize: "clamp(22px, 7vw, 30px)",
-  lineHeight: 1.15,
-  margin: 0,
-  overflowWrap: "anywhere",
-};
+@media (prefers-reduced-motion: reduce) {
+  .login-card,
+  .login-showcase::before {
+    transition: none;
+  }
+}
+`;
 
-const tagline: React.CSSProperties = {
-  color: "var(--lms-text-muted)",
-  margin: 0,
-  overflowWrap: "anywhere",
-};
-
-const hint: React.CSSProperties = {
-  color: "var(--lms-text-muted)",
-  fontSize: 13,
-  margin: 0,
-  textAlign: "center",
-};
+const HIGHLIGHTS = [
+  {
+    label: "Manage courses, users, and org units",
+    icon: (
+      <svg fill="none" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="8" cy="9" r="2.4" stroke="currentColor" strokeWidth="1.6" />
+        <path
+          d="M3.5 18.5a4.5 4.5 0 0 1 9 0"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+        <path
+          d="M15.5 7.5a2.4 2.4 0 0 1 0 4.6M16 14.2a4.5 4.5 0 0 1 4.5 4.3"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    label: "Configure branding and single sign-on",
+    icon: (
+      <svg fill="none" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M12 3 5 6v5c0 4 3 6.5 7 8 4-1.5 7-4 7-8V6l-7-3Z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        <path
+          d="m9.2 12 2 2 3.6-3.6"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    label: "Track engagement with built-in reports",
+    icon: (
+      <svg fill="none" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M4 20h16"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+        <path
+          d="M7 20v-6M12 20V8M17 20v-9"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+];
 
 export default function LoginForm({ brand }: { brand: Brand }) {
   const router = useRouter();
@@ -87,50 +307,93 @@ export default function LoginForm({ brand }: { brand: Brand }) {
   }
 
   return (
-    <main style={loginRoot}>
-      <Card style={loginCard}>
-        <form onSubmit={onSubmit}>
-          <Stack gap={5}>
-            <div style={centered}>
-              <BrandMark brand={brand} size={48} />
-              <h1 style={title}>{brand.name}</h1>
-              <p style={tagline}>{brand.tagline}</p>
-            </div>
+    <main className="login-split">
+      <style>{loginCss}</style>
 
-            <Stack gap={3}>
-              <Field htmlFor="email" label="Email" required>
-                <Input
-                  defaultValue="admin@demo.school"
-                  name="email"
-                  type="email"
-                />
-              </Field>
+      {/* Compact brand header — phone only */}
+      <div className="login-brand-compact">
+        <BrandMark brand={brand} size={48} />
+        <p className="login-brand-compact__name">{brand.name}</p>
+        <p className="login-brand-compact__tagline">{brand.tagline}</p>
+      </div>
 
-              <Field htmlFor="password" label="Password" required>
-                <Input
-                  defaultValue="password123"
-                  name="password"
-                  type="password"
-                />
-              </Field>
+      {/* Showcase panel — tablet/desktop only */}
+      <div className="login-showcase">
+        <div className="login-showcase__brand">
+          <BrandMark brand={brand} size={44} />
+          <p className="login-showcase__name">{brand.name}</p>
+        </div>
+
+        <div className="login-showcase__lead">
+          <h2 className="login-showcase__headline">{brand.tagline}</h2>
+          <p className="login-showcase__tagline">
+            Run your organization from one console — courses, people, branding,
+            and the insights to keep everything on track.
+          </p>
+          <ul className="login-highlights">
+            {HIGHLIGHTS.map((item) => (
+              <li key={item.label}>
+                <span className="login-highlight__icon">{item.icon}</span>
+                <span className="login-highlight__label">{item.label}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="login-showcase__footnote">
+          Secure, tenant-isolated administration for every brand.
+        </p>
+      </div>
+
+      {/* Form panel */}
+      <div className="login-form-panel">
+        <Card className="login-card">
+          <form onSubmit={onSubmit}>
+            <Stack gap={5}>
+              <div className="login-welcome">
+                <h1 className="login-title">Welcome back</h1>
+                <p className="login-subtitle">
+                  Sign in to the administration console.
+                </p>
+              </div>
+
+              <Stack gap={3}>
+                <Field htmlFor="email" label="Email" required>
+                  <Input
+                    defaultValue="admin@demo.school"
+                    name="email"
+                    type="email"
+                  />
+                </Field>
+
+                <Field htmlFor="password" label="Password" required>
+                  <Input
+                    defaultValue="password123"
+                    name="password"
+                    type="password"
+                  />
+                </Field>
+              </Stack>
+
+              {error ? <Alert tone="danger">{error}</Alert> : null}
+
+              <Button disabled={busy} fullWidth type="submit">
+                {busy ? "Signing in…" : "Sign in"}
+              </Button>
+
+              <Divider />
+
+              <Button fullWidth href="/api/auth/sso/start" variant="secondary">
+                Sign in with your school account
+              </Button>
+
+              <p className="login-hint">
+                Demo admin: admin@demo.school · password123
+              </p>
             </Stack>
-
-            {error ? <Alert tone="danger">{error}</Alert> : null}
-
-            <Button disabled={busy} fullWidth type="submit">
-              {busy ? "Signing in…" : "Sign in"}
-            </Button>
-
-            <Divider />
-
-            <Button fullWidth href="/api/auth/sso/start" variant="secondary">
-              Sign in with your school account
-            </Button>
-
-            <p style={hint}>Demo admin: admin@demo.school · password123</p>
-          </Stack>
-        </form>
-      </Card>
+          </form>
+        </Card>
+      </div>
     </main>
   );
 }

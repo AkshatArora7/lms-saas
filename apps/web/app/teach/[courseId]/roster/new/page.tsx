@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   Field,
-  Inline,
   Input,
   PageHeader,
   Select,
@@ -25,6 +24,58 @@ const ROLE_LABEL: Record<string, string> = {
   instructor: "Instructor",
   observer: "Observer",
 };
+
+const formCss = `
+.asg-back {
+  align-self: flex-start;
+}
+.asg-form-card {
+  padding: var(--lms-space-5);
+}
+.asg-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-5);
+}
+.asg-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-4);
+}
+.asg-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-1);
+}
+.asg-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+.asg-section-hint {
+  color: var(--lms-text-muted);
+  font-size: 0.875rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.asg-actionbar {
+  border-top: 1px solid var(--lms-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lms-space-2);
+  justify-content: flex-end;
+  padding-top: var(--lms-space-4);
+}
+@media (max-width: 599px) {
+  .asg-actionbar {
+    justify-content: stretch;
+  }
+  .asg-actionbar .lms-btn {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+}
+`;
 
 export default async function EnrollLearner({
   params,
@@ -66,9 +117,10 @@ export default async function EnrollLearner({
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
+      <style>{formCss}</style>
       <Stack gap={4}>
-        <Button href={base} size="sm" variant="ghost">
-          {"<- Back to roster"}
+        <Button className="asg-back" href={base} size="sm" variant="ghost">
+          ← Back to roster
         </Button>
 
         <PageHeader
@@ -78,10 +130,18 @@ export default async function EnrollLearner({
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
 
-        <Card>
-          <form action={enrollUserAction}>
+        <Card className="asg-form-card">
+          <form action={enrollUserAction} className="asg-form">
             <input name="courseId" type="hidden" value={courseId} />
-            <Stack gap={4}>
+
+            <section className="asg-section">
+              <div className="asg-section-head">
+                <h2 className="asg-section-title">Member</h2>
+                <p className="asg-section-hint">
+                  Add a member by their user id and choose the role they should
+                  hold in this course.
+                </p>
+              </div>
               <Field
                 htmlFor="userId"
                 label="User id"
@@ -99,13 +159,14 @@ export default async function EnrollLearner({
                   ))}
                 </Select>
               </Field>
-              <Inline gap={2}>
-                <Button type="submit">Enroll</Button>
-                <Button href={base} variant="ghost">
-                  Cancel
-                </Button>
-              </Inline>
-            </Stack>
+            </section>
+
+            <div className="asg-actionbar">
+              <Button href={base} variant="ghost">
+                Cancel
+              </Button>
+              <Button type="submit">Enroll</Button>
+            </div>
           </form>
         </Card>
       </Stack>

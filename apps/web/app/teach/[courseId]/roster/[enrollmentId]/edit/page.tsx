@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   Field,
-  Inline,
   PageHeader,
   Select,
   Stack,
@@ -27,6 +26,88 @@ const ROLE_LABEL: Record<string, string> = {
   instructor: "Instructor",
   observer: "Observer",
 };
+
+const formCss = `
+.asg-back {
+  align-self: flex-start;
+}
+.asg-form-card {
+  padding: var(--lms-space-5);
+}
+.asg-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-5);
+}
+.asg-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-4);
+}
+.asg-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-1);
+}
+.asg-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+.asg-section-hint {
+  color: var(--lms-text-muted);
+  font-size: 0.875rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.asg-actionbar {
+  border-top: 1px solid var(--lms-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lms-space-2);
+  justify-content: flex-end;
+  padding-top: var(--lms-space-4);
+}
+@media (max-width: 599px) {
+  .asg-actionbar {
+    justify-content: stretch;
+  }
+  .asg-actionbar .lms-btn {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+}
+.asg-danger {
+  border: 1px solid var(--lms-danger);
+}
+.asg-danger-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-3);
+}
+@media (min-width: 600px) {
+  .asg-danger-row {
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+.asg-danger-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-1);
+}
+.asg-danger-title {
+  color: var(--lms-danger);
+  font-weight: 600;
+  margin: 0;
+}
+.asg-danger-text {
+  color: var(--lms-text-muted);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+`;
 
 export default async function EditRosterMember({
   params,
@@ -74,20 +155,28 @@ export default async function EditRosterMember({
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
+      <style>{formCss}</style>
       <Stack gap={4}>
-        <Button href={base} size="sm" variant="ghost">
-          {"<- Back to roster"}
+        <Button className="asg-back" href={base} size="sm" variant="ghost">
+          ← Back to roster
         </Button>
 
         <PageHeader title="Change role" subtitle={enrollment.userId} />
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
 
-        <Card>
-          <form action={updateRoleAction}>
+        <Card className="asg-form-card">
+          <form action={updateRoleAction} className="asg-form">
             <input name="courseId" type="hidden" value={courseId} />
             <input name="id" type="hidden" value={enrollment.id} />
-            <Stack gap={4}>
+
+            <section className="asg-section">
+              <div className="asg-section-head">
+                <h2 className="asg-section-title">Role</h2>
+                <p className="asg-section-hint">
+                  Choose the role this member should hold in the course.
+                </p>
+              </div>
               <Field htmlFor="role" label="Role" required>
                 <Select name="role" defaultValue={enrollment.role} required>
                   {roleOptions.map((role) => (
@@ -97,22 +186,26 @@ export default async function EditRosterMember({
                   ))}
                 </Select>
               </Field>
-              <Inline gap={2}>
-                <Button type="submit">Save role</Button>
-                <Button href={base} variant="ghost">
-                  Cancel
-                </Button>
-              </Inline>
-            </Stack>
+            </section>
+
+            <div className="asg-actionbar">
+              <Button href={base} variant="ghost">
+                Cancel
+              </Button>
+              <Button type="submit">Save role</Button>
+            </div>
           </form>
         </Card>
 
-        <Card>
-          <Stack gap={3}>
-            <p style={{ margin: 0 }}>
-              Dropping a member withdraws them from this course. This removes
-              them from the active roster.
-            </p>
+        <Card className="asg-danger">
+          <div className="asg-danger-row">
+            <div className="asg-danger-copy">
+              <p className="asg-danger-title">Danger zone</p>
+              <p className="asg-danger-text">
+                Dropping a member withdraws them from this course. This removes
+                them from the active roster.
+              </p>
+            </div>
             <form action={dropEnrollmentAction}>
               <input name="courseId" type="hidden" value={courseId} />
               <input name="id" type="hidden" value={enrollment.id} />
@@ -120,7 +213,7 @@ export default async function EditRosterMember({
                 Drop member
               </Button>
             </form>
-          </Stack>
+          </div>
         </Card>
       </Stack>
     </AppShell>

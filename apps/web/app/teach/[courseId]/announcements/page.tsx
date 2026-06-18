@@ -156,7 +156,7 @@ export default async function CourseAnnouncements({
       <style>{announcementsCss}</style>
       <Stack gap={4}>
         <Button href="/teach" size="sm" variant="ghost">
-          {"<- Back to teaching"}
+          ← Back to teaching
         </Button>
 
         <PageHeader

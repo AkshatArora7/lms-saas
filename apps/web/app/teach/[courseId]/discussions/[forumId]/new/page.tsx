@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   Field,
-  Inline,
   Input,
   PageHeader,
   Stack,
@@ -18,6 +17,58 @@ import { canTeach, getTaughtCourses } from "../../../../../lib/teaching";
 import { listForums } from "../../../../../lib/discussions-api";
 import SignOutButton from "../../../../../sign-out-button";
 import { createTopicAction } from "../../actions";
+
+const formCss = `
+.asg-back {
+  align-self: flex-start;
+}
+.asg-form-card {
+  padding: var(--lms-space-5);
+}
+.asg-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-5);
+}
+.asg-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-4);
+}
+.asg-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-1);
+}
+.asg-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+.asg-section-hint {
+  color: var(--lms-text-muted);
+  font-size: 0.875rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.asg-actionbar {
+  border-top: 1px solid var(--lms-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lms-space-2);
+  justify-content: flex-end;
+  padding-top: var(--lms-space-4);
+}
+@media (max-width: 599px) {
+  .asg-actionbar {
+    justify-content: stretch;
+  }
+  .asg-actionbar .lms-btn {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+}
+`;
 
 export default async function NewTopicPage({
   params,
@@ -65,9 +116,10 @@ export default async function NewTopicPage({
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
+      <style>{formCss}</style>
       <Stack gap={4}>
-        <Button href={base} size="sm" variant="ghost">
-          {"<- Back to topics"}
+        <Button className="asg-back" href={base} size="sm" variant="ghost">
+          ← Back to topics
         </Button>
 
         <PageHeader
@@ -77,11 +129,19 @@ export default async function NewTopicPage({
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
 
-        <Card>
-          <form action={createTopicAction}>
+        <Card className="asg-form-card">
+          <form action={createTopicAction} className="asg-form">
             <input name="courseId" type="hidden" value={courseId} />
             <input name="forumId" type="hidden" value={forumId} />
-            <Stack gap={4}>
+
+            <section className="asg-section">
+              <div className="asg-section-head">
+                <h2 className="asg-section-title">Topic</h2>
+                <p className="asg-section-hint">
+                  Start a new thread with a clear title and optional context for
+                  learners.
+                </p>
+              </div>
               <Field htmlFor="title" label="Topic title" required>
                 <Input
                   name="title"
@@ -96,13 +156,14 @@ export default async function NewTopicPage({
               >
                 <Textarea name="description" rows={3} />
               </Field>
-              <Inline gap={2}>
-                <Button type="submit">Create topic</Button>
-                <Button href={base} variant="ghost">
-                  Cancel
-                </Button>
-              </Inline>
-            </Stack>
+            </section>
+
+            <div className="asg-actionbar">
+              <Button href={base} variant="ghost">
+                Cancel
+              </Button>
+              <Button type="submit">Create topic</Button>
+            </div>
           </form>
         </Card>
       </Stack>

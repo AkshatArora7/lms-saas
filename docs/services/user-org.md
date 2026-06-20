@@ -6,11 +6,11 @@
 
 ## Responsibility
 
-User profiles and the org-unit hierarchy (district/school/department/section) per OneRoster orgs/users; academic sessions; COPPA/age-appropriate parental consent for minors.
+User profiles and the org-unit hierarchy (district/school/department/section) per OneRoster orgs/users; academic sessions; COPPA/age-appropriate parental consent for minors; guardian/parent relationships with consent-gated read-only access to a child's scoped data.
 
 ## Owned tables
 
-`app_user`, `org_unit`, `academic_session`, `parental_consent`
+`app_user`, `org_unit`, `academic_session`, `parental_consent`, `guardian_relationship`
 
 ## Key endpoints
 
@@ -32,6 +32,12 @@ User profiles and the org-unit hierarchy (district/school/department/section) pe
 | `POST` | `/compliance/consents/{id}/revoke` | Revoke a consent. |
 | `GET` | `/compliance/subjects/{userId}/consents` | A subject's consent ledger. |
 | `GET` | `/compliance/subjects/{userId}/data-policy` | Age-gated data-collection decision for a category. |
+| `POST` | `/guardians` | Link a guardian to a student (starts status='pending'; emits guardian.linked). |
+| `GET` | `/students/{studentId}/guardians` | List a student's guardians. |
+| `GET` | `/guardians/{guardianId}/students` | List a guardian's students. |
+| `POST` | `/guardians/{id}/activate` | Activate a pending link after re-checking the student's consent gate (emits guardian.linked). |
+| `POST` | `/guardians/{id}/revoke` | Soft-revoke a guardian link (emits guardian.revoked). |
+| `GET` | `/guardians/authorize` | Read-only predicate: is this guardian an active, consent-satisfied guardian of this student? Consent is re-derived live. |
 
 ## Events published
 
@@ -39,6 +45,8 @@ User profiles and the org-unit hierarchy (district/school/department/section) pe
 - `user.updated`
 - `user.deactivated`
 - `orgunit.created`
+- `guardian.linked`
+- `guardian.revoked`
 
 ## Events consumed
 
@@ -52,7 +60,7 @@ User profiles and the org-unit hierarchy (district/school/department/section) pe
 
 ## Notes
 
-Read-heavy; backed by materialised membership views. OneRoster `users`/`orgs` map here. COPPA: age stored as a coarse band (not DOB); under-13 data handling is gated on verifiable parental consent (see docs/compliance/coppa-data-flows.md).
+Read-heavy; backed by materialised membership views. OneRoster `users`/`orgs` map here. COPPA: age stored as a coarse band (not DOB); under-13 data handling is gated on verifiable parental consent (see docs/compliance/coppa-data-flows.md). Guardian links are read-only and consent-gated: `/guardians/authorize` re-derives the consent decision live, so a consent revoke denies access immediately (no separate guardian write path).
 
 ## Cross-cutting
 

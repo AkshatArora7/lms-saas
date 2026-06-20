@@ -16,12 +16,16 @@ Learning Record Store (Caliper/xAPI), engagement metrics, at-risk/predictive rea
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/caliper/events` | Ingest Caliper envelope. |
+| `POST` | `/analytics/events` | Ingest a Caliper event to the LRS (+ transactional outbox row). |
+| `POST` | `/analytics/xapi` | Ingest an xAPI statement to the LRS. |
+| `GET` | `/analytics/events` | List captured events (filter by type/action/time). |
+| `GET` | `/analytics/aggregate` | De-identified aggregate counts (safe to pool cross-tenant). |
 | `GET` | `/courses/{id}/engagement` | Engagement summary read model. |
 | `GET` | `/courses/{id}/at-risk` | At-risk learner predictions. |
 
 ## Events published
 
+- `learning.event_captured`
 - `analytics.atrisk.flagged`
 - `engagement.summary.updated`
 

@@ -82,6 +82,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `identity.role.assigned` | identity | - |
 | `identity.role.revoked` | identity | - |
 | `identity.user.authenticated` | identity | - |
+| `learning.event_captured` | analytics | - |
 | `lti.deeplink.created` | lti | - |
 | `lti.tool.launched` | lti | - |
 | `notification.failed` | notification | - |

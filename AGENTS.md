@@ -85,29 +85,37 @@ up per task, but every agent operates under one of these roles and follows the
 **hand-off protocol**. **No agent denies a task** — it either does it or delegates
 it to the role that can.
 
-### Roles
+### Roles (the 10-agent SDLC team — full specs in [`.claude/agents/`](.claude/agents/README.md))
 
 | Role | Owns | Hands off to |
 | ---- | ---- | ------------ |
-| **Orchestrator** | Decomposes a request into tasks, assigns roles, tracks completion. | any role |
-| **Backlog agent** | Writes user stories + acceptance criteria; seeds issues. | Orchestrator |
-| **Schema agent** | `database/schema.sql`, RLS policies, migrations; pglast validation. | Service agent, Review agent |
-| **Service agent** | A bounded context under `services/*` (one owner per service) + its spec. | Schema agent (for tables), Review agent |
-| **Review agent** | Verifies acceptance criteria, isolation, and DoD; requests changes. | the implementing role |
-| **Docs agent** | README, `docs/*`, generated specs. | Review agent |
+| **Orchestrator** | Decomposes a request, owns the handshake file, assigns roles, tracks completion, holds the DoD gate. | any role |
+| **Backlog agent** | User stories + acceptance criteria; seeds issues (story-first). | Architect / implementing role |
+| **Architect** | Technical design: service boundaries, API/event contracts, data ownership, build sequence, ADRs. Designs; doesn't implement. | Schema agent, Service agent, UX designer |
+| **UX designer** | Decides what a screen should be; emits a JSON design prompt. Designs; no app code. | Frontend dev |
+| **Schema agent** | `database/schema.sql`, RLS policies, migrations; pglast validation. | Service agent, Security agent |
+| **Service agent** | A bounded context under `services/*` (one owner per service) + its spec. | Schema agent (for tables), QA agent |
+| **Frontend dev** | A screen in `apps/web`/`apps/admin`, all breakpoints in one pass, WCAG 2.2 AA. | UX designer, Service agent, QA agent |
+| **QA agent** | Test strategy + the verification suite (typecheck/lint/test/build, pglast); root-causes failures and routes the fix. | the owning specialist, Security agent |
+| **Security agent** | Final gate: tenant-isolation/authz/secrets audit + Definition-of-Done review. | the implementing role |
+| **Docs agent** | README, `docs/*`, generated specs. | QA agent, Security agent |
 
 ### Hand-off protocol
 
 1. **Accept or delegate — never deny.** If a task is outside your role, **hand it
    to the named role that owns it** (do not refuse and stop). Record the hand-off
    as an issue comment or commit reference naming the receiving role.
-2. **Complete context on hand-off.** Each agent is stateless; the delegating agent
-   passes everything the receiver needs (issue link, files, acceptance criteria,
-   constraints from this file).
+2. **Use the handshake file for context.** Each agent is **stateless**, so the
+   task's living context lives in `.claude/handshakes/<branch>.md` (template at
+   `.claude/agents/handshake.template.md`). Read it in full before acting; update
+   your own section on hand-off. Pass everything the receiver needs (issue link,
+   files, acceptance criteria, constraints from this file). **Facts come from
+   source — never invent issue numbers, columns, routes, or test counts.**
 3. **Single owner per scope.** Once a scope is delegated, that role owns it until
    done or re-delegated — no duplicated work.
-4. **Close the loop.** The Review agent confirms the Definition of Done before a
-   task is considered complete; it hands unmet items back to the implementer.
+4. **Close the loop.** The QA agent confirms the checks are green and the Security
+   agent confirms the Definition of Done before a task is complete; unmet items go
+   back to the implementer.
 
 ### Escalation (when no role can accept)
 

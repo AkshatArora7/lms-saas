@@ -39,3 +39,7 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Agent handshakes — ephemeral per-task context (keep the dir's README only)
+.claude/handshakes/*.md
+!.claude/handshakes/README.md

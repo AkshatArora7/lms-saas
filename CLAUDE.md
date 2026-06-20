@@ -11,11 +11,14 @@ schema or RLS, add a feature end-to-end, **design or build a UI screen**, groom
 the backlog, **debug a bug or failing build**), **delegate to the `orchestrator`
 subagent immediately** instead of doing the work inline. The orchestrator
 decomposes the request and routes each task to the right specialist
-(`backlog-agent`, `schema-agent`, `service-builder`, `ux-designer`,
-`frontend-dev`, `rca-agent`, `docs-agent`, `verify`, `review-agent`).
+(`backlog-agent`, `architect`, `ux-designer`, `schema-agent`, `service-builder`,
+`frontend-dev`, `qa-agent`, `security-agent`, `docs-agent`). The team shares
+context through a per-task **handshake file** (`.claude/handshakes/<branch>.md`,
+from `.claude/agents/handshake.template.md`) — agents read it before acting and
+update it on hand-off, so context is grounded rather than re-invented.
 
 For any **bug, failing test, broken build, or CI failure**, engage the
-`rca-agent` first (via the orchestrator): it finds the true root cause and then
+`qa-agent` first (via the orchestrator): it finds the true root cause and then
 delegates the fix to the owning specialist — never patch the symptom directly.
 
 Only handle a request directly without the team when it is a trivial,
@@ -33,8 +36,8 @@ The team and how work flows are documented in
    project board before starting (`gh issue edit <n> --add-assignee @me`).
 3. **Isolation is sacred.** New tenant-scoped tables ship their RLS policy in the
    same change; never weaken tenant scoping.
-4. **Prove it.** Not done until pglast + lint + typecheck + test + build pass and
-   `review-agent` signs off the Definition of Done.
+4. **Prove it.** Not done until pglast + lint + typecheck + test + build pass
+   (`qa-agent`) and `security-agent` signs off the Definition of Done.
 5. **Every PR is validated.** CI (Lint · Typecheck · Build · Test + pglast) is a
    **required check** — branches must be up to date and pass before merge.
 6. **Commit hygiene.** Conventional Commits referencing the issue (`Closes #N`);

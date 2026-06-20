@@ -32,6 +32,7 @@ export interface InputProps {
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
+  autoComplete?: string;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
   className?: string;

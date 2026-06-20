@@ -348,7 +348,7 @@ export default function LoginForm({ brand }: { brand: Brand }) {
       {/* Form panel */}
       <div className="login-form-panel">
         <Card className="login-card">
-          <form onSubmit={onSubmit}>
+          <form action="/api/auth/login" method="post" onSubmit={onSubmit}>
             <Stack gap={5}>
               <div className="login-welcome">
                 <h1 className="login-title">Welcome back</h1>
@@ -359,16 +359,12 @@ export default function LoginForm({ brand }: { brand: Brand }) {
 
               <Stack gap={3}>
                 <Field htmlFor="email" label="Email" required>
-                  <Input
-                    defaultValue="admin@demo.school"
-                    name="email"
-                    type="email"
-                  />
+                  <Input autoComplete="email" name="email" type="email" />
                 </Field>
 
                 <Field htmlFor="password" label="Password" required>
                   <Input
-                    defaultValue="password123"
+                    autoComplete="current-password"
                     name="password"
                     type="password"
                   />

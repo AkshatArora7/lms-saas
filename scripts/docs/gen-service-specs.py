@@ -318,13 +318,15 @@ SERVICES = [
     },
     {
         "name": "lti", "port": 4018, "data": "Postgres + Redis",
-        "resp": "LTI 1.3 Platform + Tool: OIDC login, AGS, NRPS, Deep Linking, Dynamic Registration.",
+        "resp": "LTI 1.3 Platform + Tool: OIDC login, AGS, NRPS, Deep Linking, Dynamic Registration. Also serves signed, short-lived embeddable course/widget iframes for school portals.",
         "tables": ["lti_registration", "lti_deployment"],
         "endpoints": [
             ("POST", "/lti/login", "OIDC third-party login initiation."),
             ("POST", "/lti/launch", "Validate id_token launch, mint session."),
             ("POST", "/lti/register", "Dynamic Registration of a tool."),
             ("GET", "/lti/nrps/contextmemberships", "Names and Role Provisioning Service."),
+            ("POST", "/embed/tokens", "Mint a signed, short-lived embed token scoped to a tenant + resource + allowed origins."),
+            ("GET", "/embed/widget", "Render the embeddable widget; sets frame-ancestors from the signed origins."),
         ],
         "publishes": ["lti.tool.launched", "lti.deeplink.created"],
         "consumes": ["grading.graded (AGS score passback)"],

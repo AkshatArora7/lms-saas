@@ -1042,6 +1042,33 @@ CREATE TABLE IF NOT EXISTS ai_embedding (
 );
 CREATE INDEX IF NOT EXISTS ix_ai_embedding_tenant ON ai_embedding(tenant_id, course_id);
 
+-- Global tenant-scoped search read model (keyword pg_trgm + semantic pgvector).
+-- One denormalized row per indexable entity (course, content_topic, app_user, ...).
+-- Owned by the search service; populated via events/backfill, not by reading
+-- other services' tables. org_unit_id NULL = tenant-global (e.g. people directory).
+CREATE TABLE IF NOT EXISTS search_document (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  org_unit_id uuid REFERENCES org_unit(id) ON DELETE CASCADE,
+  entity_type text NOT NULL,
+  entity_id   uuid NOT NULL,
+  title       text NOT NULL,
+  body        text,
+  search_text text NOT NULL,
+  embedding   vector(1024),
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, entity_type, entity_id)
+);
+CREATE INDEX IF NOT EXISTS ix_search_document_search_trgm
+  ON search_document USING gin (search_text gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_search_document_title_trgm
+  ON search_document USING gin (title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_search_document_tenant_ou
+  ON search_document (tenant_id, org_unit_id);
+CREATE INDEX IF NOT EXISTS ix_search_document_embedding
+  ON search_document USING ivfflat (embedding vector_cosine_ops);
+
 CREATE TABLE IF NOT EXISTS ai_chat (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id   uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,

@@ -14,8 +14,15 @@ import { createLogger } from "@lms/logger";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import { registerBillingRoutes, type BillingRouteDeps } from "./routes.js";
-import { MemoryPlanStore, MemorySubscriptionStore } from "./store.memory.js";
 import {
+  MemoryInvoiceStore,
+  MemoryMeterStore,
+  MemoryPlanStore,
+  MemorySubscriptionStore,
+} from "./store.memory.js";
+import {
+  createPrismaInvoiceStore,
+  createPrismaMeterStore,
   createPrismaPlanStore,
   createPrismaSubscriptionStore,
 } from "./store.prisma.js";
@@ -28,6 +35,8 @@ export interface BuildAppOptions {
   config?: AppConfig;
   planStore?: BillingRouteDeps["planStore"];
   subscriptionStore?: BillingRouteDeps["subscriptionStore"];
+  meterStore?: BillingRouteDeps["meterStore"];
+  invoiceStore?: BillingRouteDeps["invoiceStore"];
 }
 
 /**
@@ -52,6 +61,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     planStore,
     subscriptionStore:
       options.subscriptionStore ?? createPrismaSubscriptionStore(planStore),
+    meterStore: options.meterStore ?? createPrismaMeterStore(),
+    invoiceStore: options.invoiceStore ?? createPrismaInvoiceStore(),
   });
 
   return app;
@@ -78,6 +89,8 @@ async function start(): Promise<void> {
       options = {
         planStore,
         subscriptionStore: new MemorySubscriptionStore(planStore),
+        meterStore: new MemoryMeterStore(),
+        invoiceStore: new MemoryInvoiceStore(),
       };
     }
     const app = buildApp(options);

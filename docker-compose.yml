@@ -148,6 +148,11 @@ services:
     environment:
       <<: *common-env
       PORT: 4001
+      # Local demo sign-in: seed the demo accounts (admin@demo.school /
+      # student@demo.school, password123) in an in-memory store so the
+      # web/admin login flow works against this bundled stack. The seeded
+      # Postgres has schema + RLS but no auth users. Unset for real deployments.
+      IDENTITY_STORE: "memory"
     depends_on:
       postgres:
         condition: service_healthy

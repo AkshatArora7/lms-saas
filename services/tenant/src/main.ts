@@ -14,6 +14,12 @@ import Fastify, { type FastifyInstance } from "fastify";
 
 import { MemoryBrandingStore } from "./branding.memory.js";
 import { createPrismaBrandingStore } from "./branding.prisma.js";
+import { MemoryDelegationStore } from "./delegation.memory.js";
+import { createPrismaDelegationStore } from "./delegation.prisma.js";
+import {
+  registerDelegationRoutes,
+  type DelegationRouteDeps,
+} from "./delegation.routes.js";
 import { createHttpOffboardingPorts } from "./offboarding.http.js";
 import {
   registerOffboardingRoutes,
@@ -36,6 +42,8 @@ export interface BuildAppOptions {
   brandingStore?: TenantRouteDeps["brandingStore"];
   /** Offboarding ports (#7); tests inject fakes. */
   offboardingPorts?: OffboardingRouteDeps["ports"];
+  /** Sub-tenant admin delegation store (#5); tests inject memory. */
+  delegationStore?: DelegationRouteDeps["store"];
 }
 
 /**
@@ -69,6 +77,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         gatewayUrl: process.env.GATEWAY_URL ?? "http://gateway:4000",
       }),
   });
+  registerDelegationRoutes(app, {
+    tenantStore: store,
+    store: options.delegationStore ?? createPrismaDelegationStore(),
+  });
 
   return app;
 }
@@ -95,6 +107,7 @@ async function start(): Promise<void> {
             store: createSeededMemoryStore(),
             settingsStore: new MemorySettingsStore(),
             brandingStore: new MemoryBrandingStore(),
+            delegationStore: new MemoryDelegationStore(),
           }
         : {},
     );

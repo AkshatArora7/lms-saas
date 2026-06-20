@@ -53,7 +53,7 @@ SERVICES = [
     {
         "name": "tenant", "port": 4002, "data": "control-plane DB",
         "resp": "Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant hierarchy (district -> school), feature flags, plan binding.",
-        "tables": ["tenant", "plan", "subscription", "tenant_setting", "tenant_branding"],
+        "tables": ["tenant", "plan", "subscription", "tenant_setting", "tenant_branding", "tenant_admin_delegation"],
         "endpoints": [
             ("POST", "/tenants", "Provision a tenant or sub-tenant (kind=standalone|parent|sub)."),
             ("GET", "/tenants/{id}/routing", "Resolve pool vs silo + database_ref for connection routing."),
@@ -67,6 +67,10 @@ SERVICES = [
             ("GET", "/settings/catalog", "The catalog of known governance keys, types and defaults."),
             ("GET", "/tenants/{id}/export", "Offboarding export: OneRoster CSV + content archive (audited)."),
             ("POST", "/tenants/{id}/offboard", "Purge a tenant's data across all services (verified, audited) and mark it deleted."),
+            ("POST", "/tenants/{id}/delegations", "Delegate admin of a sub-tenant to a user (district -> school)."),
+            ("GET", "/tenants/{id}/delegations", "List active admin delegations for a sub-tenant."),
+            ("POST", "/tenants/{id}/delegations/{did}/revoke", "Revoke a delegation."),
+            ("GET", "/tenants/{id}/access-check", "Hierarchy-aware decision: may an actor administer this sub-tenant?"),
         ],
         "publishes": ["tenant.provisioning.started", "tenant.activated", "tenant.suspended", "tenant.subtenant.linked", "tenant.branding.updated", "tenant.data.exported", "tenant.data.purged"],
         "consumes": ["billing.subscription.changed (entitlements)"],

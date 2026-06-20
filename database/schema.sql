@@ -1181,3 +1181,26 @@ CREATE TABLE IF NOT EXISTS parental_consent (
 );
 CREATE INDEX IF NOT EXISTS ix_parental_consent_subject
   ON parental_consent(tenant_id, subject_user_id);
+
+-- ============================================================================
+-- SUB-TENANT ADMIN DELEGATION  (district -> school self-management)
+-- ============================================================================
+-- Records that a district has delegated admin of a specific sub-tenant (school)
+-- to a user. CONTROL-PLANE hierarchy/governance data: it links a delegator
+-- tenant to a scope tenant, so it has no single owning tenant and is NOT in the
+-- RLS tenant_tables loop (same rationale as `tenant`). Only the control-plane
+-- tenant service reads/writes it. Cross-sub-tenant isolation of DATA is still
+-- enforced by RLS on the domain tables; this table only records who may
+-- administer which sub-tenant.
+CREATE TABLE IF NOT EXISTS tenant_admin_delegation (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  delegator_tenant_id uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  scope_tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  delegate_user_id    uuid NOT NULL,
+  role                text NOT NULL DEFAULT 'school_admin',
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  revoked_at          timestamptz,
+  UNIQUE (scope_tenant_id, delegate_user_id, role)
+);
+CREATE INDEX IF NOT EXISTS ix_tenant_deleg_scope
+  ON tenant_admin_delegation(scope_tenant_id);

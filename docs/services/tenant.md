@@ -10,7 +10,7 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 
 ## Owned tables
 
-`tenant`, `plan`, `subscription`, `tenant_setting`, `tenant_branding`
+`tenant`, `plan`, `subscription`, `tenant_setting`, `tenant_branding`, `tenant_admin_delegation`
 
 ## Key endpoints
 
@@ -28,6 +28,10 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 | `GET` | `/settings/catalog` | The catalog of known governance keys, types and defaults. |
 | `GET` | `/tenants/{id}/export` | Offboarding export: OneRoster CSV + content archive (audited). |
 | `POST` | `/tenants/{id}/offboard` | Purge a tenant's data across all services (verified, audited) and mark it deleted. |
+| `POST` | `/tenants/{id}/delegations` | Delegate admin of a sub-tenant to a user (district -> school). |
+| `GET` | `/tenants/{id}/delegations` | List active admin delegations for a sub-tenant. |
+| `POST` | `/tenants/{id}/delegations/{did}/revoke` | Revoke a delegation. |
+| `GET` | `/tenants/{id}/access-check` | Hierarchy-aware decision: may an actor administer this sub-tenant? |
 
 ## Events published
 

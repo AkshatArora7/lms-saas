@@ -55,9 +55,10 @@ SERVICES = [
         "resp": "Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant hierarchy (district -> school), feature flags, plan binding.",
         "tables": ["tenant", "plan", "subscription", "tenant_setting", "tenant_branding", "tenant_admin_delegation"],
         "endpoints": [
-            ("POST", "/tenants", "Provision a tenant or sub-tenant (kind=standalone|parent|sub)."),
+            ("POST", "/tenants", "Provision a tenant; pass parentTenantId to register a school sub-tenant under a district (inherits plan; promotes parent)."),
+            ("GET", "/tenants/{id}/children", "List/search a district's child sub-tenants (?q=)."),
             ("GET", "/tenants/{id}/routing", "Resolve pool vs silo + database_ref for connection routing."),
-            ("GET", "/tenants/{id}/subtree", "District roll-up: tenant_subtree() ids for parent reporting/billing."),
+            ("GET", "/tenants/{id}/subtree", "District roll-up: root + descendants (tenant_subtree()) for parent reporting/billing."),
             ("PATCH", "/tenants/{id}/flags", "Toggle feature flags / add-on entitlements."),
             ("PUT", "/tenants/{id}/branding", "Set white-label branding (logo, colours, theme, custom domain)."),
             ("GET", "/tenants/{id}/branding", "Resolve effective branding (with parent inheritance)."),

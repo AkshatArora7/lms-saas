@@ -41,6 +41,7 @@ interface ProvisionBody {
   name?: unknown;
   region?: unknown;
   plan?: unknown;
+  parentTenantId?: unknown;
 }
 
 /**
@@ -77,12 +78,23 @@ export function registerTenantRoutes(
     if (body.plan !== undefined && typeof body.plan !== "string") {
       return badRequest(reply, "plan must be a string.");
     }
+    if (
+      body.parentTenantId !== undefined &&
+      body.parentTenantId !== null &&
+      (typeof body.parentTenantId !== "string" ||
+        !UUID_RE.test(body.parentTenantId))
+    ) {
+      return badRequest(reply, "parentTenantId must be a uuid.");
+    }
 
     const result = await deps.store.provisionTenant({
       slug: body.slug.trim(),
       name: body.name.trim(),
       region: body.region?.trim(),
       plan: body.plan?.trim(),
+      ...(typeof body.parentTenantId === "string"
+        ? { parentTenantId: body.parentTenantId }
+        : {}),
     });
 
     if (!result.ok) {
@@ -90,6 +102,12 @@ export function registerTenantRoutes(
         return reply.code(409).send({
           error: "slug_taken",
           message: "A tenant with this slug already exists.",
+        });
+      }
+      if (result.reason === "unknown_parent") {
+        return reply.code(404).send({
+          error: "unknown_parent",
+          message: "Parent (district) tenant not found.",
         });
       }
       return reply.code(400).send({
@@ -100,6 +118,44 @@ export function registerTenantRoutes(
 
     return reply.code(201).send({ tenant: result.tenant });
   });
+
+  // District -> child sub-tenants: list/search the schools under a district.
+  app.get<{ Params: { id: string }; Querystring: { q?: string } }>(
+    "/tenants/:id/children",
+    async (req, reply) => {
+      if (!UUID_RE.test(req.params.id)) {
+        return badRequest(reply, "tenant id must be a uuid.");
+      }
+      const district = await deps.store.getTenant(req.params.id);
+      if (!district) {
+        return reply
+          .code(404)
+          .send({ error: "not_found", message: "Tenant not found." });
+      }
+      const children = await deps.store.listChildren(req.params.id, {
+        ...(isNonEmptyString(req.query.q) ? { q: req.query.q } : {}),
+      });
+      return reply.code(200).send({ children });
+    },
+  );
+
+  // District subtree (root + descendants) — the scope for aggregate reporting.
+  app.get<{ Params: { id: string } }>(
+    "/tenants/:id/subtree",
+    async (req, reply) => {
+      if (!UUID_RE.test(req.params.id)) {
+        return badRequest(reply, "tenant id must be a uuid.");
+      }
+      const root = await deps.store.getTenant(req.params.id);
+      if (!root) {
+        return reply
+          .code(404)
+          .send({ error: "not_found", message: "Tenant not found." });
+      }
+      const tenants = await deps.store.listSubtree(req.params.id);
+      return reply.code(200).send({ tenants });
+    },
+  );
 
   app.get<{ Params: { id: string } }>("/tenants/:id", async (req, reply) => {
     const tenant = await deps.store.getTenant(req.params.id);

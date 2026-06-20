@@ -5,6 +5,7 @@ import { EVENT_TYPES } from "@lms/events";
 import {
   normalizeSlug,
   subdomainFor,
+  type ChildTenantFilter,
   type OutboxEvent,
   type ProvisionTenantInput,
   type ProvisionTenantResult,
@@ -53,6 +54,13 @@ export class MemoryTenantStore implements TenantStore {
     const taken = this.tenants.some((t) => normalizeSlug(t.slug) === slug);
     if (taken) return { ok: false, reason: "slug_taken" };
 
+    // Resolve the parent (district) first when creating a sub-tenant.
+    let parent: TenantRecord | undefined;
+    if (input.parentTenantId != null) {
+      parent = this.tenants.find((t) => t.id === input.parentTenantId);
+      if (!parent) return { ok: false, reason: "unknown_parent" };
+    }
+
     let planId: string | null = null;
     if (input.plan !== undefined) {
       if (!this.knownPlanCodes.includes(input.plan)) {
@@ -61,9 +69,12 @@ export class MemoryTenantStore implements TenantStore {
       // The Prisma store resolves the plan *code* to a plan id; in memory we
       // use the code itself as a stand-in identifier.
       planId = input.plan;
+    } else if (parent) {
+      // A sub-tenant inherits plan/billing from its parent unless overridden.
+      planId = parent.planId;
     }
 
-    const region = input.region ?? "us-east";
+    const region = input.region ?? parent?.region ?? "us-east";
     const timestamp = this.now().toISOString();
 
     // Model the provisioning lifecycle explicitly: a tenant is born
@@ -73,7 +84,8 @@ export class MemoryTenantStore implements TenantStore {
       id: this.generateId(),
       slug,
       name: input.name,
-      kind: "standalone",
+      kind: parent ? "sub" : "standalone",
+      parentId: parent?.id ?? null,
       tier: "pool",
       status: "provisioning",
       region,
@@ -84,6 +96,12 @@ export class MemoryTenantStore implements TenantStore {
     };
     tenant.status = "active";
     this.tenants.push(tenant);
+
+    // Promote a standalone parent to a district the first time it gains a child.
+    if (parent && parent.kind === "standalone") {
+      parent.kind = "parent";
+      parent.updatedAt = timestamp;
+    }
 
     // Transactional outbox: record the event in the same logical step as the
     // tenant insert (one transaction in the Prisma store).
@@ -126,6 +144,38 @@ export class MemoryTenantStore implements TenantStore {
   async listTenants(): Promise<TenantRecord[]> {
     return [...this.tenants];
   }
+
+  async listChildren(
+    parentId: string,
+    filter?: ChildTenantFilter,
+  ): Promise<TenantRecord[]> {
+    const q = filter?.q?.trim().toLowerCase();
+    return this.tenants.filter(
+      (t) =>
+        t.parentId === parentId &&
+        (q === undefined ||
+          q === "" ||
+          t.name.toLowerCase().includes(q) ||
+          t.slug.toLowerCase().includes(q)),
+    );
+  }
+
+  async listSubtree(rootId: string): Promise<TenantRecord[]> {
+    const ids = new Set<string>([rootId]);
+    let grew = true;
+    let guard = 0;
+    while (grew && guard < 64) {
+      grew = false;
+      guard += 1;
+      for (const t of this.tenants) {
+        if (t.parentId && ids.has(t.parentId) && !ids.has(t.id)) {
+          ids.add(t.id);
+          grew = true;
+        }
+      }
+    }
+    return this.tenants.filter((t) => ids.has(t.id));
+  }
 }
 
 /** Build a MemoryTenantStore pre-seeded with a demo tenant for local dev. */
@@ -139,6 +189,7 @@ export function createSeededMemoryStore(
     slug: "demo",
     name: "Demo Academy",
     kind: "standalone",
+    parentId: null,
     tier: "pool",
     status: "active",
     region: "us-east",

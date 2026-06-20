@@ -20,6 +20,8 @@ export interface TenantRecord {
   slug: string;
   name: string;
   kind: TenantKind;
+  /** Parent (district) tenant for a sub-tenant; null for top-level tenants. */
+  parentId: string | null;
   tier: TenantTier;
   status: TenantStatus;
   region: string;
@@ -37,11 +39,23 @@ export interface ProvisionTenantInput {
   region?: string;
   /** Optional plan *code* (e.g. "core"); resolved to a plan id. */
   plan?: string;
+  /**
+   * Register this tenant as a SUB-TENANT (school) under a parent (district).
+   * The parent is promoted to `kind = 'parent'`, and plan/billing is inherited
+   * from the parent unless `plan` is given here.
+   */
+  parentTenantId?: string | null;
 }
 
 export type ProvisionTenantResult =
   | { ok: true; tenant: TenantRecord }
-  | { ok: false; reason: "slug_taken" | "unknown_plan" };
+  | { ok: false; reason: "slug_taken" | "unknown_plan" | "unknown_parent" };
+
+/** Filter for listing a district's child sub-tenants. */
+export interface ChildTenantFilter {
+  /** Case-insensitive substring match on name or slug. */
+  q?: string;
+}
 
 /**
  * The shape of a `tenant.provisioned` row written to the transactional outbox
@@ -65,6 +79,13 @@ export interface TenantStore {
   getTenant(id: string): Promise<TenantRecord | null>;
   getTenantBySlug(slug: string): Promise<TenantRecord | null>;
   listTenants(): Promise<TenantRecord[]>;
+  /** Direct child sub-tenants of a district, optionally filtered/searched. */
+  listChildren(
+    parentId: string,
+    filter?: ChildTenantFilter,
+  ): Promise<TenantRecord[]>;
+  /** Every tenant in a district's subtree (root + all descendants). */
+  listSubtree(rootId: string): Promise<TenantRecord[]>;
   /** Transition a tenant's lifecycle status (e.g. to `deleted` on offboarding). */
   setStatus(id: string, status: TenantStatus): Promise<TenantRecord | null>;
 }

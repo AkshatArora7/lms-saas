@@ -149,7 +149,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | search | content, course, discussion |
 | billing | tenant |
 | audit | - |
-| mobile-bff | calendar, course, grading, identity, notification |
+| mobile-bff | assignment, calendar, course, enrollment, gateway, identity, notification |
 | attendance | calendar, enrollment, notification, reporting |
 | relay | notification, tenant |
 

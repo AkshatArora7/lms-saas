@@ -32,6 +32,8 @@ export const EVENT_TYPES = {
   ROLE_UPDATED: "role.updated",
   ROLE_DELETED: "role.deleted",
   ORGUNIT_CREATED: "orgunit.created",
+  GUARDIAN_LINKED: "guardian.linked",
+  GUARDIAN_REVOKED: "guardian.revoked",
   COURSE_PUBLISHED: "course.published",
   ENROLLMENT_CREATED: "enrollment.created",
   CONTENT_VIEWED: "content.viewed",

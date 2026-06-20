@@ -1209,6 +1209,38 @@ CREATE TABLE IF NOT EXISTS parental_consent (
 CREATE INDEX IF NOT EXISTS ix_parental_consent_subject
   ON parental_consent(tenant_id, subject_user_id);
 
+-- A guardian (parent/guardian app_user) linked to a student app_user, with a
+-- read-only, consent-gated relationship. consent_id is an audit/provenance
+-- pointer to the parental_consent row used to activate; live access is
+-- re-derived from parental_consent at request time (see consent rules).
+CREATE TABLE IF NOT EXISTS guardian_relationship (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id        uuid NOT NULL REFERENCES tenant(id)  ON DELETE CASCADE,
+  guardian_user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  student_user_id  uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  relationship     text NOT NULL DEFAULT 'guardian'
+                     CHECK (relationship IN ('parent','guardian','other')),
+  status           text NOT NULL DEFAULT 'pending'
+                     CHECK (status IN ('pending','active','revoked')),
+  -- provenance only: the parental_consent row used to activate (NOT the live gate)
+  consent_id       uuid REFERENCES parental_consent(id) ON DELETE SET NULL,
+  note             text,
+  created_by       uuid,                 -- admin/staff who created the link
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now(),
+  revoked_at       timestamptz,
+  CONSTRAINT guardian_relationship_no_self
+    CHECK (guardian_user_id <> student_user_id),
+  UNIQUE (tenant_id, guardian_user_id, student_user_id)
+);
+CREATE INDEX IF NOT EXISTS ix_guardian_rel_student
+  ON guardian_relationship(tenant_id, student_user_id);
+CREATE INDEX IF NOT EXISTS ix_guardian_rel_guardian
+  ON guardian_relationship(tenant_id, guardian_user_id);
+CREATE TRIGGER trg_guardian_relationship_updated BEFORE UPDATE
+  ON guardian_relationship
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 -- ============================================================================
 -- SUB-TENANT ADMIN DELEGATION  (district -> school self-management)
 -- ============================================================================

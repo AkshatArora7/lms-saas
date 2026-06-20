@@ -22,6 +22,9 @@ import Fastify, {
 import { MemoryConsentStore } from "./consent.memory.js";
 import { createPrismaConsentStore } from "./consent.prisma.js";
 import { registerConsentRoutes, type ConsentRouteDeps } from "./consent.routes.js";
+import { MemoryGuardianStore } from "./guardian.memory.js";
+import { createPrismaGuardianStore } from "./guardian.prisma.js";
+import { registerGuardianRoutes, type GuardianRouteDeps } from "./guardian.routes.js";
 import { registerUserOrgRoutes, type UserOrgRouteDeps } from "./routes.js";
 import { createSeededMemoryStore } from "./store.memory.js";
 import { createPrismaStore } from "./store.prisma.js";
@@ -36,6 +39,8 @@ export interface BuildAppOptions {
   resolveTenant?: UserOrgRouteDeps["resolveTenant"];
   /** Parental-consent store (#77); tests inject memory. */
   consentStore?: ConsentRouteDeps["store"];
+  /** Guardian-relationship store (#24); tests inject memory. */
+  guardianStore?: GuardianRouteDeps["store"];
 }
 
 /**
@@ -81,8 +86,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     store: options.store ?? createPrismaStore(),
     resolveTenant,
   });
+  const consentStore = options.consentStore ?? createPrismaConsentStore();
   registerConsentRoutes(app, {
-    store: options.consentStore ?? createPrismaConsentStore(),
+    store: consentStore,
+    resolveTenant,
+  });
+  registerGuardianRoutes(app, {
+    store: options.guardianStore ?? createPrismaGuardianStore(),
+    consentStore,
     resolveTenant,
   });
 
@@ -106,7 +117,11 @@ async function start(): Promise<void> {
     }
     const app = buildApp(
       useMemoryStore
-        ? { store: createSeededMemoryStore(), consentStore: new MemoryConsentStore() }
+        ? {
+            store: createSeededMemoryStore(),
+            consentStore: new MemoryConsentStore(),
+            guardianStore: new MemoryGuardianStore(),
+          }
         : {},
     );
     await app.listen({ port, host: "0.0.0.0" });

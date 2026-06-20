@@ -161,5 +161,16 @@ export function createPrismaStore(): TenantStore {
       );
       return rows.map(toRecord);
     },
+
+    async setStatus(id, status) {
+      const rows = await db.$queryRawUnsafe<TenantRow[]>(
+        `UPDATE tenant SET status = $2, updated_at = now()
+          WHERE id = $1::uuid
+        RETURNING ${SELECT_COLUMNS}`,
+        id,
+        status,
+      );
+      return rows[0] ? toRecord(rows[0]) : null;
+    },
   };
 }

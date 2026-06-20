@@ -106,6 +106,8 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `submission.late` | assignment | - |
 | `tenant.activated` | tenant | billing |
 | `tenant.branding.updated` | tenant | - |
+| `tenant.data.exported` | tenant | - |
+| `tenant.data.purged` | tenant | - |
 | `tenant.provisioning.started` | tenant | - |
 | `tenant.subtenant.linked` | tenant | - |
 | `tenant.suspended` | tenant | - |
@@ -127,7 +129,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | --- | --- |
 | gateway | identity, tenant |
 | identity | tenant |
-| tenant | billing |
+| tenant | audit, billing |
 | user-org | identity, sis |
 | enrollment | billing, course, user-org |
 | course | content, user-org |

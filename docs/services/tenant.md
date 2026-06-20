@@ -26,6 +26,8 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 | `GET` | `/tenants/{id}/settings` | Effective governance settings (catalog defaults + overrides). |
 | `GET` | `/tenants/{id}/settings/{key}` | Effective value for one setting key. |
 | `GET` | `/settings/catalog` | The catalog of known governance keys, types and defaults. |
+| `GET` | `/tenants/{id}/export` | Offboarding export: OneRoster CSV + content archive (audited). |
+| `POST` | `/tenants/{id}/offboard` | Purge a tenant's data across all services (verified, audited) and mark it deleted. |
 
 ## Events published
 
@@ -34,6 +36,8 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 - `tenant.suspended`
 - `tenant.subtenant.linked`
 - `tenant.branding.updated`
+- `tenant.data.exported`
+- `tenant.data.purged`
 
 ## Events consumed
 
@@ -44,10 +48,12 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 - Neon API (silo branch/project create)
 - secret store (database_ref -> DSN)
 - billing
+- all tenant-scoped services (offboarding export/purge via gateway)
+- audit (offboarding trail)
 
 ## Notes
 
-Control-plane; `tenant` is NOT in the RLS tenant_tables loop. Provisioning is a saga with compensation (delete branch on failure).
+Control-plane; `tenant` is NOT in the RLS tenant_tables loop. Provisioning is a saga with compensation (delete branch on failure). Offboarding orchestrates per-service export/purge behind ports; per-service admin export/erasure endpoints are the contract (unverified services surface as failed, never silent).
 
 ## Cross-cutting
 

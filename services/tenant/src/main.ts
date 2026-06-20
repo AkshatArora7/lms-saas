@@ -14,6 +14,11 @@ import Fastify, { type FastifyInstance } from "fastify";
 
 import { MemoryBrandingStore } from "./branding.memory.js";
 import { createPrismaBrandingStore } from "./branding.prisma.js";
+import { createHttpOffboardingPorts } from "./offboarding.http.js";
+import {
+  registerOffboardingRoutes,
+  type OffboardingRouteDeps,
+} from "./offboarding.routes.js";
 import { registerTenantRoutes, type TenantRouteDeps } from "./routes.js";
 import { MemorySettingsStore } from "./settings.memory.js";
 import { createPrismaSettingsStore } from "./settings.prisma.js";
@@ -29,6 +34,8 @@ export interface BuildAppOptions {
   store?: TenantRouteDeps["store"];
   settingsStore?: TenantRouteDeps["settingsStore"];
   brandingStore?: TenantRouteDeps["brandingStore"];
+  /** Offboarding ports (#7); tests inject fakes. */
+  offboardingPorts?: OffboardingRouteDeps["ports"];
 }
 
 /**
@@ -47,11 +54,20 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     uptime: process.uptime(),
   }));
 
+  const store = options.store ?? createPrismaStore();
   registerTenantRoutes(app, {
     config,
-    store: options.store ?? createPrismaStore(),
+    store,
     settingsStore: options.settingsStore ?? createPrismaSettingsStore(),
     brandingStore: options.brandingStore ?? createPrismaBrandingStore(),
+  });
+  registerOffboardingRoutes(app, {
+    store,
+    ports:
+      options.offboardingPorts ??
+      createHttpOffboardingPorts({
+        gatewayUrl: process.env.GATEWAY_URL ?? "http://gateway:4000",
+      }),
   });
 
   return app;

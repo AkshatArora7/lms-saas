@@ -65,6 +65,8 @@ export interface TenantStore {
   getTenant(id: string): Promise<TenantRecord | null>;
   getTenantBySlug(slug: string): Promise<TenantRecord | null>;
   listTenants(): Promise<TenantRecord[]>;
+  /** Transition a tenant's lifecycle status (e.g. to `deleted` on offboarding). */
+  setStatus(id: string, status: TenantStatus): Promise<TenantRecord | null>;
 }
 
 /** Derived routing host for a tenant slug. Pure so stores and tests share it. */

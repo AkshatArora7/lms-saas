@@ -107,6 +107,17 @@ export class MemoryTenantStore implements TenantStore {
     return this.tenants.find((t) => t.id === id) ?? null;
   }
 
+  async setStatus(
+    id: string,
+    status: TenantRecord["status"],
+  ): Promise<TenantRecord | null> {
+    const tenant = this.tenants.find((t) => t.id === id);
+    if (!tenant) return null;
+    tenant.status = status;
+    tenant.updatedAt = this.now().toISOString();
+    return tenant;
+  }
+
   async getTenantBySlug(slug: string): Promise<TenantRecord | null> {
     const normalized = normalizeSlug(slug);
     return this.tenants.find((t) => normalizeSlug(t.slug) === normalized) ?? null;

@@ -1476,6 +1476,24 @@
             "No secrets committed (env via gitignored .env); tenant isolation (RLS) unaffected; Conventional Commits, no Copilot trailer.",
             "README + docs/DEPLOYMENT.md document the one-command full-app workflow."
           ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 3,
+          "title": "Seed demo enrollment & course data so the bundled demo stack returns populated dashboards (mobile-bff /mobile/home 200)",
+          "as_a": "platform engineer",
+          "i_want": "the bundled demo stack to seed demo course and enrollment rows for the demo accounts, scoped to the demo tenant",
+          "so_that": "logging in as a demo user returns populated dashboards instead of empty/404 screens, giving a credible out-of-the-box demo",
+          "ac": [
+            "On a fresh volume of the bundled docker compose 'lms' stack, the demo seed enrolls the demo users (admin@demo.school / demo-admin and student@demo.school) into at least one demo course within the demo tenant 11111111-1111-1111-1111-111111111111.",
+            "GET /mobile/home on mobile-bff with a valid demo JWT returns HTTP 200 with a non-empty courses array (previously 404 because no enrollment rows existed for the demo users).",
+            "The web learner dashboard renders the seeded enrolled course(s) for the demo user.",
+            "Identity demo users (IDENTITY_STORE=memory) align by user id (e.g. demo-admin) with the seeded course/enrollment rows so the mobile-bff -> enrollment -> course aggregation resolves.",
+            "Demo seeding is idempotent (re-running compose / re-seeding does not duplicate rows) and strictly tenant-scoped to the demo tenant; no cross-tenant leakage.",
+            "No change to production seeding behaviour and no weakening of RLS / tenant isolation.",
+            "Relevant files for the implementer (fix is OUT OF SCOPE here - this issue only tracks the gap): packages/db/prisma/seed.ts (DB seed, currently tenant/roles/permissions only), services/identity/src/store.memory.ts (demo users), services/enrollment + services/course (demo rows), services/mobile-bff/src/routes.ts + upstream.ts (the consumer)."
+          ]
         }
       ]
     },

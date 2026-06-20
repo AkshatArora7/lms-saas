@@ -19,6 +19,9 @@ import Fastify, {
   type FastifyRequest,
 } from "fastify";
 
+import { MemoryConsentStore } from "./consent.memory.js";
+import { createPrismaConsentStore } from "./consent.prisma.js";
+import { registerConsentRoutes, type ConsentRouteDeps } from "./consent.routes.js";
 import { registerUserOrgRoutes, type UserOrgRouteDeps } from "./routes.js";
 import { createSeededMemoryStore } from "./store.memory.js";
 import { createPrismaStore } from "./store.prisma.js";
@@ -31,6 +34,8 @@ export interface BuildAppOptions {
   config?: AppConfig;
   store?: UserOrgRouteDeps["store"];
   resolveTenant?: UserOrgRouteDeps["resolveTenant"];
+  /** Parental-consent store (#77); tests inject memory. */
+  consentStore?: ConsentRouteDeps["store"];
 }
 
 /**
@@ -70,10 +75,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     uptime: process.uptime(),
   }));
 
+  const resolveTenant = options.resolveTenant ?? headerTenantResolver(config);
   registerUserOrgRoutes(app, {
     config,
     store: options.store ?? createPrismaStore(),
-    resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+    resolveTenant,
+  });
+  registerConsentRoutes(app, {
+    store: options.consentStore ?? createPrismaConsentStore(),
+    resolveTenant,
   });
 
   return app;
@@ -94,8 +104,11 @@ async function start(): Promise<void> {
       process.env.DATABASE_URL ??= "postgres://demo:demo@localhost:5432/demo";
       process.env.JWT_SECRET ??= "local-dev-secret-not-for-production";
     }
-    const store = useMemoryStore ? createSeededMemoryStore() : undefined;
-    const app = buildApp(store ? { store } : {});
+    const app = buildApp(
+      useMemoryStore
+        ? { store: createSeededMemoryStore(), consentStore: new MemoryConsentStore() }
+        : {},
+    );
     await app.listen({ port, host: "0.0.0.0" });
     log.info(
       { port, store: useMemoryStore ? "memory(demo)" : "prisma" },

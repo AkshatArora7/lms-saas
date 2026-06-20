@@ -1149,3 +1149,35 @@ CREATE INDEX IF NOT EXISTS ix_usage_tenant_metric
 ALTER TABLE audit_log
   ADD COLUMN IF NOT EXISTS prev_hash bytea,
   ADD COLUMN IF NOT EXISTS row_hash  bytea;
+
+-- ============================================================================
+-- COMPLIANCE  (COPPA/FERPA: age-gated handling + parental consent)
+-- ============================================================================
+-- One row per (subject, consent_type). `age_band` is the minimised age signal
+-- (band, not date of birth) so minor status is known without collecting extra
+-- PII. Verifiable parental consent gates data collection for minors; the
+-- data-collection policy is enforced from these rows. Tenant-scoped under RLS.
+CREATE TABLE IF NOT EXISTS parental_consent (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  subject_user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  age_band        text NOT NULL DEFAULT 'unknown'
+                    CHECK (age_band IN ('under_13','13_17','adult','unknown')),
+  consent_type    text NOT NULL
+                    CHECK (consent_type IN
+                      ('data_collection','third_party_sharing',
+                       'directory_information','ai_features')),
+  status          text NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending','granted','revoked')),
+  guardian_name   text,
+  guardian_email  citext,
+  method          text
+                    CHECK (method IN
+                      ('verifiable_email','signed_form','in_person','none')),
+  recorded_by     uuid,
+  recorded_at     timestamptz NOT NULL DEFAULT now(),
+  revoked_at      timestamptz,
+  UNIQUE (tenant_id, subject_user_id, consent_type)
+);
+CREATE INDEX IF NOT EXISTS ix_parental_consent_subject
+  ON parental_consent(tenant_id, subject_user_id);

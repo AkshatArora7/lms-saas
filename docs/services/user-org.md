@@ -6,11 +6,11 @@
 
 ## Responsibility
 
-User profiles and the org-unit hierarchy (district/school/department/section) per OneRoster orgs/users; academic sessions.
+User profiles and the org-unit hierarchy (district/school/department/section) per OneRoster orgs/users; academic sessions; COPPA/age-appropriate parental consent for minors.
 
 ## Owned tables
 
-`app_user`, `org_unit`, `academic_session`
+`app_user`, `org_unit`, `academic_session`, `parental_consent`
 
 ## Key endpoints
 
@@ -28,6 +28,10 @@ User profiles and the org-unit hierarchy (district/school/department/section) pe
 | `PATCH` | `/users/{id}` | Update profile/status (emits user.updated/deactivated). |
 | `POST` | `/users/{id}/roles` | Assign a per-tenant role at an org unit. |
 | `DELETE` | `/users/{id}/roles/{assignmentId}` | Revoke a role assignment. |
+| `POST` | `/compliance/consents` | Capture/upsert parental consent for a (subject, category). |
+| `POST` | `/compliance/consents/{id}/revoke` | Revoke a consent. |
+| `GET` | `/compliance/subjects/{userId}/consents` | A subject's consent ledger. |
+| `GET` | `/compliance/subjects/{userId}/data-policy` | Age-gated data-collection decision for a category. |
 
 ## Events published
 
@@ -48,7 +52,7 @@ User profiles and the org-unit hierarchy (district/school/department/section) pe
 
 ## Notes
 
-Read-heavy; backed by materialised membership views. OneRoster `users`/`orgs` map here.
+Read-heavy; backed by materialised membership views. OneRoster `users`/`orgs` map here. COPPA: age stored as a coarse band (not DOB); under-13 data handling is gated on verifiable parental consent (see docs/compliance/coppa-data-flows.md).
 
 ## Cross-cutting
 

@@ -73,8 +73,8 @@ SERVICES = [
     },
     {
         "name": "user-org", "port": 4003, "data": "Postgres (read-heavy)",
-        "resp": "User profiles and the org-unit hierarchy (district/school/department/section) per OneRoster orgs/users; academic sessions.",
-        "tables": ["app_user", "org_unit", "academic_session"],
+        "resp": "User profiles and the org-unit hierarchy (district/school/department/section) per OneRoster orgs/users; academic sessions; COPPA/age-appropriate parental consent for minors.",
+        "tables": ["app_user", "org_unit", "academic_session", "parental_consent"],
         "endpoints": [
             ("POST", "/org-units", "Create org unit under a parent (maintains materialised path; emits orgunit.created)."),
             ("GET", "/org-units", "List org units (filter by parentId, type)."),
@@ -88,11 +88,15 @@ SERVICES = [
             ("PATCH", "/users/{id}", "Update profile/status (emits user.updated/deactivated)."),
             ("POST", "/users/{id}/roles", "Assign a per-tenant role at an org unit."),
             ("DELETE", "/users/{id}/roles/{assignmentId}", "Revoke a role assignment."),
+            ("POST", "/compliance/consents", "Capture/upsert parental consent for a (subject, category)."),
+            ("POST", "/compliance/consents/{id}/revoke", "Revoke a consent."),
+            ("GET", "/compliance/subjects/{userId}/consents", "A subject's consent ledger."),
+            ("GET", "/compliance/subjects/{userId}/data-policy", "Age-gated data-collection decision for a category."),
         ],
         "publishes": ["user.created", "user.updated", "user.deactivated", "orgunit.created"],
         "consumes": ["sis.user.upserted", "sis.org.upserted"],
         "deps": ["identity (claims)", "sis (rostering source of truth when SIS-driven)"],
-        "notes": "Read-heavy; backed by materialised membership views. OneRoster `users`/`orgs` map here.",
+        "notes": "Read-heavy; backed by materialised membership views. OneRoster `users`/`orgs` map here. COPPA: age stored as a coarse band (not DOB); under-13 data handling is gated on verifiable parental consent (see docs/compliance/coppa-data-flows.md).",
     },
     {
         "name": "enrollment", "port": 4004, "data": "Postgres",

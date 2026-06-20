@@ -157,14 +157,18 @@ Instead of a remote Neon DB you can run Postgres (with the schema + RLS already
 applied) and Redis locally:
 
 ```bash
-docker compose up -d                 # postgres (pgvector, schema+rls auto-applied) + redis
+docker compose -f docker-compose.infra.yml up -d   # postgres (pgvector, schema+rls auto-applied) + redis
 # PowerShell:  $env:DATABASE_URL = "postgresql://lms:lms@localhost:5432/lms"
 export DATABASE_URL=postgresql://lms:lms@localhost:5432/lms
-docker compose down -v               # stop and wipe (re-applies schema on next up)
+docker compose -f docker-compose.infra.yml down -v # stop and wipe (re-applies schema on next up)
 ```
 
 The `schema.sql` and `rls.sql` are mounted as init scripts, so a fresh volume is
 seeded automatically. This mirrors the Postgres used in CI.
+
+> Note: the bare `docker compose up -d` now brings up the **entire** app mesh
+> (Postgres + Redis + all services + web + admin) from `docker-compose.yml`. For
+> just the DB + Redis the integration tests need, use the infra-only file above.
 
 ### Integration tests (RLS isolation + golden path)
 
@@ -176,7 +180,7 @@ RLS and asserts a second tenant sees none of it. They run automatically in CI an
 **skip** when `DATABASE_URL` is unset.
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.infra.yml up -d
 export DATABASE_URL=postgresql://lms:lms@localhost:5432/lms
 pnpm --filter @lms/integration-tests test
 ```

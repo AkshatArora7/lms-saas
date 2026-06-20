@@ -29,7 +29,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [lti](lti.md) | 4018 | Postgres + Redis | `lti_registration`, `lti_deployment` |
 | [sis](sis.md) | 4019 | Postgres | `sis_sync`, `sis_id_map` |
 | [video](video.md) | 4020 | Blob + JSONB | `video_asset` |
-| [search](search.md) | 4021 | Postgres (FTS/vector) | - |
+| [search](search.md) | 4021 | Postgres (pg_trgm/vector) | `search_document` |
 | [billing](billing.md) | 4022 | Postgres | `plan`, `subscription`, `invoice`, `usage_meter` |
 | [audit](audit.md) | 4023 | Postgres (ledger) | `audit_log` |
 | [mobile-bff](mobile-bff.md) | 4024 | stateless | - |
@@ -97,7 +97,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `role.created` | identity | - |
 | `role.deleted` | identity | - |
 | `role.updated` | identity | - |
-| `search.reindexed` | search | - |
 | `sis.class.upserted` | sis | course |
 | `sis.enrollment.upserted` | sis | enrollment |
 | `sis.org.upserted` | sis | user-org |

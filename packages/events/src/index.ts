@@ -41,6 +41,7 @@ export const EVENT_TYPES = {
   SUBMISSION_FEEDBACK_RELEASED: "submission.feedback_released",
   ATTENDANCE_FLAGGED: "attendance.flagged",
   DISCUSSION_POST_CREATED: "discussion.post_created",
+  LEARNING_EVENT_CAPTURED: "learning.event_captured",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];

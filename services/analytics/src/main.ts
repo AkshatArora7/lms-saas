@@ -1,27 +1,56 @@
 /**
  * analytics service.
- * Learning analytics, engagement dashboards, at-risk prediction. Caliper/xAPI Learning Record Store; event-sourced read models.
+ * Learning analytics + Caliper/xAPI Learning Record Store (issue #60): captures
+ * standardized learning events into the tenant-scoped LRS tables, writing a
+ * transactional outbox row alongside each so delivery is async/exactly-once,
+ * and serves de-identified aggregates safe to pool across tenants.
  *
  * Lightweight Fastify HTTP service. Each request resolves a TenantContext
  * (pool vs silo) and runs domain work through @lms/db.withTenant so Postgres
  * RLS scopes every query. Deployable as a container image (Dockerfile ->
  * GHCR -> container host) or, for edge/BFF roles, as Vercel Functions.
  */
-import Fastify, { type FastifyInstance } from "fastify";
-
-import { loadConfig } from "@lms/config";
+import { loadConfig, type AppConfig } from "@lms/config";
 import { createLogger } from "@lms/logger";
+import type { TenantContext } from "@lms/types";
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+
+import { registerAnalyticsRoutes, type AnalyticsRouteDeps } from "./routes.js";
+import { MemoryAnalyticsStore } from "./store.memory.js";
+import { createPrismaStore } from "./store.prisma.js";
 
 const SERVICE = "analytics";
 const log = createLogger(SERVICE);
 
+/** Overridable dependencies — tests inject an in-memory store. */
+export interface BuildAppOptions {
+  config?: AppConfig;
+  store?: AnalyticsRouteDeps["store"];
+  resolveTenant?: AnalyticsRouteDeps["resolveTenant"];
+}
+
 /**
- * Build the Fastify app without binding a port, so tests can drive it via
- * `app.inject(...)`. Config is resolved lazily here (not at import time) to
- * keep the module import side-effect free.
+ * Default tenant resolution: the gateway authenticates the request and forwards
+ * the verified tenant as `x-tenant-id`.
  */
-export function buildApp(): FastifyInstance {
-  const config = loadConfig();
+function headerTenantResolver(
+  config: AppConfig,
+): (req: FastifyRequest) => TenantContext {
+  return (req) => {
+    const tenantId = req.headers["x-tenant-id"];
+    if (typeof tenantId !== "string" || tenantId.length === 0) {
+      throw new Error("missing x-tenant-id");
+    }
+    return {
+      tenantId,
+      tier: config.DEFAULT_TENANT_TIER,
+      databaseUrl: config.DATABASE_URL,
+    };
+  };
+}
+
+export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
+  const config = options.config ?? loadConfig();
   const app = Fastify({ logger: false });
 
   app.get("/health", async () => ({
@@ -31,19 +60,35 @@ export function buildApp(): FastifyInstance {
     uptime: process.uptime(),
   }));
 
-  // TODO: register domain routes (see /docs/ARCHITECTURE.md). Tenant-resolution
-  // middleware and RLS-scoped handlers are added per bounded context.
+  registerAnalyticsRoutes(app, {
+    store: options.store ?? createPrismaStore(),
+    resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+  });
 
   return app;
 }
 
 const port = Number(process.env.PORT ?? 4015);
 
+/**
+ * Local dev convenience: `ANALYTICS_STORE=memory` runs the service against an
+ * in-memory LRS so the ingestion surface works without a Postgres database.
+ */
+const useMemoryStore = process.env.ANALYTICS_STORE === "memory";
+
 async function start(): Promise<void> {
   try {
-    const app = buildApp();
+    if (useMemoryStore) {
+      process.env.DATABASE_URL ??= "postgres://demo:demo@localhost:5432/demo";
+      process.env.JWT_SECRET ??= "local-dev-secret-not-for-production";
+    }
+    const store = useMemoryStore ? new MemoryAnalyticsStore() : undefined;
+    const app = buildApp(store ? { store } : {});
     await app.listen({ port, host: "0.0.0.0" });
-    log.info({ port }, `${SERVICE} service listening`);
+    log.info(
+      { port, store: useMemoryStore ? "memory" : "prisma" },
+      `${SERVICE} service listening`,
+    );
   } catch (err) {
     log.error({ err }, `failed to start ${SERVICE} service`);
     process.exit(1);

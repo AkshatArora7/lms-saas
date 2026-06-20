@@ -11,6 +11,15 @@ export {
   hashRefreshToken,
   type RefreshTokenMaterial,
 } from "./refresh.js";
+export {
+  signEmbedToken,
+  verifyEmbedToken,
+  EMBED_TOKEN_AUDIENCE,
+  type EmbedResourceType,
+  type EmbedTokenClaims,
+  type EmbedTokenSignerOptions,
+  type NewEmbedTokenClaims,
+} from "./embed.js";
 
 /**
  * Access-token claims carried on every authenticated request.

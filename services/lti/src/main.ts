@@ -1,27 +1,62 @@
 /**
  * lti service.
- * LTI 1.3 Platform + Tool: OIDC login, AGS, NRPS, Deep Linking 2.0, Dynamic Registration. Redis nonce/state cache.
+ * LTI 1.3 Platform + Tool: OIDC login, AGS, NRPS, Deep Linking 2.0, Dynamic
+ * Registration. Also owns the embeddable course/widget surface (issue #13):
+ * signed, short-lived iframe embeds for school portals.
  *
  * Lightweight Fastify HTTP service. Each request resolves a TenantContext
  * (pool vs silo) and runs domain work through @lms/db.withTenant so Postgres
  * RLS scopes every query. Deployable as a container image (Dockerfile ->
  * GHCR -> container host) or, for edge/BFF roles, as Vercel Functions.
  */
-import Fastify, { type FastifyInstance } from "fastify";
-
-import { loadConfig } from "@lms/config";
+import { loadConfig, type AppConfig } from "@lms/config";
 import { createLogger } from "@lms/logger";
+import type { TenantContext } from "@lms/types";
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+
+import { registerEmbedRoutes, type EmbedRouteDeps } from "./embed.routes.js";
 
 const SERVICE = "lti";
 const log = createLogger(SERVICE);
+
+/** Overridable dependencies — tests inject config, tenant resolution, and URLs. */
+export interface BuildAppOptions {
+  config?: AppConfig;
+  resolveTenant?: EmbedRouteDeps["resolveTenant"];
+  /** Absolute base URL the widget is served from (to build embed URLs). */
+  publicBaseUrl?: string;
+  /** Base URL of the learner app the widget links out to. */
+  launchBaseUrl?: string;
+}
+
+/**
+ * Default tenant resolution: the gateway authenticates the request and forwards
+ * the verified tenant as `x-tenant-id`. Used by the embed-token mint endpoint;
+ * the public widget render path trusts only the signed token, not this header.
+ */
+function headerTenantResolver(
+  config: AppConfig,
+): (req: FastifyRequest) => TenantContext {
+  return (req) => {
+    const tenantId = req.headers["x-tenant-id"];
+    if (typeof tenantId !== "string" || tenantId.length === 0) {
+      throw new Error("missing x-tenant-id");
+    }
+    return {
+      tenantId,
+      tier: config.DEFAULT_TENANT_TIER,
+      databaseUrl: config.DATABASE_URL,
+    };
+  };
+}
 
 /**
  * Build the Fastify app without binding a port, so tests can drive it via
  * `app.inject(...)`. Config is resolved lazily here (not at import time) to
  * keep the module import side-effect free.
  */
-export function buildApp(): FastifyInstance {
-  const config = loadConfig();
+export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
+  const config = options.config ?? loadConfig();
   const app = Fastify({ logger: false });
 
   app.get("/health", async () => ({
@@ -31,8 +66,21 @@ export function buildApp(): FastifyInstance {
     uptime: process.uptime(),
   }));
 
-  // TODO: register domain routes (see /docs/ARCHITECTURE.md). Tenant-resolution
-  // middleware and RLS-scoped handlers are added per bounded context.
+  registerEmbedRoutes(app, {
+    resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+    secret: config.JWT_SECRET,
+    ...(config.JWT_ISSUER ? { issuer: config.JWT_ISSUER } : {}),
+    ...(options.publicBaseUrl !== undefined
+      ? { publicBaseUrl: options.publicBaseUrl }
+      : process.env.EMBED_PUBLIC_URL
+        ? { publicBaseUrl: process.env.EMBED_PUBLIC_URL }
+        : {}),
+    ...(options.launchBaseUrl !== undefined
+      ? { launchBaseUrl: options.launchBaseUrl }
+      : process.env.EMBED_LAUNCH_URL
+        ? { launchBaseUrl: process.env.EMBED_LAUNCH_URL }
+        : {}),
+  });
 
   return app;
 }

@@ -6,7 +6,7 @@
 
 ## Responsibility
 
-LTI 1.3 Platform + Tool: OIDC login, AGS, NRPS, Deep Linking, Dynamic Registration.
+LTI 1.3 Platform + Tool: OIDC login, AGS, NRPS, Deep Linking, Dynamic Registration. Also serves signed, short-lived embeddable course/widget iframes for school portals.
 
 ## Owned tables
 
@@ -20,6 +20,8 @@ LTI 1.3 Platform + Tool: OIDC login, AGS, NRPS, Deep Linking, Dynamic Registrati
 | `POST` | `/lti/launch` | Validate id_token launch, mint session. |
 | `POST` | `/lti/register` | Dynamic Registration of a tool. |
 | `GET` | `/lti/nrps/contextmemberships` | Names and Role Provisioning Service. |
+| `POST` | `/embed/tokens` | Mint a signed, short-lived embed token scoped to a tenant + resource + allowed origins. |
+| `GET` | `/embed/widget` | Render the embeddable widget; sets frame-ancestors from the signed origins. |
 
 ## Events published
 

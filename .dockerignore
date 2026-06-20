@@ -1,0 +1,42 @@
+# Keep the Docker build context clean and Linux-correct.
+#
+# Host node_modules must NEVER be copied into the image: on Windows they contain
+# junctions/symlinks into the pnpm store that do not translate to Linux, which
+# breaks `pnpm install` and `prisma generate` inside the build. Each image runs
+# `pnpm install --frozen-lockfile` to materialize Linux-native dependencies.
+**/node_modules
+
+# Build outputs (regenerated inside the image)
+**/dist
+**/.next
+**/.turbo
+**/build
+**/coverage
+**/*.tsbuildinfo
+**/.prisma
+
+# Secrets and local env — do not bake into images
+.env
+.env.*
+!.env.example
+
+# VCS / tooling / editor noise
+.git
+.gitignore
+.github
+.vscode
+.idea
+**/*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Agent / session / graph artifacts
+.claude
+.graphify
+graphify-out
+
+# Container/compose files are not needed inside the image
+docker-compose*.yml
+Dockerfile
+**/Dockerfile
+.dockerignore

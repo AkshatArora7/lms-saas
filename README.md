@@ -502,6 +502,32 @@ AGENTS.md    rules every contributor/AI agent must follow
 > **New collaborator?** Start with [`SETUP.md`](SETUP.md) — a step-by-step guide
 > from a fresh clone to a running, understood project.
 
+### Run the whole platform (Docker — production-like)
+
+One command builds an image for **every microservice** and brings up the full
+mesh — Postgres + Redis + all 26 services behind the API gateway — exactly the
+way it runs on a container host in production:
+
+```bash
+docker compose -f docker-compose.services.yml up --build -d   # or: pnpm start
+```
+
+- **Gateway (authenticated API edge):** http://localhost:4000 — routes
+  `/api/:service/*` to the owning service.
+- Every service is also published on its own `40xx` port for direct inspection
+  (see the port map in [`.env.example`](.env.example)).
+- **Stop** (and wipe the seeded DB volume): `pnpm stop` /
+  `docker compose -f docker-compose.services.yml down -v`. **Tail logs:** `pnpm logs`.
+
+On first boot the Postgres container auto-applies
+[`database/schema.sql`](database/schema.sql) + [`database/policies/rls.sql`](database/policies/rls.sql);
+the gateway is wired to each service via `SERVICE_URL_*`, and all services share
+one `JWT_SECRET` so identity-issued tokens verify at the edge. The placeholder
+secrets in the compose file are **dev-only** — override them before any real
+deployment.
+
+### Develop the apps & services locally (hot reload)
+
 ```bash
 pnpm install
 cp .env.example .env            # fill in DATABASE_URL, JWT_SECRET, etc.
@@ -512,7 +538,7 @@ pnpm db:generate                # Prisma client
 #   psql "$DIRECT_URL" -f database/policies/rls.sql
 
 pnpm db:seed
-pnpm dev                        # turbo runs apps + services
+pnpm dev                        # turbo runs apps + services (hot reload)
 ```
 
 ---

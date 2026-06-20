@@ -1,17 +1,68 @@
-# Local development stack — Postgres (with schema + RLS pre-applied) and Redis.
+# -----------------------------------------------------------------------------
+# Full LMS app mesh in ONE command. This is the canonical compose file: a bare
+# `docker compose up -d` brings up the ENTIRE platform - Postgres + Redis + all
+# 26 microservices + the gateway + the web app (3000) + the admin app (3001),
+# all on one network and wired together by DNS service names.
+#
+# DATABASE (default): the bundled in-compose Postgres (auto-applies
+# database/schema.sql + database/policies/rls.sql on first boot, so tenant RLS
+# is enforced out of the box). Nothing external is required.
+#
+# DATABASE (Supabase, opt-in): set DATABASE_URL in .env (Compose reads .env
+# automatically for ${VAR} interpolation) to a Supabase connection string and
+# it transparently overrides the in-compose Postgres. For IPv4 / serverless
+# runtimes use the Supabase pooler (Supavisor) URL - the direct
+# db.<ref>.supabase.co host is IPv6-only.
+#
+# Images: services + gateway + web + admin default to owner-built GHCR images
+# (ghcr.io/akshatarora7/lms-saas/<name>:latest). To build locally instead,
+# uncomment the `build:` block kept commented above each `image:` line.
+#
+# Bring the whole platform up (pulls images on first run):
 #
 #   docker compose up -d
-#   export DATABASE_URL=postgresql://lms:lms@localhost:5432/lms   # PowerShell: $env:DATABASE_URL=...
-#   pnpm --filter @lms/integration-tests test
 #
-# The schema and RLS policies are mounted as init scripts and run automatically
-# the first time the postgres volume is created. Remove the volume to re-seed:
-#   docker compose down -v
+# Public surfaces:
+#   http://localhost:3000  web app (learner)
+#   http://localhost:3001  admin console
+#   http://localhost:4000  gateway (authenticated /api/:service/*)
+# Every service is also published on its own 40xx port for direct inspection.
 #
-# This mirrors the Postgres used in CI (pgvector/pgvector:pg15, user/pw/db = lms)
-# so the integration tests behave identically locally and in the pipeline.
+# Tear down:  docker compose down   (add -v to also wipe the Postgres volume)
+#
+# Infra-only stack (Postgres + Redis, used by the integration-test workflow)
+# lives in docker-compose.infra.yml: `docker compose -f docker-compose.infra.yml up -d`.
+#
+# NOTE: the JWT_SECRET fallback below is a dev-only placeholder. Set real secrets
+# in .env or your orchestrator's secret store before any real deployment.
+# -----------------------------------------------------------------------------
+name: lms
+
+x-common-env: &common-env
+  NODE_ENV: production
+  TENANT_MODE: ${TENANT_MODE:-hybrid}
+  DEFAULT_TENANT_TIER: ${DEFAULT_TENANT_TIER:-pool}
+  # Defaults to the in-compose Postgres. Override by setting DATABASE_URL in .env
+  # (e.g. a Supabase pooler URL for IPv4) to point the whole mesh at Supabase.
+  DATABASE_URL: ${DATABASE_URL:-postgresql://lms:lms@postgres:5432/lms}
+  DIRECT_URL: ${DIRECT_URL:-${DATABASE_URL}}
+  CONTROL_PLANE_DATABASE_URL: ${CONTROL_PLANE_DATABASE_URL:-${DATABASE_URL}}
+  JWT_SECRET: ${JWT_SECRET:-local-compose-dev-secret-change-me-please}
+  JWT_ISSUER: ${JWT_ISSUER:-https://auth.lms.local}
+  JWT_AUDIENCE: ${JWT_AUDIENCE:-lms-api}
+  GROQ_API_KEY: ${GROQ_API_KEY:-}
+
+x-svc-healthcheck: &svc-healthcheck
+  test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:'+(process.env.PORT||'4000')+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+  interval: 10s
+  timeout: 5s
+  retries: 15
+  start_period: 40s
 
 services:
+  # In-compose Postgres (always up). The default DB for the mesh; set DATABASE_URL
+  # in .env to point at Supabase instead. Auto-applies the canonical schema + RLS
+  # on first boot.
   postgres:
     image: pgvector/pgvector:pg15
     container_name: lms-postgres
@@ -30,10 +81,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
-  # Local stand-in for Upstash Redis (tenant-prefixed cache, unread counters,
-  # LTI nonce/state). The app talks to Upstash via REST in prod; locally this
-  # plain Redis covers the same key/value usage.
+  # In-compose Redis (always up). Services use Upstash REST in production; this is
+  # parity only and unused unless you wire it up.
   redis:
     image: redis:7-alpine
     container_name: lms-redis
@@ -44,6 +95,547 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  gateway:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/gateway/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/gateway:latest
+    environment:
+      <<: *common-env
+      PORT: 4000
+      SERVICE_URL_IDENTITY: http://identity:4001
+      SERVICE_URL_TENANT: http://tenant:4002
+      SERVICE_URL_USER_ORG: http://user-org:4003
+      SERVICE_URL_ENROLLMENT: http://enrollment:4004
+      SERVICE_URL_COURSE: http://course:4005
+      SERVICE_URL_CONTENT: http://content:4006
+      SERVICE_URL_ASSIGNMENT: http://assignment:4007
+      SERVICE_URL_ASSESSMENT: http://assessment:4008
+      SERVICE_URL_GRADING: http://grading:4009
+      SERVICE_URL_DISCUSSION: http://discussion:4010
+      SERVICE_URL_ANNOUNCEMENT: http://announcement:4011
+      SERVICE_URL_NOTIFICATION: http://notification:4012
+      SERVICE_URL_CALENDAR: http://calendar:4013
+      SERVICE_URL_RUBRIC: http://rubric:4014
+      SERVICE_URL_ANALYTICS: http://analytics:4015
+      SERVICE_URL_REPORTING: http://reporting:4016
+      SERVICE_URL_AI: http://ai:4017
+      SERVICE_URL_LTI: http://lti:4018
+      SERVICE_URL_SIS: http://sis:4019
+      SERVICE_URL_VIDEO: http://video:4020
+      SERVICE_URL_SEARCH: http://search:4021
+      SERVICE_URL_BILLING: http://billing:4022
+      SERVICE_URL_AUDIT: http://audit:4023
+      SERVICE_URL_MOBILE_BFF: http://mobile-bff:4024
+      SERVICE_URL_ATTENDANCE: http://attendance:4025
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+  identity:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/identity/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/identity:latest
+    environment:
+      <<: *common-env
+      PORT: 4001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4001:4001"
+    restart: unless-stopped
+
+  tenant:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/tenant/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/tenant:latest
+    environment:
+      <<: *common-env
+      PORT: 4002
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4002:4002"
+    restart: unless-stopped
+
+  user-org:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/user-org/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/user-org:latest
+    environment:
+      <<: *common-env
+      PORT: 4003
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4003:4003"
+    restart: unless-stopped
+
+  enrollment:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/enrollment/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/enrollment:latest
+    environment:
+      <<: *common-env
+      PORT: 4004
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4004:4004"
+    restart: unless-stopped
+
+  course:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/course/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/course:latest
+    environment:
+      <<: *common-env
+      PORT: 4005
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4005:4005"
+    restart: unless-stopped
+
+  content:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/content/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/content:latest
+    environment:
+      <<: *common-env
+      PORT: 4006
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4006:4006"
+    restart: unless-stopped
+
+  assignment:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/assignment/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/assignment:latest
+    environment:
+      <<: *common-env
+      PORT: 4007
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4007:4007"
+    restart: unless-stopped
+
+  assessment:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/assessment/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/assessment:latest
+    environment:
+      <<: *common-env
+      PORT: 4008
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4008:4008"
+    restart: unless-stopped
+
+  grading:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/grading/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/grading:latest
+    environment:
+      <<: *common-env
+      PORT: 4009
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4009:4009"
+    restart: unless-stopped
+
+  discussion:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/discussion/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/discussion:latest
+    environment:
+      <<: *common-env
+      PORT: 4010
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4010:4010"
+    restart: unless-stopped
+
+  announcement:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/announcement/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/announcement:latest
+    environment:
+      <<: *common-env
+      PORT: 4011
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4011:4011"
+    restart: unless-stopped
+
+  notification:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/notification/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/notification:latest
+    environment:
+      <<: *common-env
+      PORT: 4012
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4012:4012"
+    restart: unless-stopped
+
+  calendar:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/calendar/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/calendar:latest
+    environment:
+      <<: *common-env
+      PORT: 4013
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4013:4013"
+    restart: unless-stopped
+
+  rubric:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/rubric/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/rubric:latest
+    environment:
+      <<: *common-env
+      PORT: 4014
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4014:4014"
+    restart: unless-stopped
+
+  analytics:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/analytics/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/analytics:latest
+    environment:
+      <<: *common-env
+      PORT: 4015
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4015:4015"
+    restart: unless-stopped
+
+  reporting:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/reporting/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/reporting:latest
+    environment:
+      <<: *common-env
+      PORT: 4016
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4016:4016"
+    restart: unless-stopped
+
+  ai:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/ai/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/ai:latest
+    environment:
+      <<: *common-env
+      PORT: 4017
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4017:4017"
+    restart: unless-stopped
+
+  lti:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/lti/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/lti:latest
+    environment:
+      <<: *common-env
+      PORT: 4018
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4018:4018"
+    restart: unless-stopped
+
+  sis:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/sis/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/sis:latest
+    environment:
+      <<: *common-env
+      PORT: 4019
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4019:4019"
+    restart: unless-stopped
+
+  video:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/video/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/video:latest
+    environment:
+      <<: *common-env
+      PORT: 4020
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4020:4020"
+    restart: unless-stopped
+
+  search:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/search/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/search:latest
+    environment:
+      <<: *common-env
+      PORT: 4021
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4021:4021"
+    restart: unless-stopped
+
+  billing:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/billing/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/billing:latest
+    environment:
+      <<: *common-env
+      PORT: 4022
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4022:4022"
+    restart: unless-stopped
+
+  audit:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/audit/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/audit:latest
+    environment:
+      <<: *common-env
+      PORT: 4023
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4023:4023"
+    restart: unless-stopped
+
+  mobile-bff:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/mobile-bff/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/mobile-bff:latest
+    environment:
+      <<: *common-env
+      PORT: 4024
+      GATEWAY_URL: http://gateway:4000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      gateway:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4024:4024"
+    restart: unless-stopped
+
+  attendance:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/attendance/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/attendance:latest
+    environment:
+      <<: *common-env
+      PORT: 4025
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4025:4025"
+    restart: unless-stopped
+
+  # Learner web app (Next.js standalone). Server-side *_URL env points at the
+  # services it calls via compose DNS. Healthy = `/` returns < 500.
+  web:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/web:latest
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: "0.0.0.0"
+      IDENTITY_URL: http://identity:4001
+      ENROLLMENT_SERVICE_URL: http://enrollment:4004
+      ASSIGNMENT_SERVICE_URL: http://assignment:4007
+      DISCUSSION_SERVICE_URL: http://discussion:4010
+      ANNOUNCEMENT_SERVICE_URL: http://announcement:4011
+      ATTENDANCE_SERVICE_URL: http://attendance:4025
+    depends_on:
+      identity:
+        condition: service_healthy
+      enrollment:
+        condition: service_healthy
+      assignment:
+        condition: service_healthy
+      discussion:
+        condition: service_healthy
+      announcement:
+        condition: service_healthy
+      attendance:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:'+(process.env.PORT||'3000')+'/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  # Admin console (Next.js standalone). Calls identity + course server-side.
+  # Healthy = `/` returns < 500.
+  admin:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/admin:latest
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOSTNAME: "0.0.0.0"
+      IDENTITY_URL: http://identity:4001
+      COURSE_SERVICE_URL: http://course:4005
+    depends_on:
+      identity:
+        condition: service_healthy
+      course:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:'+(process.env.PORT||'3001')+'/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
 
 volumes:
   lms_pgdata:

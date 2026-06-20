@@ -502,44 +502,52 @@ AGENTS.md    rules every contributor/AI agent must follow
 > **New collaborator?** Start with [`SETUP.md`](SETUP.md) — a step-by-step guide
 > from a fresh clone to a running, understood project.
 
-### Run the whole platform (Docker — production-like)
+### Run the whole platform (Docker — one command)
 
-One command builds an image for **every microservice** and brings up the full
-mesh — all 26 services behind the API gateway — exactly the way it runs on a
-container host in production. The database is **Supabase** (managed Postgres);
-connection details are read from your `.env` automatically:
+One command brings up the **entire** platform — Postgres + Redis + all 26
+services behind the API gateway + the web app (3000) + the admin console (3001) —
+exactly the way it runs on a container host in production:
 
 ```bash
-docker compose -f docker-compose.services.yml up --build -d   # or: pnpm start
+docker compose up -d   # or: pnpm start
 ```
 
+By default this pulls the owner-built GHCR images
+(`ghcr.io/akshatarora7/lms-saas/<name>:latest`) and runs against the bundled
+in-compose Postgres, which **auto-applies** `schema.sql` + `rls.sql` on first
+boot — so tenant RLS is enforced with zero external setup. To build the images
+locally instead of pulling, uncomment the `build:` block kept above each
+`image:` line in `docker-compose.yml`.
+
+- **Web app (learner):** http://localhost:3000
+- **Admin console:** http://localhost:3001
 - **Gateway (authenticated API edge):** http://localhost:4000 — routes
   `/api/:service/*` to the owning service.
 - Every service is also published on its own `40xx` port for direct inspection
   (see the port map in [`.env.example`](.env.example)).
-- **Stop:** `pnpm stop` / `docker compose -f docker-compose.services.yml down`.
-  **Tail logs:** `pnpm logs`.
+- **Stop:** `pnpm stop` / `docker compose down`. **Tail logs:** `pnpm logs`.
 
-`DATABASE_URL` (Supabase) comes from `.env`; the gateway is wired to each service
-via `SERVICE_URL_*`, and all services share one `JWT_SECRET` so identity-issued
-tokens verify at the edge. Apply the canonical schema to Supabase **once** (see
-below). The placeholder `JWT_SECRET` fallback is **dev-only** — set a real one in
-`.env` before any real deployment.
+The gateway is wired to each service via `SERVICE_URL_*`, and all services share
+one `JWT_SECRET` so identity-issued tokens verify at the edge. The placeholder
+`JWT_SECRET` fallback is **dev-only** — set a real one in `.env` before any real
+deployment.
+
+**Use Supabase instead of the bundled Postgres:** set `DATABASE_URL` in `.env`
+to your Supabase connection string and it transparently overrides the in-compose
+default for the whole mesh.
 
 > **Supabase + IPv4:** the direct `db.<ref>.supabase.co` host is IPv6-only. On
 > IPv4-only or serverless networks, use the Supabase **connection pooler**
 > (Supavisor) URL — `...pooler.supabase.com:6543?pgbouncer=true` — as your
 > `DATABASE_URL`.
 
-**Offline fallback (no Supabase):** bring up a throwaway local Postgres + Redis
-(auto-applies `schema.sql` + `rls.sql` on first boot) with the `local-infra`
-profile:
+**Infra only (Postgres + Redis):** the lightweight stack used by the integration
+tests lives in `docker-compose.infra.yml`:
 
 ```bash
-DATABASE_URL=postgresql://lms:lms@postgres:5432/lms \
-  docker compose -f docker-compose.services.yml --profile local-infra up --build -d
+docker compose -f docker-compose.infra.yml up -d
 # teardown + wipe the local DB volume:
-docker compose -f docker-compose.services.yml --profile local-infra down -v
+docker compose -f docker-compose.infra.yml down -v
 ```
 
 ### Develop the apps & services locally (hot reload)

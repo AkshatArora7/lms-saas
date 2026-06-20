@@ -1458,6 +1458,24 @@
             "The notification service POST /events is wired as the first real consumer for at least one event type end-to-end",
             "Unit tests cover the publisher/relay (publish + dedupe + published_at stamping) and an integration test proves an outbox row is published and a redelivery is deduped, using the existing non-superuser RLS harness in tests/integration"
           ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "One-command full-app Docker mesh (docker compose up -d)",
+          "as_a": "platform engineer",
+          "i_want": "docker compose up -d to bring up the entire LMS app (Postgres + Redis + the 26 containerized services + the web app on 3000 + the admin app on 3001) in one command, referencing owner-built ghcr images",
+          "so_that": "I can stand up and demo the whole platform locally with a single command without building images by hand",
+          "ac": [
+            "One command (docker compose up -d) brings up Postgres + Redis + the 26 containerized services + web app + admin app, all wired together.",
+            "Compose references owner-built images ghcr.io/akshatarora7/lms-saas/<service>:latest (lowercase) by default, NOT build: for the 26 services (optional commented build fallback OK).",
+            "apps/web and apps/admin get a Dockerfile (multi-stage pnpm-workspace, Next.js standalone) - these are net-new.",
+            "web/admin server-side *_URL env wired to compose DNS names (not localhost).",
+            "services depend_on postgres healthy; web/admin depend_on the services they call; healthchecks present.",
+            "No secrets committed (env via gitignored .env); tenant isolation (RLS) unaffected; Conventional Commits, no Copilot trailer.",
+            "README + docs/DEPLOYMENT.md document the one-command full-app workflow."
+          ]
         }
       ]
     },

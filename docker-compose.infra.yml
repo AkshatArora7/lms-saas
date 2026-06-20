@@ -1,0 +1,49 @@
+# Local development stack — Postgres (with schema + RLS pre-applied) and Redis.
+#
+#   docker compose up -d
+#   export DATABASE_URL=postgresql://lms:lms@localhost:5432/lms   # PowerShell: $env:DATABASE_URL=...
+#   pnpm --filter @lms/integration-tests test
+#
+# The schema and RLS policies are mounted as init scripts and run automatically
+# the first time the postgres volume is created. Remove the volume to re-seed:
+#   docker compose down -v
+#
+# This mirrors the Postgres used in CI (pgvector/pgvector:pg15, user/pw/db = lms)
+# so the integration tests behave identically locally and in the pipeline.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: lms-postgres
+    environment:
+      POSTGRES_USER: lms
+      POSTGRES_PASSWORD: lms
+      POSTGRES_DB: lms
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/policies/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
+      - lms_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lms"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Local stand-in for Upstash Redis (tenant-prefixed cache, unread counters,
+  # LTI nonce/state). The app talks to Upstash via REST in prod; locally this
+  # plain Redis covers the same key/value usage.
+  redis:
+    image: redis:7-alpine
+    container_name: lms-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  lms_pgdata:

@@ -196,6 +196,11 @@
       "name": "area/web",
       "color": "0e8a16",
       "description": "Learner & admin web frontends (Next.js)"
+    },
+    {
+      "name": "area/admin",
+      "color": "0e8a16",
+      "description": "Admin console frontend (Next.js)"
     }
   ],
   "epics": [
@@ -637,6 +642,19 @@
             "Copy a course to many sub-tenants/offerings",
             "Track provenance/version",
             "Local edits allowed post-copy"
+          ]
+        },
+        {
+          "type": "bug",
+          "priority": "P1",
+          "points": 3,
+          "title": "fix(course): create course fails on Postgres - text id bound into uuid id column (column id is of type uuid but expression is of type text)",
+          "ac": [
+            "Course create succeeds against the dockerized Postgres (no 42804 / Prisma P2010 'column id is of type uuid but expression is of type text').",
+            "A course created with a unique marker appears on the admin /courses screen, which is genuinely wired via apps/admin/app/lib/courses-api.ts -> COURSE_SERVICE_URL/courses.",
+            "The course create path in services/course/src/store.prisma.ts casts the id bind to uuid (e.g. $n::uuid) or generates the uuid server-side; course.id is uuid (database/schema.sql:303).",
+            "Covered by the Postgres-backed integration lane from the tenant-scoped uuid bind bug (recurrence guard).",
+            "No RLS / tenant-isolation weakening. NOTE: the fix is OUT OF SCOPE for this issue - it only tracks the gap."
           ]
         }
       ]
@@ -1476,6 +1494,19 @@
             "No secrets committed (env via gitignored .env); tenant isolation (RLS) unaffected; Conventional Commits, no Copilot trailer.",
             "README + docs/DEPLOYMENT.md document the one-command full-app workflow."
           ]
+        },
+        {
+          "type": "bug",
+          "priority": "P1",
+          "points": 5,
+          "title": "fix(stores): tenant-scoped Prisma raw SQL binds text params to uuid columns (operator does not exist: uuid = text)",
+          "ac": [
+            "All tenant-scoped raw-SQL params bound against uuid columns are explicitly cast (e.g. $1::uuid) across the affected stores: assignment, attendance, enrollment, announcement, discussion - audit any other store with the same $queryRawUnsafe pattern.",
+            "In-container reads return HTTP 200 with seeded data (no Postgres 42883 'operator does not exist: uuid = text').",
+            "A Postgres-backed (non-memory) integration test lane runs these stores against real Postgres in CI so uuid=text regressions are caught (recurrence guard).",
+            "No RLS / tenant-isolation weakening.",
+            "Evidence: schema columns are uuid (database/schema.sql assignment.id/tenant_id/course_id ~494-507, course.id/tenant_id ~302-315); stores pass un-cast string params via $queryRawUnsafe (services/assignment/src/store.prisma.ts 'WHERE id = $1' line ~116, 'WHERE course_id = $1' line ~126; same pattern in attendance/enrollment/announcement/discussion). Reproduced in-container (assignment:4007 / attendance:4025 / enrollment:4004 returned HTTP 500). CI is green because unit tests and dev run with *_STORE=memory, never exercising the Prisma/Postgres path. Correct pattern already exists in services/user-org/src/guardian.prisma.ts ($n::uuid). FIX OUT OF SCOPE - tracked only."
+          ]
         }
       ]
     },
@@ -1637,6 +1668,23 @@
             "Tenant context resolves a display name and theme colour at the edge",
             "Login and home reflect the tenant's brand name",
             "Defaults apply cleanly when a tenant has no custom branding"
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 13,
+          "title": "Wire learner web + admin screens to live microservices (remove hardcoded demo data)",
+          "as_a": "student",
+          "i_want": "the learner web and admin screens to render live data from their owning microservices instead of hardcoded demo constants",
+          "so_that": "what I see reflects real tenant data, not a fixed demo gated on the demo tenant id",
+          "ac": [
+            "Each listed screen fetches from its owning service via a tenant-scoped, JWT-forwarded BFF route and renders live data (a seeded uniquely-marked record appears).",
+            "Each screen falls back gracefully when the service is empty or offline.",
+            "The hardcoded demo constants gated on tenantId === '11111111-1111-1111-1111-111111111111' are removed.",
+            "Screens to wire (feature - route - demo literal file:line - owning service): Learner dashboard / apps/web/app/lib/dashboard.ts:50 (DEMO_COURSES) & :68 (DEMO_COURSE_DETAILS) - course 4005 / analytics 4015; Announcements /announcements apps/web/app/lib/announcements.ts:35 (DEMO_ANNOUNCEMENTS) - announcement 4011; Assignments /assignments apps/web/app/lib/assignments.ts:49 (DEMO_ASSIGNMENTS) - assignment 4007; Grades /grades apps/web/app/lib/grades.ts:33 (DEMO_GRADES) - grading 4009; Schedule /schedule apps/web/app/lib/schedule.ts:50 (DEMO_ENTRIES) - calendar 4013; Course detail+item /courses/[id] & /courses/[id]/items/[itemId] apps/web/app/lib/dashboard.ts:68 (DEMO_COURSE_DETAILS) - course 4005 / content 4006; Course discussions /courses/[id]/discussions apps/web/app/lib/discussions.ts:32 (DEMO_THREADS_BY_COURSE) - discussion 4010; Profile /profile apps/web/app/lib/profile.ts:74-78 - identity 4001 / user-org 4003; Teacher nav /teach apps/web/app/lib/teaching.ts:36 (DEMO_TAUGHT) - enrollment 4004 / analytics 4015; Teacher gradebook /teach/[c]/gradebook apps/web/app/lib/gradebook.ts:43 (DEMO_GRADEBOOKS) - grading 4009; Admin users /users & /users/[id] apps/admin/app/lib/directory.ts:28 (DEMO_USERS) - user-org 4003; Admin org-units /org-units apps/admin/app/lib/org-units.ts:27 (DEMO_TREE) - user-org 4003; Admin reports /reports apps/admin/app/lib/reports.ts:28 (DEMO_SCHOOLS) - reporting 4016; Admin branding /branding apps/admin/app/lib/branding.ts:15 (DEFAULT_BRAND/demoSchoolBrands) - tenant 4002; Admin settings /settings apps/admin/app/lib/tenant.ts:29-45 (POOL/SILO literal copy) - tenant 4002.",
+            "Wiring /teach (teaching.ts:36 DEMO_TAUGHT) also unblocks the genuinely-wired teacher inner screens whose access is gated by the hardcoded course nav.",
+            "Depends on the two uuid-bind bugs being fixed first (tenant-scoped stores + course create) or newly-wired learner/teacher reads will hit uuid=text. Related: existing demo enrollment seed story #266 (reference, do not duplicate). This is a large epic - per-feature sub-stories can be split during grooming. FIX OUT OF SCOPE here - tracked only."
           ]
         }
       ]

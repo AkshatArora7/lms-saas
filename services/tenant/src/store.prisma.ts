@@ -3,6 +3,7 @@ import { EVENT_TYPES } from "@lms/events";
 
 import {
   subdomainFor,
+  type ChildTenantFilter,
   type ProvisionTenantInput,
   type ProvisionTenantResult,
   type TenantKind,
@@ -17,6 +18,7 @@ interface TenantRow {
   slug: string;
   name: string;
   kind: TenantKind;
+  parent_id: string | null;
   tier: TenantTier;
   status: TenantStatus;
   region: string;
@@ -35,6 +37,7 @@ function toRecord(row: TenantRow): TenantRecord {
     slug: row.slug,
     name: row.name,
     kind: row.kind,
+    parentId: row.parent_id ?? null,
     tier: row.tier,
     status: row.status,
     region: row.region,
@@ -45,8 +48,8 @@ function toRecord(row: TenantRow): TenantRecord {
   };
 }
 
-const SELECT_COLUMNS = `id, slug, name, kind, tier, status, region, plan_id,
-  created_at, updated_at`;
+const SELECT_COLUMNS = `id, slug, name, kind, parent_id, tier, status, region,
+  plan_id, created_at, updated_at`;
 
 /**
  * Control-plane tenant store. The `tenant` table is the tenant registry itself
@@ -62,7 +65,6 @@ export function createPrismaStore(): TenantStore {
     async provisionTenant(
       input: ProvisionTenantInput,
     ): Promise<ProvisionTenantResult> {
-      const region = input.region ?? "us-east";
       return db.$transaction(async (tx) => {
         // Slug uniqueness — citext makes the comparison case-insensitive.
         const existing = await tx.$queryRawUnsafe<{ id: string }[]>(
@@ -73,7 +75,20 @@ export function createPrismaStore(): TenantStore {
           return { ok: false, reason: "slug_taken" } as ProvisionTenantResult;
         }
 
-        let planId: string | null = null;
+        // Resolve the parent (district) when registering a sub-tenant.
+        let parent: TenantRow | undefined;
+        if (input.parentTenantId != null) {
+          const parentRows = await tx.$queryRawUnsafe<TenantRow[]>(
+            `SELECT ${SELECT_COLUMNS} FROM tenant WHERE id = $1::uuid LIMIT 1`,
+            input.parentTenantId,
+          );
+          parent = parentRows[0];
+          if (!parent) {
+            return { ok: false, reason: "unknown_parent" } as ProvisionTenantResult;
+          }
+        }
+
+        let planId: string | null = parent?.plan_id ?? null; // inherit by default
         if (input.plan !== undefined) {
           const planRows = await tx.$queryRawUnsafe<{ id: string }[]>(
             `SELECT id FROM plan WHERE code = $1 LIMIT 1`,
@@ -89,21 +104,34 @@ export function createPrismaStore(): TenantStore {
           planId = resolved;
         }
 
+        const region = input.region ?? parent?.region ?? "us-east";
+        const kind = parent ? "sub" : "standalone";
+
         // Pool provisioning is synchronous (shared infra, nothing to stand
         // up), so the row lands directly as 'active' — the completed
         // provisioning->active transition. The 'provisioning' state exists in
         // the schema for silo tenants that must wait on infra to be built.
         const inserted = await tx.$queryRawUnsafe<TenantRow[]>(
-          `INSERT INTO tenant (slug, name, kind, tier, status, region, plan_id)
-           VALUES ($1, $2, 'standalone', 'pool', 'active', $3, $4)
+          `INSERT INTO tenant (slug, name, kind, parent_id, tier, status, region, plan_id)
+           VALUES ($1, $2, $3, $4::uuid, 'pool', 'active', $5, $6)
            RETURNING ${SELECT_COLUMNS}`,
           input.slug,
           input.name,
+          kind,
+          parent?.id ?? null,
           region,
           planId,
         );
         const row = inserted[0]!;
         const record = toRecord(row);
+
+        // Promote a standalone parent to a district on its first sub-tenant.
+        if (parent && parent.kind === "standalone") {
+          await tx.$executeRawUnsafe(
+            `UPDATE tenant SET kind = 'parent', updated_at = now() WHERE id = $1::uuid`,
+            parent.id,
+          );
+        }
 
         // event_outbox is RLS-scoped under FORCE ROW LEVEL SECURITY, so this
         // control-plane provisioning tx must establish the new tenant's RLS
@@ -122,6 +150,8 @@ export function createPrismaStore(): TenantStore {
         const payload = {
           slug: record.slug,
           name: record.name,
+          kind: record.kind,
+          parentId: record.parentId,
           region: record.region,
           tier: record.tier,
           subdomain: record.subdomain,
@@ -153,6 +183,31 @@ export function createPrismaStore(): TenantStore {
         slug,
       );
       return rows[0] ? toRecord(rows[0]) : null;
+    },
+
+    async listChildren(parentId: string, filter?: ChildTenantFilter) {
+      const q = filter?.q?.trim();
+      const rows = await db.$queryRawUnsafe<TenantRow[]>(
+        `SELECT ${SELECT_COLUMNS} FROM tenant
+          WHERE parent_id = $1::uuid
+            AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%'
+                                  OR slug ILIKE '%' || $2 || '%')
+          ORDER BY name`,
+        parentId,
+        q && q.length > 0 ? q : null,
+      );
+      return rows.map(toRecord);
+    },
+
+    async listSubtree(rootId: string) {
+      // tenant_subtree() = root + all descendants; the FK keeps it acyclic.
+      const rows = await db.$queryRawUnsafe<TenantRow[]>(
+        `SELECT ${SELECT_COLUMNS} FROM tenant
+          WHERE id IN (SELECT id FROM tenant_subtree($1::uuid))
+          ORDER BY created_at`,
+        rootId,
+      );
+      return rows.map(toRecord);
     },
 
     async listTenants() {

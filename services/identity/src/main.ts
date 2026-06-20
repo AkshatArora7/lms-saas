@@ -20,6 +20,8 @@ import Fastify, {
   type FastifyRequest,
 } from "fastify";
 
+import { createPrismaAuthzStore } from "./authz.prisma.js";
+import { registerAuthzRoutes, type AuthzRouteDeps } from "./authz.routes.js";
 import { createPrismaRbacStore } from "./rbac.prisma.js";
 import { registerRbacRoutes, type RbacRouteDeps } from "./rbac.routes.js";
 import { registerAuthRoutes, type IdentityRouteDeps } from "./routes.js";
@@ -39,6 +41,8 @@ export interface BuildAppOptions {
   oidcExchanger?: IdentityRouteDeps["oidcExchanger"];
   /** RBAC management store (roles & permission sets); tests inject memory. */
   rbacStore?: RbacRouteDeps["store"];
+  /** Org-scoped authorization store (#18); tests inject memory. */
+  authzStore?: AuthzRouteDeps["store"];
 }
 
 /**
@@ -92,6 +96,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   // RBAC management (roles & custom permission sets) shares the tenant resolver.
   registerRbacRoutes(app, {
     store: options.rbacStore ?? createPrismaRbacStore(),
+    resolveTenant,
+  });
+
+  // Org-scoped authorization (permission checks + effective permissions).
+  registerAuthzRoutes(app, {
+    store: options.authzStore ?? createPrismaAuthzStore(),
     resolveTenant,
   });
 

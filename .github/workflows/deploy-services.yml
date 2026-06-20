@@ -35,18 +35,32 @@ jobs:
         id: filter
         with:
           filters: |
-            gateway: services/gateway/**
-            identity: services/identity/**
-            tenant: services/tenant/**
-            course: services/course/**
-            content: services/content/**
-            enrollment: services/enrollment/**
-            assessment: services/assessment/**
-            grading: services/grading/**
-            discussion: services/discussion/**
-            notification: services/notification/**
+            ai: services/ai/**
             analytics: services/analytics/**
-            integration: services/integration/**
+            announcement: services/announcement/**
+            assessment: services/assessment/**
+            assignment: services/assignment/**
+            attendance: services/attendance/**
+            audit: services/audit/**
+            billing: services/billing/**
+            calendar: services/calendar/**
+            content: services/content/**
+            course: services/course/**
+            discussion: services/discussion/**
+            enrollment: services/enrollment/**
+            gateway: services/gateway/**
+            grading: services/grading/**
+            identity: services/identity/**
+            lti: services/lti/**
+            mobile-bff: services/mobile-bff/**
+            notification: services/notification/**
+            reporting: services/reporting/**
+            rubric: services/rubric/**
+            search: services/search/**
+            sis: services/sis/**
+            tenant: services/tenant/**
+            user-org: services/user-org/**
+            video: services/video/**
       # On push: build only changed services (paths-filter output).
       # On manual dispatch: build the requested service, or all of them.
       - name: Resolve service matrix
@@ -56,7 +70,7 @@ jobs:
           INPUT_SERVICE: ${{ github.event.inputs.service }}
           PUSH_SERVICES: ${{ steps.filter.outputs.changes }}
         run: |
-          ALL='["gateway","identity","tenant","course","content","enrollment","assessment","grading","discussion","notification","analytics","integration"]'
+          ALL='["ai","analytics","announcement","assessment","assignment","attendance","audit","billing","calendar","content","course","discussion","enrollment","gateway","grading","identity","lti","mobile-bff","notification","reporting","rubric","search","sis","tenant","user-org","video"]'
           if [ "$EVENT" = "push" ]; then
             echo "services=$PUSH_SERVICES" >> "$GITHUB_OUTPUT"
           elif [ "$INPUT_SERVICE" = "all" ]; then

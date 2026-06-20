@@ -505,8 +505,9 @@ AGENTS.md    rules every contributor/AI agent must follow
 ### Run the whole platform (Docker — production-like)
 
 One command builds an image for **every microservice** and brings up the full
-mesh — Postgres + Redis + all 26 services behind the API gateway — exactly the
-way it runs on a container host in production:
+mesh — all 26 services behind the API gateway — exactly the way it runs on a
+container host in production. The database is **Supabase** (managed Postgres);
+connection details are read from your `.env` automatically:
 
 ```bash
 docker compose -f docker-compose.services.yml up --build -d   # or: pnpm start
@@ -516,24 +517,39 @@ docker compose -f docker-compose.services.yml up --build -d   # or: pnpm start
   `/api/:service/*` to the owning service.
 - Every service is also published on its own `40xx` port for direct inspection
   (see the port map in [`.env.example`](.env.example)).
-- **Stop** (and wipe the seeded DB volume): `pnpm stop` /
-  `docker compose -f docker-compose.services.yml down -v`. **Tail logs:** `pnpm logs`.
+- **Stop:** `pnpm stop` / `docker compose -f docker-compose.services.yml down`.
+  **Tail logs:** `pnpm logs`.
 
-On first boot the Postgres container auto-applies
-[`database/schema.sql`](database/schema.sql) + [`database/policies/rls.sql`](database/policies/rls.sql);
-the gateway is wired to each service via `SERVICE_URL_*`, and all services share
-one `JWT_SECRET` so identity-issued tokens verify at the edge. The placeholder
-secrets in the compose file are **dev-only** — override them before any real
-deployment.
+`DATABASE_URL` (Supabase) comes from `.env`; the gateway is wired to each service
+via `SERVICE_URL_*`, and all services share one `JWT_SECRET` so identity-issued
+tokens verify at the edge. Apply the canonical schema to Supabase **once** (see
+below). The placeholder `JWT_SECRET` fallback is **dev-only** — set a real one in
+`.env` before any real deployment.
+
+> **Supabase + IPv4:** the direct `db.<ref>.supabase.co` host is IPv6-only. On
+> IPv4-only or serverless networks, use the Supabase **connection pooler**
+> (Supavisor) URL — `...pooler.supabase.com:6543?pgbouncer=true` — as your
+> `DATABASE_URL`.
+
+**Offline fallback (no Supabase):** bring up a throwaway local Postgres + Redis
+(auto-applies `schema.sql` + `rls.sql` on first boot) with the `local-infra`
+profile:
+
+```bash
+DATABASE_URL=postgresql://lms:lms@postgres:5432/lms \
+  docker compose -f docker-compose.services.yml --profile local-infra up --build -d
+# teardown + wipe the local DB volume:
+docker compose -f docker-compose.services.yml --profile local-infra down -v
+```
 
 ### Develop the apps & services locally (hot reload)
 
 ```bash
 pnpm install
-cp .env.example .env            # fill in DATABASE_URL, JWT_SECRET, etc.
+cp .env.example .env            # fill in DATABASE_URL (Supabase), JWT_SECRET, etc.
 pnpm db:generate                # Prisma client
 
-# Apply the canonical schema + RLS (needs Postgres + psql, or run via CI):
+# Apply the canonical schema + RLS to Supabase (once):
 #   psql "$DIRECT_URL" -f database/schema.sql
 #   psql "$DIRECT_URL" -f database/policies/rls.sql
 

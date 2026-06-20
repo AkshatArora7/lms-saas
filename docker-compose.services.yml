@@ -1,29 +1,44 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# Full local production-like mesh: Postgres + Redis + every microservice as its
-# own container, all on one network, with the gateway wired to each upstream.
+# -----------------------------------------------------------------------------
+# Full local production-like mesh: every microservice as its own container, all
+# on one network, with the gateway wired to each upstream.
 #
-# Single command to bring the whole platform up (build images on first run):
+# DATABASE: Supabase (managed Postgres). Connection details come from .env -
+# Compose reads .env automatically for ${VAR} interpolation. Apply the schema to
+# Supabase once via database/schema.sql + database/policies/rls.sql (the bundled
+# Postgres below is only an opt-in offline fallback under the "local-infra"
+# profile). For IPv4 / serverless runtimes, use the Supabase connection pooler
+# (Supavisor) URL - the direct db.<ref>.supabase.co host is IPv6-only.
+#
+# Bring the whole platform up against Supabase (build images on first run):
 #
 #   docker compose -f docker-compose.services.yml up --build -d
 #
-# Public edge:   http://localhost:4000  (gateway — authenticated /api/:service/*)
-# Every service is also published on its own 40xx port for direct inspection.
-# Tear down (and wipe the seeded DB volume):
-#   docker compose -f docker-compose.services.yml down -v
+# Run fully offline with a throwaway local Postgres instead of Supabase:
 #
-# NOTE: JWT_SECRET below is a dev-only placeholder. Override every secret via a
-# .env file or your orchestrator's secret store before any real deployment.
-# ─────────────────────────────────────────────────────────────────────────────
+#   DATABASE_URL=postgresql://lms:lms@postgres:5432/lms \
+#     docker compose -f docker-compose.services.yml --profile local-infra up --build -d
+#
+# Public edge:   http://localhost:4000  (gateway - authenticated /api/:service/*)
+# Every service is also published on its own 40xx port for direct inspection.
+# Tear down:  docker compose -f docker-compose.services.yml down
+#   (add -v --profile local-infra to also wipe the local Postgres volume)
+#
+# NOTE: the JWT_SECRET fallback below is a dev-only placeholder. Set real secrets
+# in .env or your orchestrator's secret store before any real deployment.
+# -----------------------------------------------------------------------------
 name: lms
 
 x-common-env: &common-env
   NODE_ENV: production
-  TENANT_MODE: hybrid
-  DEFAULT_TENANT_TIER: pool
-  DATABASE_URL: postgresql://lms:lms@postgres:5432/lms
-  JWT_SECRET: local-compose-dev-secret-change-me-please
-  JWT_ISSUER: https://auth.lms.local
-  JWT_AUDIENCE: lms-api
+  TENANT_MODE: ${TENANT_MODE:-hybrid}
+  DEFAULT_TENANT_TIER: ${DEFAULT_TENANT_TIER:-pool}
+  # Supabase (managed Postgres). Required - set in .env. Use the pooler URL for IPv4.
+  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env (Supabase connection string)}
+  DIRECT_URL: ${DIRECT_URL:-${DATABASE_URL}}
+  CONTROL_PLANE_DATABASE_URL: ${CONTROL_PLANE_DATABASE_URL:-${DATABASE_URL}}
+  JWT_SECRET: ${JWT_SECRET:-local-compose-dev-secret-change-me-please}
+  JWT_ISSUER: ${JWT_ISSUER:-https://auth.lms.local}
+  JWT_AUDIENCE: ${JWT_AUDIENCE:-lms-api}
   GROQ_API_KEY: ${GROQ_API_KEY:-}
 
 x-svc-healthcheck: &svc-healthcheck
@@ -33,14 +48,13 @@ x-svc-healthcheck: &svc-healthcheck
   retries: 15
   start_period: 40s
 
-x-depends-db: &depends-db
-  postgres:
-    condition: service_healthy
-
 services:
+  # Opt-in offline Postgres (profile: local-infra). NOT used when pointing at
+  # Supabase. Auto-applies the canonical schema + RLS on first boot.
   postgres:
     image: pgvector/pgvector:pg15
     container_name: lms-postgres
+    profiles: ["local-infra"]
     environment:
       POSTGRES_USER: lms
       POSTGRES_PASSWORD: lms
@@ -58,9 +72,12 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Opt-in offline Redis (profile: local-infra). Services use Upstash REST in
+  # production; this is parity only and unused unless you wire it up.
   redis:
     image: redis:7-alpine
     container_name: lms-redis
+    profiles: ["local-infra"]
     ports:
       - "6379:6379"
     healthcheck:
@@ -104,7 +121,9 @@ services:
       SERVICE_URL_MOBILE_BFF: http://mobile-bff:4024
       SERVICE_URL_ATTENDANCE: http://attendance:4025
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4000:4000"
@@ -119,7 +138,9 @@ services:
       <<: *common-env
       PORT: 4001
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4001:4001"
@@ -134,7 +155,9 @@ services:
       <<: *common-env
       PORT: 4002
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4002:4002"
@@ -149,7 +172,9 @@ services:
       <<: *common-env
       PORT: 4003
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4003:4003"
@@ -164,7 +189,9 @@ services:
       <<: *common-env
       PORT: 4004
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4004:4004"
@@ -179,7 +206,9 @@ services:
       <<: *common-env
       PORT: 4005
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4005:4005"
@@ -194,7 +223,9 @@ services:
       <<: *common-env
       PORT: 4006
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4006:4006"
@@ -209,7 +240,9 @@ services:
       <<: *common-env
       PORT: 4007
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4007:4007"
@@ -224,7 +257,9 @@ services:
       <<: *common-env
       PORT: 4008
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4008:4008"
@@ -239,7 +274,9 @@ services:
       <<: *common-env
       PORT: 4009
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4009:4009"
@@ -254,7 +291,9 @@ services:
       <<: *common-env
       PORT: 4010
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4010:4010"
@@ -269,7 +308,9 @@ services:
       <<: *common-env
       PORT: 4011
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4011:4011"
@@ -284,7 +325,9 @@ services:
       <<: *common-env
       PORT: 4012
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4012:4012"
@@ -299,7 +342,9 @@ services:
       <<: *common-env
       PORT: 4013
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4013:4013"
@@ -314,7 +359,9 @@ services:
       <<: *common-env
       PORT: 4014
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4014:4014"
@@ -329,7 +376,9 @@ services:
       <<: *common-env
       PORT: 4015
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4015:4015"
@@ -344,7 +393,9 @@ services:
       <<: *common-env
       PORT: 4016
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4016:4016"
@@ -359,7 +410,9 @@ services:
       <<: *common-env
       PORT: 4017
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4017:4017"
@@ -374,7 +427,9 @@ services:
       <<: *common-env
       PORT: 4018
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4018:4018"
@@ -389,7 +444,9 @@ services:
       <<: *common-env
       PORT: 4019
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4019:4019"
@@ -404,7 +461,9 @@ services:
       <<: *common-env
       PORT: 4020
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4020:4020"
@@ -419,7 +478,9 @@ services:
       <<: *common-env
       PORT: 4021
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4021:4021"
@@ -434,7 +495,9 @@ services:
       <<: *common-env
       PORT: 4022
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4022:4022"
@@ -449,7 +512,9 @@ services:
       <<: *common-env
       PORT: 4023
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4023:4023"
@@ -467,6 +532,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
       gateway:
         condition: service_healthy
     healthcheck: *svc-healthcheck
@@ -483,7 +549,9 @@ services:
       <<: *common-env
       PORT: 4025
     depends_on:
-      <<: *depends-db
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck: *svc-healthcheck
     ports:
       - "4025:4025"

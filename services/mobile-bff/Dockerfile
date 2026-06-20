@@ -12,7 +12,12 @@ RUN pnpm --filter "@lms/service-mobile-bff..." build
 
 FROM base AS runtime
 ENV NODE_ENV=production PORT=4024
-COPY --from=build /app/services/mobile-bff/dist ./dist
+# Ship the built workspace so @lms/* imports resolve at runtime. The service is
+# compiled with tsc (not bundled), so the compiled workspace packages it imports
+# must be present and the process must run from the service's workspace dir.
 COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/services/mobile-bff ./services/mobile-bff
+WORKDIR /app/services/mobile-bff
 EXPOSE 4024
 CMD ["node", "dist/main.js"]

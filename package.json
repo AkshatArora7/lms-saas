@@ -9,6 +9,9 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
+    "start": "docker compose -f docker-compose.services.yml up --build -d",
+    "stop": "docker compose -f docker-compose.services.yml down",
+    "logs": "docker compose -f docker-compose.services.yml logs -f",
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",

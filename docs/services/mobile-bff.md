@@ -16,8 +16,11 @@ _None_ (stateless or operates on derived/index data only).
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/home` | Aggregated dashboard (courses + deadlines + notifications). |
-| `GET` | `/courses/{id}/overview` | Course bundle tuned for mobile. |
+| `GET` | `/mobile/home` | Home screen: enrolled courses + due-soon + unread badge in one round-trip. |
+| `GET` | `/mobile/courses/{courseId}` | Course detail screen: course + its assignments. |
+| `GET` | `/mobile/notifications` | Notifications screen with computed unread count. |
+| `POST` | `/mobile/assignments/{assignmentId}/submissions` | Submit work from mobile (forwards to the assignment service). |
+| `POST` | `/mobile/devices` | Register a device push token for notifications. |
 
 ## Events published
 
@@ -29,15 +32,17 @@ _None_
 
 ## Dependencies
 
+- gateway (auth + proxy)
 - course
 - calendar
 - notification
-- grading
+- assignment
+- enrollment
 - identity
 
 ## Notes
 
-Stateless aggregation; holds tokens server-side and keeps the mobile client thin.
+Stateless aggregation behind the same bearer-token model; verifies the token, fans out per screen via the gateway, and registers devices (push delivery is owned by the notification service).
 
 ## Cross-cutting
 

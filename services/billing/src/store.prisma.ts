@@ -3,15 +3,24 @@ import { controlPlane, withTenant } from "@lms/db";
 import {
   canTransition,
   type BillingModel,
+  type ConsolidatedInvoice,
+  type InvoiceRecord,
+  type InvoiceStatus,
+  type InvoiceStore,
+  type MeterStore,
+  type NewInvoiceInput,
   type NewSubscriptionInput,
   type PlanRecord,
   type PlanStore,
+  type RecordUsageInput,
   type SetSeatsResult,
   type SubscribeResult,
   type SubscriptionRecord,
   type SubscriptionStatus,
   type SubscriptionStore,
   type TransitionResult,
+  type UsageMeterRecord,
+  type UsageWindow,
 } from "./store.js";
 
 interface PlanRow {
@@ -185,6 +194,180 @@ export function createPrismaSubscriptionStore(
         );
         return { ok: true, subscription: toSubscription(updated[0]!) };
       });
+    },
+  };
+}
+
+// ===========================================================================
+// Usage metering & invoicing (#72)
+// ===========================================================================
+
+interface UsageRow {
+  id: string;
+  tenant_id: string;
+  metric: string;
+  quantity: number | string;
+  window_start: Date | string;
+  window_end: Date | string;
+}
+
+interface InvoiceRow {
+  id: string;
+  tenant_id: string;
+  subscription_id: string | null;
+  number: string;
+  status: InvoiceStatus;
+  amount_cents: number;
+  currency: string;
+  period_start: Date | string | null;
+  period_end: Date | string | null;
+  issued_at: Date | string | null;
+  paid_at: Date | string | null;
+}
+
+function toUsage(row: UsageRow): UsageMeterRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    metric: row.metric,
+    quantity: Number(row.quantity),
+    windowStart: isoOrNull(row.window_start) ?? "",
+    windowEnd: isoOrNull(row.window_end) ?? "",
+  };
+}
+
+function toInvoice(row: InvoiceRow): InvoiceRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    subscriptionId: row.subscription_id,
+    number: row.number,
+    status: row.status,
+    amountCents: row.amount_cents,
+    currency: row.currency,
+    periodStart: isoOrNull(row.period_start),
+    periodEnd: isoOrNull(row.period_end),
+    issuedAt: isoOrNull(row.issued_at),
+    paidAt: isoOrNull(row.paid_at),
+  };
+}
+
+const INVOICE_SELECT = `
+  SELECT id, tenant_id, subscription_id, number, status, amount_cents, currency,
+         period_start, period_end, issued_at, paid_at
+    FROM invoice`;
+
+/** Tenant-scoped usage meter store (RLS via withTenant; uuid params cast). */
+export function createPrismaMeterStore(): MeterStore {
+  return {
+    async recordUsage(ctx, input: RecordUsageInput): Promise<UsageMeterRecord> {
+      return withTenant(ctx, async (db: Db) => {
+        const rows = await db.$queryRawUnsafe<UsageRow[]>(
+          `INSERT INTO usage_meter
+             (tenant_id, metric, quantity, window_start, window_end)
+           VALUES ($1::uuid, $2, $3, $4::timestamptz, $5::timestamptz)
+           RETURNING id, tenant_id, metric, quantity, window_start, window_end`,
+          ctx.tenantId,
+          input.metric,
+          input.quantity,
+          input.windowStart,
+          input.windowEnd,
+        );
+        return toUsage(rows[0]!);
+      });
+    },
+
+    async rollup(ctx, metric, window?: UsageWindow): Promise<number> {
+      return withTenant(ctx, async (db: Db) => {
+        const rows = await db.$queryRawUnsafe<{ total: number | string }[]>(
+          `SELECT COALESCE(SUM(quantity), 0) AS total
+             FROM usage_meter
+            WHERE metric = $1
+              AND ($2::timestamptz IS NULL OR window_start >= $2::timestamptz)
+              AND ($3::timestamptz IS NULL OR window_start < $3::timestamptz)`,
+          metric,
+          window?.from ?? null,
+          window?.to ?? null,
+        );
+        return Number(rows[0]?.total ?? 0);
+      });
+    },
+
+    async listUsage(ctx, metric?): Promise<UsageMeterRecord[]> {
+      return withTenant(ctx, async (db: Db) => {
+        const rows = await db.$queryRawUnsafe<UsageRow[]>(
+          `SELECT id, tenant_id, metric, quantity, window_start, window_end
+             FROM usage_meter
+            WHERE ($1::text IS NULL OR metric = $1)
+            ORDER BY window_start DESC`,
+          metric ?? null,
+        );
+        return rows.map(toUsage);
+      });
+    },
+  };
+}
+
+/**
+ * Tenant-scoped invoice store. Per-tenant reads/writes go through RLS; the
+ * district roll-up reads control-plane but is bounded to `tenant_subtree`.
+ */
+export function createPrismaInvoiceStore(): InvoiceStore {
+  return {
+    async createInvoice(ctx, input: NewInvoiceInput): Promise<InvoiceRecord> {
+      return withTenant(ctx, async (db: Db) => {
+        const counted = await db.$queryRawUnsafe<{ n: number | string }[]>(
+          `SELECT COUNT(*) AS n FROM invoice`,
+        );
+        const seq = Number(counted[0]?.n ?? 0) + 1;
+        const number = `INV-${String(seq).padStart(5, "0")}`;
+        const status = input.status ?? "open";
+        const rows = await db.$queryRawUnsafe<InvoiceRow[]>(
+          `INSERT INTO invoice
+             (tenant_id, subscription_id, number, status, amount_cents, currency,
+              period_start, period_end, issued_at)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6,
+                   $7::timestamptz, $8::timestamptz,
+                   CASE WHEN $4 = 'draft' THEN NULL ELSE now() END)
+           RETURNING id, tenant_id, subscription_id, number, status, amount_cents,
+                     currency, period_start, period_end, issued_at, paid_at`,
+          ctx.tenantId,
+          input.subscriptionId ?? null,
+          number,
+          status,
+          input.amountCents,
+          input.currency ?? "USD",
+          input.periodStart ?? null,
+          input.periodEnd ?? null,
+        );
+        return toInvoice(rows[0]!);
+      });
+    },
+
+    async listInvoices(ctx): Promise<InvoiceRecord[]> {
+      return withTenant(ctx, async (db: Db) => {
+        const rows = await db.$queryRawUnsafe<InvoiceRow[]>(
+          `${INVOICE_SELECT} ORDER BY number`,
+        );
+        return rows.map(toInvoice);
+      });
+    },
+
+    async consolidate(districtTenantId): Promise<ConsolidatedInvoice> {
+      const cp = controlPlane() as unknown as Db;
+      const rows = await cp.$queryRawUnsafe<InvoiceRow[]>(
+        `${INVOICE_SELECT}
+          WHERE tenant_id IN (SELECT id FROM tenant_subtree($1::uuid))
+          ORDER BY tenant_id, number`,
+        districtTenantId,
+      );
+      const invoices = rows.map(toInvoice);
+      return {
+        districtTenantId,
+        currency: invoices[0]?.currency ?? "USD",
+        totalCents: invoices.reduce((sum, r) => sum + r.amountCents, 0),
+        invoices,
+      };
     },
   };
 }

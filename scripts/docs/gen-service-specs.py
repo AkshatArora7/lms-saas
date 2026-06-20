@@ -376,7 +376,7 @@ SERVICES = [
     },
     {
         "name": "billing", "port": 4022, "data": "Postgres",
-        "resp": "Plans and per-tenant subscriptions (trialing->active->past_due->canceled), seats and seat enforcement; invoices/usage metering and the enrollment+billing saga participant are roadmap.",
+        "resp": "Plans and per-tenant subscriptions (trialing->active->past_due->canceled), seats and seat enforcement, usage metering and invoice generation (incl. district-consolidated invoices across sub-tenants).",
         "tables": ["plan", "subscription", "invoice", "usage_meter"],
         "endpoints": [
             ("GET", "/plans", "List the plan catalog (code, price, billing model, add-ons)."),
@@ -385,11 +385,16 @@ SERVICES = [
             ("POST", "/tenants/{id}/subscription/transition", "Lifecycle transition (validated state machine)."),
             ("PUT", "/tenants/{id}/subscription/seats", "Set the seat count."),
             ("GET", "/tenants/{id}/subscription/seat-check", "Seat enforcement against an active-user count."),
+            ("POST", "/tenants/{id}/usage", "Record a usage meter rollup (metric + quantity over a window)."),
+            ("GET", "/tenants/{id}/usage/rollup", "Sum a metric's usage, optionally within [from, to)."),
+            ("POST", "/tenants/{id}/invoices", "Generate an invoice from the subscription plan + metered usage."),
+            ("GET", "/tenants/{id}/invoices", "List the tenant's invoices."),
+            ("GET", "/tenants/{id}/invoices/consolidated", "District-consolidated invoice across the tenant subtree."),
         ],
         "publishes": ["billing.subscription.changed"],
         "consumes": ["enrollment.created (seat reservation, roadmap)", "tenant.activated"],
         "deps": ["tenant (registry)", "payment provider (Stripe, roadmap)"],
-        "notes": "plan is the global control-plane catalog; subscription is tenant-scoped under RLS. Add-on enablement per subscription, invoices, usage metering and the seat-reservation saga are tracked follow-ups.",
+        "notes": "plan is the global control-plane catalog; subscription/invoice/usage_meter are tenant-scoped under RLS. Consolidated invoicing is a deliberate control-plane roll-up bounded to tenant_subtree(); add-on enablement and the seat-reservation saga remain follow-ups.",
     },
     {
         "name": "audit", "port": 4023, "data": "Postgres (ledger)",

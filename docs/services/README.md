@@ -119,7 +119,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `user.created (auto-provision identity link)` | - | identity |
 | `user.deactivated` | user-org | - |
 | `user.updated` | user-org | - |
-| `user.updated (provider mode export)` | - | sis |
 | `video.captioned` | video | - |
 | `video.transcode.requested` | - | video |
 | `video.transcoded` | video | - |

@@ -103,7 +103,7 @@ export function createPrismaStore(
         const schedules = orgUnitId
           ? await db.$queryRawUnsafe<BellScheduleRow[]>(
               `SELECT id, tenant_id, org_unit_id, name, timezone, is_default
-                 FROM bell_schedule WHERE org_unit_id = $1 ORDER BY name`,
+                 FROM bell_schedule WHERE org_unit_id = $1::uuid ORDER BY name`,
               orgUnitId,
             )
           : await db.$queryRawUnsafe<BellScheduleRow[]>(
@@ -124,7 +124,7 @@ export function createPrismaStore(
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<BellScheduleRow[]>(
           `SELECT id, tenant_id, org_unit_id, name, timezone, is_default
-             FROM bell_schedule WHERE id = $1 LIMIT 1`,
+             FROM bell_schedule WHERE id = $1::uuid LIMIT 1`,
           id,
         );
         const row = rows[0];
@@ -132,7 +132,7 @@ export function createPrismaStore(
         const periods = await db.$queryRawUnsafe<PeriodRow[]>(
           `SELECT id, tenant_id, bell_schedule_id, name, sort_order,
                   start_time, end_time, day_pattern
-             FROM schedule_period WHERE bell_schedule_id = $1 ORDER BY sort_order`,
+             FROM schedule_period WHERE bell_schedule_id = $1::uuid ORDER BY sort_order`,
           id,
         );
         return toSchedule(row, periods);
@@ -145,7 +145,7 @@ export function createPrismaStore(
         const scheduleRows = await db.$queryRawUnsafe<BellScheduleRow[]>(
           `INSERT INTO bell_schedule
              (id, tenant_id, org_unit_id, name, timezone, is_default)
-           VALUES ($1, $2, $3, $4, $5, $6)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
            RETURNING id, tenant_id, org_unit_id, name, timezone, is_default`,
           bellScheduleId,
           ctx.tenantId,
@@ -161,7 +161,7 @@ export function createPrismaStore(
             `INSERT INTO schedule_period
                (tenant_id, bell_schedule_id, name, sort_order,
                 start_time, end_time, day_pattern)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7)
              RETURNING id, tenant_id, bell_schedule_id, name, sort_order,
                        start_time, end_time, day_pattern`,
             ctx.tenantId,
@@ -184,7 +184,7 @@ export function createPrismaStore(
         // All entries already booked in this period on this day.
         const existing = await db.$queryRawUnsafe<TimetableRow[]>(
           `SELECT ${ENTRY_COLUMNS} FROM timetable_entry
-             WHERE period_id = $1 AND day_of_week IS NOT DISTINCT FROM $2`,
+             WHERE period_id = $1::uuid AND day_of_week IS NOT DISTINCT FROM $2`,
           input.periodId,
           dayOfWeek,
         );
@@ -209,7 +209,7 @@ export function createPrismaStore(
           `INSERT INTO timetable_entry
              (tenant_id, org_unit_id, period_id, academic_session_id,
               instructor_id, room, day_of_week)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7)
            RETURNING ${ENTRY_COLUMNS}`,
           ctx.tenantId,
           input.orgUnitId,
@@ -227,7 +227,7 @@ export function createPrismaStore(
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<TimetableRow[]>(
           `SELECT ${ENTRY_COLUMNS} FROM timetable_entry
-             WHERE instructor_id = $1 ORDER BY day_of_week, period_id`,
+             WHERE instructor_id = $1::uuid ORDER BY day_of_week, period_id`,
           instructorId,
         );
         return rows.map(toEntry);
@@ -238,7 +238,7 @@ export function createPrismaStore(
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<TimetableRow[]>(
           `SELECT ${ENTRY_COLUMNS} FROM timetable_entry
-             WHERE org_unit_id = $1 ORDER BY day_of_week, period_id`,
+             WHERE org_unit_id = $1::uuid ORDER BY day_of_week, period_id`,
           orgUnitId,
         );
         return rows.map(toEntry);

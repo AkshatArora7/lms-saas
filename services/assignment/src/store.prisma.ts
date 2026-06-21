@@ -94,7 +94,7 @@ export function createPrismaStore(): AssignmentStore {
           `INSERT INTO assignment
              (tenant_id, course_id, title, instructions, due_at, points,
               submission_type, allow_late)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8)
            RETURNING id, tenant_id, course_id, title, instructions, due_at,
                      points, submission_type, allow_late, created_at`,
           ctx.tenantId,
@@ -113,7 +113,7 @@ export function createPrismaStore(): AssignmentStore {
     async getAssignment(ctx, id) {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<AssignmentRow[]>(
-          `${SELECT_ASSIGNMENT} WHERE id = $1 LIMIT 1`,
+          `${SELECT_ASSIGNMENT} WHERE id = $1::uuid LIMIT 1`,
           id,
         );
         return rows[0] ? toAssignment(rows[0]) : null;
@@ -123,7 +123,7 @@ export function createPrismaStore(): AssignmentStore {
     async listAssignments(ctx, courseId) {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<AssignmentRow[]>(
-          `${SELECT_ASSIGNMENT} WHERE course_id = $1 ORDER BY created_at`,
+          `${SELECT_ASSIGNMENT} WHERE course_id = $1::uuid ORDER BY created_at`,
           courseId,
         );
         return rows.map(toAssignment);
@@ -149,7 +149,7 @@ export function createPrismaStore(): AssignmentStore {
 
         if (sets.length === 0) {
           const rows = await db.$queryRawUnsafe<AssignmentRow[]>(
-            `${SELECT_ASSIGNMENT} WHERE id = $1 LIMIT 1`,
+            `${SELECT_ASSIGNMENT} WHERE id = $1::uuid LIMIT 1`,
             id,
           );
           return rows[0] ? toAssignment(rows[0]) : null;
@@ -158,7 +158,7 @@ export function createPrismaStore(): AssignmentStore {
         params.push(id);
         const rows = await db.$queryRawUnsafe<AssignmentRow[]>(
           `UPDATE assignment SET ${sets.join(", ")}
-            WHERE id = $${params.length}
+            WHERE id = $${params.length}::uuid
           RETURNING id, tenant_id, course_id, title, instructions, due_at,
                     points, submission_type, allow_late, created_at`,
           ...params,
@@ -170,7 +170,7 @@ export function createPrismaStore(): AssignmentStore {
     async deleteAssignment(ctx, id) {
       return withTenant(ctx, async (db) => {
         const affected = await db.$executeRawUnsafe(
-          `DELETE FROM assignment WHERE id = $1`,
+          `DELETE FROM assignment WHERE id = $1::uuid`,
           id,
         );
         return affected > 0;
@@ -182,7 +182,7 @@ export function createPrismaStore(): AssignmentStore {
         const assignmentRows = await db.$queryRawUnsafe<
           { due_at: Date | string | null; allow_late: boolean }[]
         >(
-          `SELECT due_at, allow_late FROM assignment WHERE id = $1 LIMIT 1`,
+          `SELECT due_at, allow_late FROM assignment WHERE id = $1::uuid LIMIT 1`,
           assignmentId,
         );
         const assignment = assignmentRows[0];
@@ -200,7 +200,7 @@ export function createPrismaStore(): AssignmentStore {
           `INSERT INTO submission
              (tenant_id, assignment_id, user_id, body, blob_url, status,
               submitted_at, is_late)
-           VALUES ($1, $2, $3, $4, $5, 'submitted', now(), $6)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, 'submitted', now(), $6)
            ON CONFLICT (assignment_id, user_id) DO UPDATE SET
              body = EXCLUDED.body,
              blob_url = EXCLUDED.blob_url,
@@ -229,7 +229,7 @@ export function createPrismaStore(): AssignmentStore {
     async listSubmissions(ctx, assignmentId) {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<SubmissionRow[]>(
-          `${SELECT_SUBMISSION} WHERE assignment_id = $1 ORDER BY submitted_at`,
+          `${SELECT_SUBMISSION} WHERE assignment_id = $1::uuid ORDER BY submitted_at`,
           assignmentId,
         );
         return rows.map(toSubmission);
@@ -239,7 +239,7 @@ export function createPrismaStore(): AssignmentStore {
     async getSubmission(ctx, id) {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<SubmissionRow[]>(
-          `${SELECT_SUBMISSION} WHERE id = $1 LIMIT 1`,
+          `${SELECT_SUBMISSION} WHERE id = $1::uuid LIMIT 1`,
           id,
         );
         return rows[0] ? toSubmission(rows[0]) : null;
@@ -249,12 +249,12 @@ export function createPrismaStore(): AssignmentStore {
     async returnSubmission(ctx, id) {
       return withTenant(ctx, async (db) => {
         const updated = await db.$executeRawUnsafe(
-          `UPDATE submission SET status = 'returned' WHERE id = $1`,
+          `UPDATE submission SET status = 'returned' WHERE id = $1::uuid`,
           id,
         );
         if (updated === 0) return null;
         const rows = await db.$queryRawUnsafe<SubmissionRow[]>(
-          `${SELECT_SUBMISSION} WHERE id = $1 LIMIT 1`,
+          `${SELECT_SUBMISSION} WHERE id = $1::uuid LIMIT 1`,
           id,
         );
         return rows[0] ? toSubmission(rows[0]) : null;

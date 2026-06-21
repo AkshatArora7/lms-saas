@@ -55,7 +55,7 @@ export function createPrismaStore(): AnnouncementStore {
         const rows = await db.$queryRawUnsafe<AnnouncementRow[]>(
           `INSERT INTO announcement
              (tenant_id, org_unit_id, author_id, title, body, publish_at, expires_at)
-           VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7::timestamptz)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, COALESCE($6::timestamptz, now()), $7::timestamptz)
            RETURNING id, tenant_id, org_unit_id, author_id, title, body,
                      publish_at, expires_at, created_at`,
           ctx.tenantId,
@@ -73,7 +73,7 @@ export function createPrismaStore(): AnnouncementStore {
     async get(ctx, id) {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<AnnouncementRow[]>(
-          `${SELECT} WHERE id = $1 LIMIT 1`,
+          `${SELECT} WHERE id = $1::uuid LIMIT 1`,
           id,
         );
         return rows[0] ? toRecord(rows[0]) : null;
@@ -85,14 +85,14 @@ export function createPrismaStore(): AnnouncementStore {
         const rows = opts.visibleOnly
           ? await db.$queryRawUnsafe<AnnouncementRow[]>(
               `${SELECT}
-                WHERE org_unit_id = $1
+                WHERE org_unit_id = $1::uuid
                   AND publish_at <= now()
                   AND (expires_at IS NULL OR expires_at > now())
                 ORDER BY publish_at DESC`,
               orgUnitId,
             )
           : await db.$queryRawUnsafe<AnnouncementRow[]>(
-              `${SELECT} WHERE org_unit_id = $1 ORDER BY publish_at DESC`,
+              `${SELECT} WHERE org_unit_id = $1::uuid ORDER BY publish_at DESC`,
               orgUnitId,
             );
         return rows.map(toRecord);
@@ -107,7 +107,7 @@ export function createPrismaStore(): AnnouncementStore {
              body = COALESCE($3, body),
              publish_at = COALESCE($4::timestamptz, publish_at),
              expires_at = CASE WHEN $5 THEN $6::timestamptz ELSE expires_at END
-           WHERE id = $1
+           WHERE id = $1::uuid
            RETURNING id, tenant_id, org_unit_id, author_id, title, body,
                      publish_at, expires_at, created_at`,
           id,
@@ -125,7 +125,7 @@ export function createPrismaStore(): AnnouncementStore {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<AnnouncementRow[]>(
           `UPDATE announcement SET publish_at = now()
-            WHERE id = $1
+            WHERE id = $1::uuid
             RETURNING id, tenant_id, org_unit_id, author_id, title, body,
                       publish_at, expires_at, created_at`,
           id,
@@ -137,7 +137,7 @@ export function createPrismaStore(): AnnouncementStore {
     async remove(ctx, id) {
       return withTenant(ctx, async (db) => {
         const deleted = await db.$executeRawUnsafe(
-          `DELETE FROM announcement WHERE id = $1`,
+          `DELETE FROM announcement WHERE id = $1::uuid`,
           id,
         );
         return deleted > 0;

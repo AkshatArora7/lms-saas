@@ -113,7 +113,7 @@ export function createPrismaStore(
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<CodeRow[]>(
           `INSERT INTO attendance_code (tenant_id, code, label, category, is_default)
-           VALUES ($1, $2, $3, $4, $5)
+           VALUES ($1::uuid, $2, $3, $4, $5)
            ON CONFLICT (tenant_id, code)
            DO UPDATE SET label = EXCLUDED.label,
                          category = EXCLUDED.category,
@@ -134,7 +134,7 @@ export function createPrismaStore(
         for (const c of DEFAULT_ATTENDANCE_CODES) {
           await db.$executeRawUnsafe(
             `INSERT INTO attendance_code (tenant_id, code, label, category, is_default)
-             VALUES ($1, $2, $3, $4, $5)
+             VALUES ($1::uuid, $2, $3, $4, $5)
              ON CONFLICT (tenant_id, code) DO NOTHING`,
             ctx.tenantId,
             c.code,
@@ -156,7 +156,7 @@ export function createPrismaStore(
         const periodLabel = input.periodLabel ?? null;
         const existing = await db.$queryRawUnsafe<{ id: string }[]>(
           `SELECT id FROM attendance_session
-             WHERE org_unit_id = $1 AND meeting_date = $2
+             WHERE org_unit_id = $1::uuid AND meeting_date = $2
                AND period_label IS NOT DISTINCT FROM $3
              LIMIT 1`,
           input.orgUnitId,
@@ -169,7 +169,7 @@ export function createPrismaStore(
           `INSERT INTO attendance_session
              (id, tenant_id, org_unit_id, timetable_entry_id, meeting_date,
               period_label, taken_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7::uuid)
            RETURNING ${SESSION_COLUMNS}`,
           generateId(),
           ctx.tenantId,
@@ -186,13 +186,13 @@ export function createPrismaStore(
     async getSession(ctx, id) {
       return withTenant(ctx, async (db) => {
         const sessions = await db.$queryRawUnsafe<SessionRow[]>(
-          `SELECT ${SESSION_COLUMNS} FROM attendance_session WHERE id = $1 LIMIT 1`,
+          `SELECT ${SESSION_COLUMNS} FROM attendance_session WHERE id = $1::uuid LIMIT 1`,
           id,
         );
         const session = sessions[0];
         if (!session) return null;
         const records = await db.$queryRawUnsafe<RecordRow[]>(
-          `SELECT ${RECORD_COLUMNS} FROM attendance_record WHERE session_id = $1`,
+          `SELECT ${RECORD_COLUMNS} FROM attendance_record WHERE session_id = $1::uuid`,
           id,
         );
         return { session: toSession(session), records: records.map(toRecord) };
@@ -202,7 +202,7 @@ export function createPrismaStore(
     async setRecords(ctx, sessionId, records: RecordInput[]) {
       return withTenant<SetRecordsResult>(ctx, async (db) => {
         const sessions = await db.$queryRawUnsafe<SessionRow[]>(
-          `SELECT ${SESSION_COLUMNS} FROM attendance_session WHERE id = $1 LIMIT 1`,
+          `SELECT ${SESSION_COLUMNS} FROM attendance_session WHERE id = $1::uuid LIMIT 1`,
           sessionId,
         );
         const session = sessions[0];
@@ -222,7 +222,7 @@ export function createPrismaStore(
           await db.$executeRawUnsafe(
             `INSERT INTO attendance_record
                (id, tenant_id, session_id, user_id, code, minutes_late, comment)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7)
              ON CONFLICT (session_id, user_id)
              DO UPDATE SET code = EXCLUDED.code,
                            minutes_late = EXCLUDED.minutes_late,
@@ -238,7 +238,7 @@ export function createPrismaStore(
         }
 
         const updated = await db.$queryRawUnsafe<RecordRow[]>(
-          `SELECT ${RECORD_COLUMNS} FROM attendance_record WHERE session_id = $1`,
+          `SELECT ${RECORD_COLUMNS} FROM attendance_record WHERE session_id = $1::uuid`,
           sessionId,
         );
         return { ok: true, records: updated.map(toRecord) };
@@ -249,7 +249,7 @@ export function createPrismaStore(
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<SessionRow[]>(
           `UPDATE attendance_session SET status = 'finalized'
-             WHERE id = $1
+             WHERE id = $1::uuid
            RETURNING ${SESSION_COLUMNS}`,
           id,
         );
@@ -265,7 +265,7 @@ export function createPrismaStore(
              FROM attendance_record r
              JOIN attendance_code c
                ON c.tenant_id = r.tenant_id AND c.code = r.code
-            WHERE r.session_id = $1 AND c.category IN ('absent','tardy')`,
+            WHERE r.session_id = $1::uuid AND c.category IN ('absent','tardy')`,
           id,
         );
         for (const r of flagged) {
@@ -297,7 +297,7 @@ export function createPrismaStore(
              JOIN attendance_session s ON s.id = r.session_id
              JOIN attendance_code c
                ON c.tenant_id = r.tenant_id AND c.code = r.code
-            WHERE s.org_unit_id = $1
+            WHERE s.org_unit_id = $1::uuid
             GROUP BY r.user_id, c.category`,
           orgUnitId,
         );
@@ -355,7 +355,7 @@ export function createPrismaStore(
              JOIN attendance_session s ON s.id = r.session_id
              JOIN attendance_code c
                ON c.tenant_id = r.tenant_id AND c.code = r.code
-            WHERE r.user_id = $1
+            WHERE r.user_id = $1::uuid
             ORDER BY s.meeting_date DESC`,
           userId,
         );

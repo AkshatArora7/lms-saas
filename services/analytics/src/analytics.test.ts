@@ -6,7 +6,13 @@ import { describe, expect, it } from "vitest";
 
 import { buildApp } from "./main.js";
 import { DEMO_TENANT_ID, MemoryAnalyticsStore } from "./store.memory.js";
-import { aggregateEvents } from "./store.js";
+import {
+  aggregateEvents,
+  buildOrgUnitRollups,
+  ratePct,
+  round1,
+  summarizeOrgUnitRollups,
+} from "./store.js";
 
 const config = {
   TENANT_MODE: "hybrid",
@@ -143,5 +149,114 @@ describe("analytics LRS (#60)", () => {
     expect(JSON.stringify(agg)).not.toContain("u1");
 
     expect((await app.inject({ method: "GET", url: "/analytics/aggregate?dimension=bogus", headers: H })).statusCode).toBe(400);
+  });
+});
+
+describe("org-unit reporting rollups (#269)", () => {
+  it("buildOrgUnitRollups aggregates a school's subtree (pure)", () => {
+    const rollups = buildOrgUnitRollups({
+      orgUnits: [
+        { id: "s1", name: "Beta School", code: "B", type: "organization", path: [] },
+        { id: "s2", name: "Alpha School", code: "A", type: "organization", path: [] },
+        { id: "o1", name: "Offering", code: null, type: "course_offering", path: ["s1"] },
+      ],
+      courses: [{ orgUnitId: "o1" }],
+      enrollments: [{ orgUnitId: "o1" }, { orgUnitId: "o1" }],
+      attendance: [
+        { orgUnitId: "o1", present: true },
+        { orgUnitId: "o1", present: false },
+        { orgUnitId: "o1", present: true },
+      ],
+      grades: [{ orgUnitId: "o1", pct: 80 }, { orgUnitId: "o1", pct: 100 }],
+    });
+    // Sorted by name: Alpha (empty) then Beta (the one with the subtree).
+    expect(rollups.map((r) => r.name)).toEqual(["Alpha School", "Beta School"]);
+    expect(rollups[1]).toEqual({
+      orgUnitId: "s1",
+      name: "Beta School",
+      code: "B",
+      courseCount: 1,
+      enrollmentCount: 2,
+      attendanceRate: 66.7,
+      averageGrade: 90,
+    });
+    // No data → null rates, not zero.
+    expect(rollups[0]).toMatchObject({
+      courseCount: 0,
+      enrollmentCount: 0,
+      attendanceRate: null,
+      averageGrade: null,
+    });
+  });
+
+  it("ratePct/round1 are null-safe and rounded", () => {
+    expect(ratePct(2, 3)).toBe(66.7);
+    expect(ratePct(0, 0)).toBeNull();
+    expect(round1(92.04)).toBe(92);
+  });
+
+  it("summarizeOrgUnitRollups enrollment-weights the rates", () => {
+    const summary = summarizeOrgUnitRollups([
+      { orgUnitId: "a", name: "A", code: null, courseCount: 2, enrollmentCount: 10, attendanceRate: 90, averageGrade: 80 },
+      { orgUnitId: "b", name: "B", code: null, courseCount: 1, enrollmentCount: 30, attendanceRate: 50, averageGrade: 60 },
+    ]);
+    expect(summary.orgUnitCount).toBe(2);
+    expect(summary.courseCount).toBe(3);
+    expect(summary.enrollmentCount).toBe(40);
+    // (90*10 + 50*30) / 40 = 60; (80*10 + 60*30) / 40 = 65.
+    expect(summary.attendanceRate).toBe(60);
+    expect(summary.averageGrade).toBe(65);
+  });
+
+  it("GET /reports/org-units returns the seeded demo rollup", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: "/reports/org-units",
+      headers: H,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.orgUnits).toHaveLength(1);
+    expect(body.orgUnits[0]).toMatchObject({
+      name: "Demo School",
+      code: "DEMO",
+      courseCount: 1,
+      enrollmentCount: 2,
+      attendanceRate: 66.7,
+      averageGrade: 92,
+    });
+    expect(body.summary).toMatchObject({
+      orgUnitCount: 1,
+      courseCount: 1,
+      enrollmentCount: 2,
+      attendanceRate: 66.7,
+      averageGrade: 92,
+    });
+  });
+
+  it("isolates tenants: a different tenant sees no rollups", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: "/reports/org-units",
+      headers: OTHER_H,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().orgUnits).toEqual([]);
+    expect(res.json().summary).toMatchObject({
+      orgUnitCount: 0,
+      courseCount: 0,
+      enrollmentCount: 0,
+      attendanceRate: null,
+      averageGrade: null,
+    });
+  });
+
+  it("requires a tenant (400 without x-tenant-id)", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: "/reports/org-units",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("tenant_required");
   });
 });

@@ -5,6 +5,7 @@ import type { TenantContext } from "@lms/types";
 
 import {
   aggregateEvents,
+  buildOrgUnitRollups,
   type AggregateDimension,
   type AnalyticsStore,
   type CaliperEventRecord,
@@ -12,10 +13,53 @@ import {
   type EventFilter,
   type NewCaliperEventInput,
   type NewXapiStatementInput,
+  type OrgUnitRollup,
+  type RollupSourceData,
   type XapiStatementRecord,
 } from "./store.js";
 
 export const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
+
+// Org-unit ids mirror the demo seed (packages/db/prisma/seed.demo.ts) so the
+// memory store's rollup matches the DB-backed one for the demo tenant.
+const DEMO_ROOT = "d0000000-0001-0000-0000-000000000001"; // org: "Demo School"
+const DEMO_OFFERING = "d0000000-0002-0000-0000-000000000001"; // course offering
+
+/**
+ * Reporting rollup source for the demo tenant, matching the seed: one school
+ * (organization) with one course offering under it carrying 1 course,
+ * 2 enrollments, 3 attendance records (P, T, P → 2 present), and one released
+ * grade of 92%. Yields courseCount=1, enrollmentCount=2, attendanceRate=66.7,
+ * averageGrade=92 — the numbers the integration evidence asserts.
+ */
+const DEMO_ROLLUP_SOURCE: RollupSourceData = {
+  orgUnits: [
+    { id: DEMO_ROOT, name: "Demo School", code: "DEMO", type: "organization", path: [] },
+    {
+      id: DEMO_OFFERING,
+      name: "Intro to the Demo Platform (Section A)",
+      code: "DEMO101-A",
+      type: "course_offering",
+      path: [DEMO_ROOT],
+    },
+  ],
+  courses: [{ orgUnitId: DEMO_OFFERING }],
+  enrollments: [{ orgUnitId: DEMO_OFFERING }, { orgUnitId: DEMO_OFFERING }],
+  attendance: [
+    { orgUnitId: DEMO_OFFERING, present: true }, // P
+    { orgUnitId: DEMO_OFFERING, present: false }, // T (tardy → not present)
+    { orgUnitId: DEMO_OFFERING, present: true }, // P
+  ],
+  grades: [{ orgUnitId: DEMO_OFFERING, pct: 92 }],
+};
+
+const EMPTY_ROLLUP_SOURCE: RollupSourceData = {
+  orgUnits: [],
+  courses: [],
+  enrollments: [],
+  attendance: [],
+  grades: [],
+};
 
 interface OutboxRow {
   tenantId: string;
@@ -43,6 +87,10 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   private events: CaliperEventRecord[] = [];
   private statements: XapiStatementRecord[] = [];
   private outbox: OutboxRow[] = [];
+  // Read-only reporting source, tenant-scoped; only the demo tenant is seeded.
+  private rollupSource: Map<string, RollupSourceData> = new Map([
+    [DEMO_TENANT_ID, DEMO_ROLLUP_SOURCE],
+  ]);
 
   constructor(
     private readonly generateId: () => string = randomUUID,
@@ -112,5 +160,10 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   ): Promise<DeidentifiedAggregate> {
     const events = await this.listEvents(ctx, filter);
     return aggregateEvents(events, dimension);
+  }
+
+  async listOrgUnitRollups(ctx: TenantContext): Promise<OrgUnitRollup[]> {
+    const data = this.rollupSource.get(ctx.tenantId) ?? EMPTY_ROLLUP_SOURCE;
+    return buildOrgUnitRollups(data);
   }
 }

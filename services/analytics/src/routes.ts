@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
   AGGREGATE_DIMENSIONS,
+  summarizeOrgUnitRollups,
   type AggregateDimension,
   type AnalyticsStore,
   type EventFilter,
@@ -169,5 +170,19 @@ export function registerAnalyticsRoutes(
       filterFromQuery(req.query),
     );
     return reply.code(200).send({ aggregate });
+  });
+
+  // Per-"school" reporting rollups for the admin /reports screen (#269). A
+  // tenant-scoped read across the existing domain tables (enrollment, course,
+  // attendance, grade) via withTenant + RLS — analytics is the reporting
+  // bounded context. Returns one row per `organization` org unit plus a
+  // district-level summary.
+  app.get("/reports/org-units", async (req, reply) => {
+    const ctx = resolveTenantOr400(deps, req, reply);
+    if (!ctx) return reply;
+    const orgUnits = await deps.store.listOrgUnitRollups(ctx);
+    return reply
+      .code(200)
+      .send({ orgUnits, summary: summarizeOrgUnitRollups(orgUnits) });
   });
 }

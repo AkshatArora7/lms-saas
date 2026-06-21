@@ -5,11 +5,14 @@ import type { TenantContext } from "@lms/types";
 
 import {
   aggregateEvents,
+  buildCourseEngagement,
   buildOrgUnitRollups,
   type AggregateDimension,
   type AnalyticsStore,
   type CaliperEventRecord,
+  type CourseEngagementResult,
   type DeidentifiedAggregate,
+  type EngagementSourceData,
   type EventFilter,
   type NewCaliperEventInput,
   type NewXapiStatementInput,
@@ -24,6 +27,8 @@ export const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
 // memory store's rollup matches the DB-backed one for the demo tenant.
 const DEMO_ROOT = "d0000000-0001-0000-0000-000000000001"; // org: "Demo School"
 const DEMO_OFFERING = "d0000000-0002-0000-0000-000000000001"; // course offering
+const DEMO_COURSE = "d0000000-0003-0000-0000-000000000001"; // course (course.id)
+const DEMO_STUDENT = "d0000000-00a1-0000-0000-000000000002"; // the lone learner
 
 /**
  * Reporting rollup source for the demo tenant, matching the seed: one school
@@ -61,6 +66,32 @@ const EMPTY_ROLLUP_SOURCE: RollupSourceData = {
   grades: [],
 };
 
+/**
+ * Engagement source for the demo course, matching the seed: one learner with
+ * 3 attendance records (P, T, P → 2 present = 66.7%), 1 of 2 assignments
+ * submitted (submissionRate 50%), and one released grade of 92%. Yields
+ * score ≈ 69.6 and one HIGH-risk learner (low_attendance + missing_submissions).
+ */
+const DEMO_ENGAGEMENT_SOURCE: EngagementSourceData = {
+  learnerIds: [DEMO_STUDENT],
+  assignmentCount: 2,
+  attendance: [
+    { learnerId: DEMO_STUDENT, present: true }, // P
+    { learnerId: DEMO_STUDENT, present: false }, // T (tardy → not present)
+    { learnerId: DEMO_STUDENT, present: true }, // P
+  ],
+  submissions: [{ learnerId: DEMO_STUDENT }], // assignment 1 only
+  grades: [{ learnerId: DEMO_STUDENT, pct: 92 }],
+};
+
+const EMPTY_ENGAGEMENT_SOURCE: EngagementSourceData = {
+  learnerIds: [],
+  assignmentCount: 0,
+  attendance: [],
+  submissions: [],
+  grades: [],
+};
+
 interface OutboxRow {
   tenantId: string;
   type: string;
@@ -91,6 +122,9 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   private rollupSource: Map<string, RollupSourceData> = new Map([
     [DEMO_TENANT_ID, DEMO_ROLLUP_SOURCE],
   ]);
+  // Per-course engagement source, tenant→(courseId→source); demo tenant only.
+  private engagementSource: Map<string, Map<string, EngagementSourceData>> =
+    new Map([[DEMO_TENANT_ID, new Map([[DEMO_COURSE, DEMO_ENGAGEMENT_SOURCE]])]]);
 
   constructor(
     private readonly generateId: () => string = randomUUID,
@@ -165,5 +199,15 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   async listOrgUnitRollups(ctx: TenantContext): Promise<OrgUnitRollup[]> {
     const data = this.rollupSource.get(ctx.tenantId) ?? EMPTY_ROLLUP_SOURCE;
     return buildOrgUnitRollups(data);
+  }
+
+  async getCourseEngagement(
+    ctx: TenantContext,
+    courseId: string,
+  ): Promise<CourseEngagementResult> {
+    const data =
+      this.engagementSource.get(ctx.tenantId)?.get(courseId) ??
+      EMPTY_ENGAGEMENT_SOURCE;
+    return buildCourseEngagement(courseId, data);
   }
 }

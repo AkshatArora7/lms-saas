@@ -3,12 +3,15 @@ import { EVENT_TYPES } from "@lms/events";
 
 import {
   aggregateEvents,
+  buildCourseEngagement,
   ratePct,
   round1,
   type AggregateDimension,
   type AnalyticsStore,
   type CaliperEventRecord,
+  type CourseEngagementResult,
   type DeidentifiedAggregate,
+  type EngagementSourceData,
   type EventFilter,
   type NewCaliperEventInput,
   type NewXapiStatementInput,
@@ -152,6 +155,64 @@ const ROLLUP_SQL = `
   WHERE s.type = 'organization'
   ORDER BY s.name ASC`;
 
+// --- Per-course engagement (#277) ------------------------------------------
+// Five small, fully BOUND sub-queries (NO string interpolation; $1::uuid is the
+// only param — the #267 rule: cast only uuid columns). All run inside one
+// withTenant tx so RLS scopes every row to the caller's tenant. The course's
+// offering is `course.org_unit_id`; learners are `enrollment` rows on that
+// offering with the 'learner' role and an active/completed status. Results feed
+// the pure `buildCourseEngagement` so memory and Prisma paths agree.
+const ENGAGEMENT_LEARNERS_SQL = `
+  SELECT e.user_id AS learner_id
+    FROM enrollment e
+    JOIN course c ON c.org_unit_id = e.org_unit_id
+    JOIN role r ON r.id = e.role_id
+   WHERE c.id = $1::uuid
+     AND r.name = 'learner'
+     AND e.status IN ('active','completed')`;
+
+const ENGAGEMENT_ASSIGNMENTS_SQL = `
+  SELECT count(*)::int AS n FROM assignment WHERE course_id = $1::uuid`;
+
+const ENGAGEMENT_ATTENDANCE_SQL = `
+  SELECT ar.user_id AS learner_id, (ac.category = 'present') AS present
+    FROM attendance_record ar
+    JOIN attendance_session ss ON ss.id = ar.session_id
+    JOIN course c ON c.org_unit_id = ss.org_unit_id
+    JOIN attendance_code ac
+      ON ac.tenant_id = ar.tenant_id AND ac.code = ar.code
+   WHERE c.id = $1::uuid`;
+
+const ENGAGEMENT_SUBMISSIONS_SQL = `
+  SELECT s.user_id AS learner_id
+    FROM submission s
+    JOIN assignment a ON a.id = s.assignment_id
+   WHERE a.course_id = $1::uuid
+     AND s.status IN ('submitted','resubmitted','returned')`;
+
+const ENGAGEMENT_GRADES_SQL = `
+  SELECT g.user_id AS learner_id,
+         (g.points / gi.max_points * 100) AS pct
+    FROM grade g
+    JOIN grade_item gi ON gi.id = g.grade_item_id
+   WHERE gi.course_id = $1::uuid
+     AND g.is_released AND g.points IS NOT NULL AND gi.max_points > 0`;
+
+interface LearnerRow {
+  learner_id: string;
+}
+interface CountRow {
+  n: number | string;
+}
+interface AttendanceRow {
+  learner_id: string;
+  present: boolean;
+}
+interface GradeRow {
+  learner_id: string;
+  pct: number | string;
+}
+
 /** RLS-scoped LRS store (uuid params cast; outbox written in the same tx). */
 export function createPrismaStore(): AnalyticsStore {
   return {
@@ -249,6 +310,43 @@ export function createPrismaStore(): AnalyticsStore {
       return withTenant(ctx, async (db: Db) => {
         const rows = await db.$queryRawUnsafe<RollupRow[]>(ROLLUP_SQL);
         return rows.map(toRollup);
+      });
+    },
+
+    async getCourseEngagement(
+      ctx,
+      courseId: string,
+    ): Promise<CourseEngagementResult> {
+      return withTenant(ctx, async (db: Db) => {
+        const [learners, assignments, attendance, submissions, grades] =
+          await Promise.all([
+            db.$queryRawUnsafe<LearnerRow[]>(ENGAGEMENT_LEARNERS_SQL, courseId),
+            db.$queryRawUnsafe<CountRow[]>(ENGAGEMENT_ASSIGNMENTS_SQL, courseId),
+            db.$queryRawUnsafe<AttendanceRow[]>(
+              ENGAGEMENT_ATTENDANCE_SQL,
+              courseId,
+            ),
+            db.$queryRawUnsafe<LearnerRow[]>(
+              ENGAGEMENT_SUBMISSIONS_SQL,
+              courseId,
+            ),
+            db.$queryRawUnsafe<GradeRow[]>(ENGAGEMENT_GRADES_SQL, courseId),
+          ]);
+
+        const data: EngagementSourceData = {
+          learnerIds: learners.map((r) => r.learner_id),
+          assignmentCount: Number(assignments[0]?.n ?? 0),
+          attendance: attendance.map((r) => ({
+            learnerId: r.learner_id,
+            present: r.present === true,
+          })),
+          submissions: submissions.map((r) => ({ learnerId: r.learner_id })),
+          grades: grades.map((r) => ({
+            learnerId: r.learner_id,
+            pct: round1(Number(r.pct)),
+          })),
+        };
+        return buildCourseEngagement(courseId, data);
       });
     },
   };

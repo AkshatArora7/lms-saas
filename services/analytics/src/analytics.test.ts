@@ -8,10 +8,12 @@ import { buildApp } from "./main.js";
 import { DEMO_TENANT_ID, MemoryAnalyticsStore } from "./store.memory.js";
 import {
   aggregateEvents,
+  buildCourseEngagement,
   buildOrgUnitRollups,
   ratePct,
   round1,
   summarizeOrgUnitRollups,
+  type EngagementSourceData,
 } from "./store.js";
 
 const config = {
@@ -255,6 +257,254 @@ describe("org-unit reporting rollups (#269)", () => {
     const res = await build().app.inject({
       method: "GET",
       url: "/reports/org-units",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("tenant_required");
+  });
+});
+
+const DEMO_COURSE = "d0000000-0003-0000-0000-000000000001";
+const DEMO_STUDENT = "d0000000-00a1-0000-0000-000000000002";
+
+function engagementSource(
+  overrides: Partial<EngagementSourceData> = {},
+): EngagementSourceData {
+  return {
+    learnerIds: [],
+    assignmentCount: 0,
+    attendance: [],
+    submissions: [],
+    grades: [],
+    ...overrides,
+  };
+}
+
+describe("course engagement + at-risk (#277, pure builder)", () => {
+  it("all-null components → score null and no at-risk learners", () => {
+    const { engagement, atRisk } = buildCourseEngagement("c1", engagementSource());
+    expect(engagement).toEqual({
+      courseId: "c1",
+      score: null,
+      learnerCount: 0,
+      components: { attendanceRate: null, submissionRate: null, gradeAverage: null },
+    });
+    expect(atRisk).toEqual([]);
+  });
+
+  it("score is the equal-weighted mean of the non-null components", () => {
+    // attendanceRate 100, gradeAverage 80, submissionRate null (no assignments).
+    const { engagement } = buildCourseEngagement(
+      "c1",
+      engagementSource({
+        learnerIds: ["u1"],
+        attendance: [
+          { learnerId: "u1", present: true },
+          { learnerId: "u1", present: true },
+        ],
+        grades: [{ learnerId: "u1", pct: 80 }],
+      }),
+    );
+    expect(engagement.components).toEqual({
+      attendanceRate: 100,
+      submissionRate: null,
+      gradeAverage: 80,
+    });
+    expect(engagement.score).toBe(90); // (100 + 80) / 2
+  });
+
+  it("uses all three components in the mean when present", () => {
+    const { engagement } = buildCourseEngagement(
+      "c1",
+      engagementSource({
+        learnerIds: ["u1"],
+        assignmentCount: 2,
+        attendance: [
+          { learnerId: "u1", present: true },
+          { learnerId: "u1", present: false },
+          { learnerId: "u1", present: true },
+        ],
+        submissions: [{ learnerId: "u1" }], // 1 of 2 → 50
+        grades: [{ learnerId: "u1", pct: 92 }],
+      }),
+    );
+    // attendance 66.7, submission 50, grade 92 → mean 69.6
+    expect(engagement.components).toEqual({
+      attendanceRate: 66.7,
+      submissionRate: 50,
+      gradeAverage: 92,
+    });
+    expect(engagement.score).toBe(69.6);
+  });
+
+  it("flags low_attendance alone as a single medium reason", () => {
+    const { atRisk } = buildCourseEngagement(
+      "c1",
+      engagementSource({
+        learnerIds: ["u1"],
+        attendance: [
+          { learnerId: "u1", present: true },
+          { learnerId: "u1", present: false }, // 50% < 80
+        ],
+      }),
+    );
+    expect(atRisk).toEqual([
+      {
+        learnerId: "u1",
+        displayName: null,
+        riskLevel: "medium",
+        reasons: [{ code: "low_attendance", metric: 50, threshold: 80 }],
+      },
+    ]);
+  });
+
+  it("flags missing_submissions alone as a single medium reason", () => {
+    const { atRisk } = buildCourseEngagement(
+      "c1",
+      engagementSource({
+        learnerIds: ["u1"],
+        assignmentCount: 4,
+        submissions: [{ learnerId: "u1" }], // 1 of 4 → 25 < 70
+      }),
+    );
+    expect(atRisk).toEqual([
+      {
+        learnerId: "u1",
+        displayName: null,
+        riskLevel: "medium",
+        reasons: [{ code: "missing_submissions", metric: 25, threshold: 70 }],
+      },
+    ]);
+  });
+
+  it("flags low_grades alone as a single medium reason", () => {
+    const { atRisk } = buildCourseEngagement(
+      "c1",
+      engagementSource({
+        learnerIds: ["u1"],
+        grades: [{ learnerId: "u1", pct: 55 }], // < 60
+      }),
+    );
+    expect(atRisk).toEqual([
+      {
+        learnerId: "u1",
+        displayName: null,
+        riskLevel: "medium",
+        reasons: [{ code: "low_grades", metric: 55, threshold: 60 }],
+      },
+    ]);
+  });
+
+  it("classifies ≥2 tripped rules as high, sorts high→medium and omits clean learners", () => {
+    const { atRisk } = buildCourseEngagement(
+      "c1",
+      engagementSource({
+        learnerIds: ["high", "medium", "clean"],
+        assignmentCount: 2,
+        attendance: [
+          { learnerId: "high", present: false }, // 0% → low_attendance
+          { learnerId: "clean", present: true },
+        ],
+        submissions: [
+          // "high": 0 of 2 → missing_submissions (a 2nd reason → high)
+          { learnerId: "medium" }, // 1 of 2 → 50 < 70 (its single reason)
+          { learnerId: "clean" },
+          { learnerId: "clean" }, // 2 of 2 → 100, no trip
+        ],
+        grades: [{ learnerId: "clean", pct: 95 }],
+      }),
+    );
+    expect(atRisk.map((r) => r.learnerId)).toEqual(["high", "medium"]);
+    expect(atRisk[0]).toMatchObject({ learnerId: "high", riskLevel: "high" });
+    expect(atRisk[0]?.reasons.map((r) => r.code).sort()).toEqual([
+      "low_attendance",
+      "missing_submissions",
+    ]);
+    expect(atRisk[1]).toMatchObject({
+      learnerId: "medium",
+      riskLevel: "medium",
+      reasons: [{ code: "missing_submissions", metric: 50, threshold: 70 }],
+    });
+  });
+
+  it("omits a learner who trips no rule", () => {
+    const { atRisk } = buildCourseEngagement(
+      "c1",
+      engagementSource({
+        learnerIds: ["u1"],
+        assignmentCount: 1,
+        attendance: [{ learnerId: "u1", present: true }], // 100
+        submissions: [{ learnerId: "u1" }], // 100
+        grades: [{ learnerId: "u1", pct: 90 }], // ≥ 60
+      }),
+    );
+    expect(atRisk).toEqual([]);
+  });
+});
+
+describe("GET /reports/engagement (#277)", () => {
+  it("returns the seeded demo course engagement + high-risk learner", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${DEMO_COURSE}`,
+      headers: H,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.engagement).toEqual({
+      courseId: DEMO_COURSE,
+      score: 69.6,
+      learnerCount: 1,
+      components: { attendanceRate: 66.7, submissionRate: 50, gradeAverage: 92 },
+    });
+    expect(body.atRisk).toEqual([
+      {
+        learnerId: DEMO_STUDENT,
+        displayName: null,
+        riskLevel: "high",
+        reasons: [
+          { code: "low_attendance", metric: 66.7, threshold: 80 },
+          { code: "missing_submissions", metric: 50, threshold: 70 },
+        ],
+      },
+    ]);
+  });
+
+  it("400 when courseId is missing or not a uuid", async () => {
+    const missing = await build().app.inject({
+      method: "GET",
+      url: "/reports/engagement",
+      headers: H,
+    });
+    expect(missing.statusCode).toBe(400);
+    const bad = await build().app.inject({
+      method: "GET",
+      url: "/reports/engagement?courseId=not-a-uuid",
+      headers: H,
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it("isolates tenants: a different tenant sees an empty engagement", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${DEMO_COURSE}`,
+      headers: OTHER_H,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.engagement).toMatchObject({
+      courseId: DEMO_COURSE,
+      score: null,
+      learnerCount: 0,
+      components: { attendanceRate: null, submissionRate: null, gradeAverage: null },
+    });
+    expect(body.atRisk).toEqual([]);
+  });
+
+  it("requires a tenant (400 without x-tenant-id)", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${DEMO_COURSE}`,
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe("tenant_required");

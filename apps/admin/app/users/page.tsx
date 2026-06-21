@@ -16,11 +16,7 @@ import type { BadgeTone } from "@lms/ui";
 
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
-import {
-  getDirectoryUsers,
-  summarizeDirectory,
-  type UserStatus,
-} from "../lib/directory";
+import { getDirectory, type UserStatus } from "../lib/directory";
 import SignOutButton from "../sign-out-button";
 
 const usersCss = `
@@ -75,7 +71,7 @@ const usersCss = `
 const STATUS_META: Record<UserStatus, { label: string; tone: BadgeTone }> = {
   active: { label: "Active", tone: "success" },
   invited: { label: "Invited", tone: "accent" },
-  suspended: { label: "Suspended", tone: "danger" },
+  inactive: { label: "Inactive", tone: "neutral" },
 };
 
 export default async function AdminUsers() {
@@ -99,8 +95,7 @@ export default async function AdminUsers() {
     );
   }
 
-  const users = getDirectoryUsers(session.tenantId);
-  const summary = summarizeDirectory(users);
+  const directory = await getDirectory(session.tenantId);
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
@@ -115,73 +110,84 @@ export default async function AdminUsers() {
           subtitle="People with access to this tenant, their roles, status, and org unit."
         />
 
-        <Grid gap={4} min="180px">
-          <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{summary.total}</p>
-              <p className="admin-stat-label">Total users</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{summary.admins}</p>
-              <p className="admin-stat-label">Administrators</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{summary.pendingInvites}</p>
-              <p className="admin-stat-label">Pending invites</p>
-            </Stack>
-          </Card>
-        </Grid>
+        {directory ? (
+          <>
+            <Grid gap={4} min="180px">
+              <Card>
+                <Stack gap={1}>
+                  <p className="admin-stat">{directory.summary.total}</p>
+                  <p className="admin-stat-label">Total users</p>
+                </Stack>
+              </Card>
+              <Card>
+                <Stack gap={1}>
+                  <p className="admin-stat">{directory.summary.admins}</p>
+                  <p className="admin-stat-label">Administrators</p>
+                </Stack>
+              </Card>
+              <Card>
+                <Stack gap={1}>
+                  <p className="admin-stat">
+                    {directory.summary.pendingInvites}
+                  </p>
+                  <p className="admin-stat-label">Pending invites</p>
+                </Stack>
+              </Card>
+            </Grid>
 
-        <section aria-labelledby="directory-heading">
-          <Stack gap={3}>
-            <h2 className="admin-section-title" id="directory-heading">
-              Directory
-            </h2>
-            {users.length ? (
-              <ul className="admin-user-list">
-                {users.map((user) => {
-                  const status = STATUS_META[user.status];
-                  return (
-                    <li key={user.id}>
-                      <Card>
-                        <div className="admin-user-row">
-                          <Stack gap={1}>
-                            <a
-                              className="admin-user-name"
-                              href={`/users/${user.id}`}
-                            >
-                              {user.name}
-                            </a>
-                            <p className="admin-user-email">{user.email}</p>
-                          </Stack>
-                          <Inline gap={2}>
-                            {user.roles.map((role) => (
-                              <Badge key={role} tone="accent">
-                                {role}
-                              </Badge>
-                            ))}
-                          </Inline>
-                          <Badge tone="neutral">{user.orgUnit}</Badge>
-                          <Chip tone={status.tone}>{status.label}</Chip>
-                        </div>
-                      </Card>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <EmptyState
-                description="Invite people or connect your SIS to populate the directory."
-                icon="👤"
-                title="No users yet"
-              />
-            )}
-          </Stack>
-        </section>
+            <section aria-labelledby="directory-heading">
+              <Stack gap={3}>
+                <h2 className="admin-section-title" id="directory-heading">
+                  Directory
+                </h2>
+                {directory.users.length ? (
+                  <ul className="admin-user-list">
+                    {directory.users.map((user) => {
+                      const status = STATUS_META[user.status];
+                      return (
+                        <li key={user.id}>
+                          <Card>
+                            <div className="admin-user-row">
+                              <Stack gap={1}>
+                                <a
+                                  className="admin-user-name"
+                                  href={`/users/${user.id}`}
+                                >
+                                  {user.name}
+                                </a>
+                                <p className="admin-user-email">{user.email}</p>
+                              </Stack>
+                              <Inline gap={2}>
+                                {user.roles.map((role) => (
+                                  <Badge key={role} tone="accent">
+                                    {role}
+                                  </Badge>
+                                ))}
+                              </Inline>
+                              <Badge tone="neutral">{user.orgUnit}</Badge>
+                              <Chip tone={status.tone}>{status.label}</Chip>
+                            </div>
+                          </Card>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <EmptyState
+                    description="Invite people or connect your SIS to populate the directory."
+                    icon="👤"
+                    title="No users yet"
+                  />
+                )}
+              </Stack>
+            </section>
+          </>
+        ) : (
+          <Alert tone="warning">
+            The user &amp; org service is unreachable, so the directory can&apos;t
+            be loaded right now. Start the service and refresh to manage users.
+          </Alert>
+        )}
       </Stack>
     </AppShell>
   );

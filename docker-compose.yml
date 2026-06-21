@@ -664,9 +664,12 @@ services:
       PORT: 3001
       HOSTNAME: "0.0.0.0"
       IDENTITY_URL: http://identity:4001
+      USER_ORG_SERVICE_URL: http://user-org:4003
       COURSE_SERVICE_URL: http://course:4005
     depends_on:
       identity:
+        condition: service_healthy
+      user-org:
         condition: service_healthy
       course:
         condition: service_healthy

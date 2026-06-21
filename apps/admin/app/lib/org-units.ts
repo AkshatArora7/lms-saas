@@ -1,102 +1,61 @@
 import { TENANT_ID } from "./auth";
+import {
+  listOrgUnits,
+  type OrgUnitRecord,
+  type OrgUnitType,
+} from "./user-org-api";
 
 /**
- * Org-unit hierarchy for the admin console.
+ * Org-unit hierarchy presentation layer for the admin console.
  *
- * In production this comes from the org microservice (tenant-scoped, via the
- * gateway). Until that read path is wired in, we resolve a small, deterministic
- * demo tree for the seeded demo tenant and an empty tree for everyone else, so
- * the console renders a real happy path and a real empty state with no backend
- * dependency.
+ * Resolves the org tree from the user-org microservice (tenant-scoped, via the
+ * BFF client in `user-org-api.ts`). The service returns a flat set of units;
+ * we assemble the tree from `parentId`. Returns `null` when the service is
+ * unreachable so the page can render an offline state — there is no demo
+ * fallback.
  */
 
-/** The kind of an org unit, shown as a badge. */
-export type OrgUnitType = "district" | "school" | "department" | "grade";
+export type { OrgUnitType };
 
 export interface OrgUnit {
   id: string;
   name: string;
   type: OrgUnitType;
-  /** Number of members directly assigned to this unit. */
-  memberCount: number;
   children: OrgUnit[];
 }
-
-const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
-
-const DEMO_TREE: OrgUnit[] = [
-  {
-    id: "ou-district",
-    name: "Demo Unified District",
-    type: "district",
-    memberCount: 4,
-    children: [
-      {
-        id: "ou-north-high",
-        name: "North High School",
-        type: "school",
-        memberCount: 2,
-        children: [
-          {
-            id: "ou-math",
-            name: "Mathematics",
-            type: "department",
-            memberCount: 6,
-            children: [],
-          },
-          {
-            id: "ou-science",
-            name: "Science",
-            type: "department",
-            memberCount: 5,
-            children: [],
-          },
-          {
-            id: "ou-humanities",
-            name: "Humanities",
-            type: "department",
-            memberCount: 7,
-            children: [],
-          },
-        ],
-      },
-      {
-        id: "ou-west-elementary",
-        name: "West Elementary",
-        type: "school",
-        memberCount: 1,
-        children: [
-          {
-            id: "ou-grade-9",
-            name: "Grade 9",
-            type: "grade",
-            memberCount: 28,
-            children: [],
-          },
-          {
-            id: "ou-grade-10",
-            name: "Grade 10",
-            type: "grade",
-            memberCount: 31,
-            children: [],
-          },
-        ],
-      },
-    ],
-  },
-];
 
 export interface OrgTreeStats {
   unitCount: number;
   depth: number;
 }
 
+/** Assemble the flat unit list into a root-first tree via `parentId`. */
+function buildTree(records: OrgUnitRecord[]): OrgUnit[] {
+  const nodes = new Map<string, OrgUnit>();
+  for (const r of records) {
+    nodes.set(r.id, { id: r.id, name: r.name, type: r.type, children: [] });
+  }
+  const roots: OrgUnit[] = [];
+  for (const r of records) {
+    const node = nodes.get(r.id)!;
+    const parent = r.parentId ? nodes.get(r.parentId) : undefined;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  }
+  return roots;
+}
+
 /**
- * Resolve the org-unit tree for the given tenant. Returns an empty array
- * (driving the empty state) for tenants without seeded demo data.
+ * Resolve the org-unit tree for the given tenant. Returns `null` when the
+ * service is unreachable (driving an offline state) and an empty array when the
+ * tenant has no units yet (driving the empty state).
  */
-export function getOrgUnits(tenantId: string = TENANT_ID): OrgUnit[] {
-  return tenantId === DEMO_TENANT_ID ? DEMO_TREE : [];
+export async function getOrgUnits(
+  tenantId: string = TENANT_ID,
+): Promise<OrgUnit[] | null> {
+  const res = await listOrgUnits(tenantId);
+  if (!res.ok) return null;
+  return buildTree(res.orgUnits);
 }
 
 /** Count total units and maximum depth across the tree. */

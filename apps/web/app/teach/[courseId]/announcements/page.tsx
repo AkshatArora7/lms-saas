@@ -15,7 +15,7 @@ import type { BadgeTone } from "@lms/ui";
 
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
-import { canTeach, getTaughtCourses } from "../../../lib/teaching";
+import { canTeach, getTaughtCourse } from "../../../lib/teaching";
 import {
   listCourseAnnouncements,
   type Announcement,
@@ -137,16 +137,14 @@ export default async function CourseAnnouncements({
   }
 
   const { courseId } = params;
-  const course = getTaughtCourses(session.tenantId).find(
-    (c) => c.id === courseId,
-  );
+  const course = await getTaughtCourse(session.userId, courseId, session.tenantId);
   if (!course) notFound();
 
   const errorMessage = Array.isArray(searchParams.error)
     ? searchParams.error[0]
     : searchParams.error;
 
-  const result = await listCourseAnnouncements(courseId, session.tenantId);
+  const result = await listCourseAnnouncements(course.orgUnitId, session.tenantId);
   const announcements = result.ok ? result.announcements : [];
   const published = announcements.filter((a) => a.status === "published").length;
   const scheduled = announcements.filter((a) => a.status === "scheduled").length;

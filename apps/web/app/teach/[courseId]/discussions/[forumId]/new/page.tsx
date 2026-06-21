@@ -13,7 +13,7 @@ import {
 
 import { getBranding } from "../../../../../lib/branding";
 import { getSession } from "../../../../../lib/auth";
-import { canTeach, getTaughtCourses } from "../../../../../lib/teaching";
+import { canTeach, getTaughtCourse } from "../../../../../lib/teaching";
 import { listForums } from "../../../../../lib/discussions-api";
 import SignOutButton from "../../../../../sign-out-button";
 import { createTopicAction } from "../../actions";
@@ -97,9 +97,7 @@ export default async function NewTopicPage({
   }
 
   const { courseId, forumId } = params;
-  const course = getTaughtCourses(session.tenantId).find(
-    (c) => c.id === courseId,
-  );
+  const course = await getTaughtCourse(session.userId, courseId, session.tenantId);
   if (!course) notFound();
 
   const forumsResult = await listForums(courseId, session.tenantId);

@@ -14,7 +14,7 @@ import {
 
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
-import { canTeach, getTaughtCourses } from "../../../lib/teaching";
+import { canTeach, getTaughtCourse } from "../../../lib/teaching";
 import { listAssignments, type Assignment } from "../../../lib/assignments-api";
 import SignOutButton from "../../../sign-out-button";
 import { deleteAssignmentAction } from "./actions";
@@ -118,9 +118,7 @@ export default async function CourseAssignments({
   }
 
   const { courseId } = params;
-  const course = getTaughtCourses(session.tenantId).find(
-    (c) => c.id === courseId,
-  );
+  const course = await getTaughtCourse(session.userId, courseId, session.tenantId);
   if (!course) notFound();
 
   const errorMessage = Array.isArray(searchParams.error)

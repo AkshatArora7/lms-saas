@@ -14,7 +14,7 @@ import {
 
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
-import { getTenantSettings } from "../lib/tenant";
+import { getTenantOverview } from "../lib/tenant";
 import SignOutButton from "../sign-out-button";
 
 const settingsCss = `
@@ -30,28 +30,48 @@ const settingsCss = `
 .set-detail strong {
   color: var(--lms-text);
 }
-.set-brand-preview {
-  align-items: center;
-  border: 1px solid var(--lms-border);
-  border-radius: var(--lms-radius-md);
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--lms-space-3);
-  padding: var(--lms-space-4);
-}
 .set-brand-name {
   font-weight: 700;
   margin: 0;
   overflow-wrap: anywhere;
 }
-.set-swatch {
-  border: 1px solid var(--lms-border);
-  border-radius: var(--lms-radius-pill);
-  height: 18px;
-  width: 18px;
-  flex-shrink: 0;
+.set-settings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-2);
+}
+.set-settings li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--lms-space-2);
+  border-bottom: 1px solid var(--lms-border);
+  padding-bottom: var(--lms-space-2);
+}
+.set-settings code {
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 `;
+
+const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> =
+  {
+    active: "success",
+    provisioning: "warning",
+    suspended: "danger",
+    deleted: "danger",
+  };
+
+/** Render an effective governance setting value for display. */
+function settingValue(value: unknown): string {
+  if (typeof value === "boolean") return value ? "Enabled" : "Disabled";
+  if (value === null || value === undefined) return "—";
+  return String(value);
+}
 
 export default async function TenantSettings() {
   const session = await getSession();
@@ -74,7 +94,7 @@ export default async function TenantSettings() {
     );
   }
 
-  const settings = getTenantSettings(session);
+  const overview = await getTenantOverview(session.tenantId);
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
@@ -86,7 +106,7 @@ export default async function TenantSettings() {
 
         <PageHeader
           title="Tenant settings"
-          subtitle="Your organisation's identity, tenancy model, and brand."
+          subtitle="Your organisation's identity, tenancy model, and governance policies."
           actions={
             <Button disabled variant="secondary">
               Edit settings
@@ -94,87 +114,103 @@ export default async function TenantSettings() {
           }
         />
 
-        <Alert tone="info">
-          Settings are read-only for now — editing identity and branding arrives
-          with the tenant service write path.
-        </Alert>
+        {overview ? (
+          <>
+            <Alert tone="info">
+              Settings are read-only for now — editing identity and policies
+              arrives with the tenant service write path.
+            </Alert>
 
-        <Grid gap={4} min="280px">
-          <Card>
-            <Stack gap={3}>
-              <h2 className="set-section-title">Organisation</h2>
-              <Inline gap={3}>
-                <BrandMark brand={brand} size={44} />
-                <Stack gap={1}>
-                  <p className="set-brand-name">{brand.name}</p>
-                  <p className="set-detail">{settings.tenancy.label} tenant</p>
+            <Grid gap={4} min="280px">
+              <Card>
+                <Stack gap={3}>
+                  <h2 className="set-section-title">Organisation</h2>
+                  <Inline gap={3}>
+                    <BrandMark brand={brand} size={44} />
+                    <Stack gap={1}>
+                      <p className="set-brand-name">{overview.name}</p>
+                      <p className="set-detail">
+                        {overview.tenancy.label} tenant
+                      </p>
+                    </Stack>
+                  </Inline>
+                  <Stack gap={1}>
+                    <p className="set-detail">
+                      <strong>Tenant ID:</strong> {overview.tenantId}
+                    </p>
+                    <p className="set-detail">
+                      <strong>Slug:</strong> {overview.slug}
+                    </p>
+                    <p className="set-detail">
+                      <strong>Region:</strong> {overview.region}
+                    </p>
+                    <div className="set-detail">
+                      <Inline align="center" gap={2}>
+                        <strong>Status:</strong>
+                        <Badge tone={STATUS_TONE[overview.status] ?? "neutral"}>
+                          {overview.status}
+                        </Badge>
+                      </Inline>
+                    </div>
+                    <p className="set-detail">
+                      <strong>Plan:</strong> {overview.plan ?? "—"}
+                    </p>
+                  </Stack>
                 </Stack>
-              </Inline>
-              <Stack gap={1}>
-                <p className="set-detail">
-                  <strong>Tenant ID:</strong> {settings.tenantId}
-                </p>
-                <p className="set-detail">
-                  <strong>Tier:</strong> {settings.tier}
-                </p>
-              </Stack>
-            </Stack>
-          </Card>
+              </Card>
 
-          <Card>
-            <Stack gap={3}>
-              <Inline gap={2} justify="space-between">
-                <h2 className="set-section-title">Tenancy model</h2>
-                <Badge
-                  tone={
-                    settings.tenancy.model === "silo" ? "accent" : "neutral"
-                  }
-                >
-                  {settings.tenancy.label}
-                </Badge>
-              </Inline>
-              <p className="set-detail">{settings.tenancy.summary}</p>
-              <p className="set-detail">{settings.tenancy.isolation}</p>
-            </Stack>
-          </Card>
-        </Grid>
-
-        <Card>
-          <Stack gap={3}>
-            <h2 className="set-section-title">Brand</h2>
-            <div className="set-brand-preview">
-              <BrandMark brand={brand} size={56} />
-              <Stack gap={1}>
-                <p className="set-brand-name">{brand.name}</p>
-                <p className="set-detail">{brand.tagline}</p>
-              </Stack>
-            </div>
-            <Grid gap={3} min="200px">
-              <p className="set-detail">
-                <Inline gap={2}>
-                  <span
-                    className="set-swatch"
-                    style={{ background: brand.accent }}
-                  />
-                  <span>
-                    <strong>Accent</strong> {brand.accent}
-                  </span>
-                </Inline>
-              </p>
-              <p className="set-detail">
-                <strong>Corner radius</strong> {brand.radius ?? "soft"}
-              </p>
-              <p className="set-detail">
-                <strong>Typography</strong> {brand.fontFamily ?? "default"}
-              </p>
+              <Card>
+                <Stack gap={3}>
+                  <Inline gap={2} justify="space-between">
+                    <h2 className="set-section-title">Tenancy model</h2>
+                    <Badge
+                      tone={
+                        overview.tenancy.model === "silo" ? "accent" : "neutral"
+                      }
+                    >
+                      {overview.tier}
+                    </Badge>
+                  </Inline>
+                  <p className="set-detail">{overview.tenancy.summary}</p>
+                  <p className="set-detail">{overview.tenancy.isolation}</p>
+                </Stack>
+              </Card>
             </Grid>
-            <Inline gap={2}>
-              <Button href="/branding" variant="secondary">
-                View all brands
-              </Button>
-            </Inline>
-          </Stack>
-        </Card>
+
+            <Card>
+              <Stack gap={3}>
+                <h2 className="set-section-title">Governance policies</h2>
+                {Object.keys(overview.settings).length ? (
+                  <ul className="set-settings">
+                    {Object.entries(overview.settings).map(([key, value]) => (
+                      <li key={key}>
+                        <code>{key}</code>
+                        <span className="set-detail">
+                          <strong>{settingValue(value)}</strong>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="set-detail">
+                    No governance policies are configured — platform defaults
+                    apply.
+                  </p>
+                )}
+                <Inline gap={2}>
+                  <Button href="/branding" variant="secondary">
+                    View branding
+                  </Button>
+                </Inline>
+              </Stack>
+            </Card>
+          </>
+        ) : (
+          <Alert tone="warning">
+            The tenant service is unreachable, so tenancy details cannot be
+            shown right now. Start the tenant service and reload.
+          </Alert>
+        )}
       </Stack>
     </AppShell>
   );

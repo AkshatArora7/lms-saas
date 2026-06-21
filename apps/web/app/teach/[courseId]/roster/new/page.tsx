@@ -13,7 +13,7 @@ import {
 
 import { getBranding } from "../../../../lib/branding";
 import { getSession } from "../../../../lib/auth";
-import { canTeach, getTaughtCourses } from "../../../../lib/teaching";
+import { canTeach, getTaughtCourse } from "../../../../lib/teaching";
 import { ASSIGNABLE_ROLES } from "../../../../lib/enrollment-api";
 import SignOutButton from "../../../../sign-out-button";
 import { enrollUserAction } from "../actions";
@@ -104,9 +104,7 @@ export default async function EnrollLearner({
   }
 
   const { courseId } = params;
-  const course = getTaughtCourses(session.tenantId).find(
-    (c) => c.id === courseId,
-  );
+  const course = await getTaughtCourse(session.userId, courseId, session.tenantId);
   if (!course) notFound();
 
   const errorMessage = Array.isArray(searchParams.error)
@@ -133,6 +131,7 @@ export default async function EnrollLearner({
         <Card className="asg-form-card">
           <form action={enrollUserAction} className="asg-form">
             <input name="courseId" type="hidden" value={courseId} />
+            <input name="orgUnitId" type="hidden" value={course.orgUnitId} />
 
             <section className="asg-section">
               <div className="asg-section-head">

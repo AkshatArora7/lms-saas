@@ -14,7 +14,7 @@ import {
 
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
-import { canTeach, getTaughtCourses } from "../../../lib/teaching";
+import { canTeach, getTaughtCourse } from "../../../lib/teaching";
 import { getRoster } from "../../../lib/enrollment-api";
 import SignOutButton from "../../../sign-out-button";
 import {
@@ -119,16 +119,14 @@ export default async function CourseRoster({
   }
 
   const { courseId } = params;
-  const course = getTaughtCourses(session.tenantId).find(
-    (c) => c.id === courseId,
-  );
+  const course = await getTaughtCourse(session.userId, courseId, session.tenantId);
   if (!course) notFound();
 
   const errorMessage = Array.isArray(searchParams.error)
     ? searchParams.error[0]
     : searchParams.error;
 
-  const result = await getRoster(courseId, session.tenantId);
+  const result = await getRoster(course.orgUnitId, session.tenantId);
   const roster = result.ok ? result.roster : [];
   const learners = roster.filter((e) => e.role === "learner").length;
   const staff = roster.length - learners;

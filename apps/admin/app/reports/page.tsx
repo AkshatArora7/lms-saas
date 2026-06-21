@@ -14,7 +14,7 @@ import {
 
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
-import { getSchoolRollups, summarizeRollups } from "../lib/reports";
+import { getReport } from "../lib/reports";
 import SignOutButton from "../sign-out-button";
 
 const reportsCss = `
@@ -62,6 +62,11 @@ const reportsCss = `
 }
 `;
 
+/** Render a 0-100 percentage (1 dp) or an em dash when null. */
+function pct(value: number | null): string {
+  return value === null ? "—" : `${value}%`;
+}
+
 export default async function AdminReports() {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -83,8 +88,7 @@ export default async function AdminReports() {
     );
   }
 
-  const schools = getSchoolRollups(session.tenantId);
-  const summary = summarizeRollups(schools);
+  const { orgUnits, summary } = await getReport(session.tenantId);
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
@@ -104,33 +108,33 @@ export default async function AdminReports() {
           }
         />
 
-        {schools.length ? (
+        {orgUnits.length ? (
           <>
             <Grid gap={4} min="180px">
               <Card>
                 <Stack gap={1}>
-                  <p className="admin-stat">{summary.schoolCount}</p>
+                  <p className="admin-stat">{summary.orgUnitCount}</p>
                   <p className="admin-stat-label">Schools</p>
                 </Stack>
               </Card>
               <Card>
                 <Stack gap={1}>
                   <p className="admin-stat">
-                    {summary.totalStudents.toLocaleString()}
+                    {summary.enrollmentCount.toLocaleString()}
                   </p>
-                  <p className="admin-stat-label">Students</p>
+                  <p className="admin-stat-label">Enrollments</p>
                 </Stack>
               </Card>
               <Card>
                 <Stack gap={1}>
-                  <p className="admin-stat">{summary.avgCompletion}%</p>
-                  <p className="admin-stat-label">Avg completion</p>
+                  <p className="admin-stat">{pct(summary.attendanceRate)}</p>
+                  <p className="admin-stat-label">Avg attendance</p>
                 </Stack>
               </Card>
               <Card>
                 <Stack gap={1}>
-                  <p className="admin-stat">{summary.totalAtRisk}</p>
-                  <p className="admin-stat-label">At-risk learners</p>
+                  <p className="admin-stat">{pct(summary.averageGrade)}</p>
+                  <p className="admin-stat-label">Avg grade</p>
                 </Stack>
               </Card>
             </Grid>
@@ -141,36 +145,43 @@ export default async function AdminReports() {
                   By school
                 </h2>
                 <ul className="school-list">
-                  {schools.map((school) => (
-                    <li key={school.id}>
+                  {orgUnits.map((school) => (
+                    <li key={school.orgUnitId}>
                       <Card>
                         <Stack gap={3}>
                           <Inline align="center" gap={2} justify="space-between">
                             <p className="school-name">{school.name}</p>
                             <Inline gap={2}>
+                              {school.code ? (
+                                <Badge tone="neutral">{school.code}</Badge>
+                              ) : null}
                               <Badge tone="neutral">
-                                {school.students.toLocaleString()} students
+                                {school.courseCount.toLocaleString()}{" "}
+                                {school.courseCount === 1 ? "course" : "courses"}
                               </Badge>
-                              <Badge
-                                tone={school.atRisk > 30 ? "danger" : "warning"}
-                              >
-                                {school.atRisk} at risk
+                              <Badge tone="accent">
+                                {school.enrollmentCount.toLocaleString()}{" "}
+                                enrollments
                               </Badge>
                             </Inline>
                           </Inline>
                           <div className="school-metrics">
                             <div>
-                              <span className="metric-label">Completion</span>
+                              <span className="metric-label">
+                                Attendance {pct(school.attendanceRate)}
+                              </span>
                               <ProgressBar
-                                label={`${school.name} completion`}
-                                value={school.completion}
+                                label={`${school.name} attendance rate`}
+                                value={school.attendanceRate ?? 0}
                               />
                             </div>
                             <div>
-                              <span className="metric-label">Engagement</span>
+                              <span className="metric-label">
+                                Average grade {pct(school.averageGrade)}
+                              </span>
                               <ProgressBar
-                                label={`${school.name} engagement`}
-                                value={school.engagement}
+                                label={`${school.name} average grade`}
+                                value={school.averageGrade ?? 0}
                               />
                             </div>
                           </div>
@@ -184,8 +195,9 @@ export default async function AdminReports() {
           </>
         ) : (
           <Alert tone="info">
-            No reporting data yet. Roll-up metrics appear here once analytics
-            read models are populated for your district.
+            No reporting data yet. Roll-up metrics appear here once schools,
+            enrollments, and activity exist for your district — or once the
+            analytics service is reachable.
           </Alert>
         )}
       </Stack>

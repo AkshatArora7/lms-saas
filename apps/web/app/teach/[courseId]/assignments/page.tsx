@@ -3,6 +3,7 @@ import {
   Alert,
   AppShell,
   Badge,
+  Breadcrumbs,
   Button,
   Card,
   Chip,
@@ -10,8 +11,10 @@ import {
   Grid,
   PageHeader,
   Stack,
+  StatCard,
 } from "@lms/ui";
 
+import { AssignmentsIcon } from "../../../lib/ui";
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
 import { canTeach, getTaughtCourse } from "../../../lib/teaching";
@@ -22,16 +25,6 @@ import { deleteAssignmentAction } from "./actions";
 const assignmentsCss = `
 .asg-section-title {
   font-size: 16px;
-  margin: 0;
-}
-.asg-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.asg-stat-label {
-  color: var(--lms-text-muted);
   margin: 0;
 }
 .asg-name {
@@ -133,9 +126,13 @@ export default async function CourseAssignments({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{assignmentsCss}</style>
       <Stack gap={4}>
-        <Button href="/teach" size="sm" variant="ghost">
-          ← Back to teaching
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Teaching", href: "/teach" },
+            { label: course.title, collapsible: true },
+            { label: "Assignments" },
+          ]}
+        />
 
         <PageHeader
           title={`${course.title} - assignments`}
@@ -151,18 +148,8 @@ export default async function CourseAssignments({
         {!result.ok ? <Alert tone="warning">{result.error}</Alert> : null}
 
         <Grid gap={4} min="180px">
-          <Card>
-            <Stack gap={1}>
-              <p className="asg-stat">{assignments.length}</p>
-              <p className="asg-stat-label">Assignments</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="asg-stat">{totalPoints}</p>
-              <p className="asg-stat-label">Total points</p>
-            </Stack>
-          </Card>
+          <StatCard label="Assignments" value={assignments.length} />
+          <StatCard label="Total points" value={totalPoints} />
         </Grid>
 
         {assignments.length ? (
@@ -213,7 +200,7 @@ export default async function CourseAssignments({
         ) : result.ok ? (
           <EmptyState
             description="Create your first assignment to start building coursework."
-            icon="[ ]"
+            icon={<AssignmentsIcon />}
             title="No assignments yet"
           />
         ) : (

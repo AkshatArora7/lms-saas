@@ -2,8 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import {
   Alert,
   AppShell,
+  Breadcrumbs,
   Button,
   Card,
+  Checkbox,
   Field,
   Input,
   PageHeader,
@@ -20,9 +22,6 @@ import SignOutButton from "../../../../../sign-out-button";
 import { deleteAssignmentAction, updateAssignmentAction } from "../../actions";
 
 const formCss = `
-.asg-back {
-  align-self: flex-start;
-}
 .asg-form-card {
   padding: var(--lms-space-5);
 }
@@ -65,24 +64,6 @@ const formCss = `
   .asg-grid-2 {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
-}
-.asg-check {
-  align-items: flex-start;
-  background: var(--lms-surface-2);
-  border: 1px solid var(--lms-border);
-  border-radius: var(--lms-radius-md);
-  cursor: pointer;
-  display: flex;
-  gap: var(--lms-space-3);
-  min-height: 44px;
-  padding: var(--lms-space-3);
-}
-.asg-check input {
-  accent-color: var(--lms-accent);
-  flex-shrink: 0;
-  height: 18px;
-  margin-top: 2px;
-  width: 18px;
 }
 .asg-check-text {
   display: flex;
@@ -193,9 +174,13 @@ export default async function EditAssignment({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{formCss}</style>
       <Stack gap={4}>
-        <Button className="asg-back" href={base} size="sm" variant="ghost">
-          ← Back to assignments
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Teaching", href: "/teach" },
+            { label: "Assignments", href: base, collapsible: true },
+            { label: assignment.title },
+          ]}
+        />
 
         <PageHeader
           title="Edit assignment"
@@ -271,19 +256,20 @@ export default async function EditAssignment({
                   <option value="none">No submission</option>
                 </Select>
               </Field>
-              <label className="asg-check">
-                <input
-                  defaultChecked={assignment.allowLate}
-                  name="allowLate"
-                  type="checkbox"
-                />
-                <span className="asg-check-text">
-                  <span className="asg-check-title">Allow late submissions</span>
-                  <span className="asg-check-hint">
-                    Learners can submit after the due date.
+              <Checkbox
+                name="allowLate"
+                defaultChecked={assignment.allowLate}
+                label={
+                  <span className="asg-check-text">
+                    <span className="asg-check-title">
+                      Allow late submissions
+                    </span>
+                    <span className="asg-check-hint">
+                      Learners can submit after the due date.
+                    </span>
                   </span>
-                </span>
-              </label>
+                }
+              />
             </section>
 
             <div className="asg-actionbar">

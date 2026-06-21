@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import type { CSSProperties } from "react";
 import {
   Alert,
   Badge,
@@ -9,6 +8,7 @@ import {
   Grid,
   PageHeader,
   Stack,
+  StatCard,
 } from "@lms/ui";
 
 import { getBranding } from "../lib/branding";
@@ -32,28 +32,6 @@ import SignOutButton from "../sign-out-button";
  * is only ever supplementary.
  */
 const attendanceCss = `
-.att-stat-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--lms-space-1);
-  align-items: flex-start;
-}
-.att-stat {
-  font-size: clamp(2rem, 6vw, 2.6rem);
-  font-weight: 700;
-  line-height: 1;
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--lms-stat-accent, var(--lms-text));
-}
-.att-stat-label {
-  color: var(--lms-text-muted);
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
 .att-section-heading {
   font-size: clamp(1.15rem, 3vw, 1.4rem);
   font-weight: 700;
@@ -160,47 +138,14 @@ export default async function Attendance() {
         ) : (
           <>
             <Grid gap={4} min="200px">
-              <Card>
-                <div
-                  className="att-stat-card"
-                  style={
-                    { "--lms-stat-accent": "var(--lms-accent)" } as CSSProperties
-                  }
-                >
-                  <p className="att-stat">{summary.total}</p>
-                  <p className="att-stat-label">Sessions recorded</p>
-                </div>
-              </Card>
-              <Card>
-                <div
-                  className="att-stat-card"
-                  style={
-                    { "--lms-stat-accent": "var(--lms-danger)" } as CSSProperties
-                  }
-                >
-                  <p className="att-stat">{summary.absent}</p>
-                  <p className="att-stat-label">Absences</p>
-                </div>
-              </Card>
-              <Card>
-                <div
-                  className="att-stat-card"
-                  style={
-                    {
-                      "--lms-stat-accent": "var(--lms-warning)",
-                    } as CSSProperties
-                  }
-                >
-                  <p className="att-stat">{summary.tardy}</p>
-                  <p className="att-stat-label">Tardies</p>
-                </div>
-              </Card>
-              <Card>
-                <div className="att-stat-card">
-                  <p className="att-stat">{summary.excused}</p>
-                  <p className="att-stat-label">Excused</p>
-                </div>
-              </Card>
+              <StatCard
+                label="Sessions recorded"
+                tone="accent"
+                value={summary.total}
+              />
+              <StatCard label="Absences" tone="danger" value={summary.absent} />
+              <StatCard label="Tardies" value={summary.tardy} />
+              <StatCard label="Excused" value={summary.excused} />
             </Grid>
 
             {groups.length ? (

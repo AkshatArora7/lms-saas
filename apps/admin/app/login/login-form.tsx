@@ -26,6 +26,11 @@ import type { Brand } from "@lms/ui";
  * gradient uses --lms-accent-contrast for guaranteed legibility, and the brand
  * name is carried as supporting text so the form's "Welcome back" stays the
  * single page <h1>.
+ *
+ * Modern UX touches kept fully client-side and honest: a password show/hide
+ * toggle and a live Caps-Lock warning — no fake "remember me" / "forgot
+ * password" affordances that the backend can't yet honour. The auth call
+ * (POST /api/auth/login with email + password) is byte-identical to before.
  */
 const loginCss = `
 .login-split {
@@ -68,11 +73,30 @@ const loginCss = `
 .login-card {
   width: 100%;
   max-width: 440px;
+  box-shadow: var(--lms-shadow-lg);
+  border-radius: var(--lms-radius-lg);
 }
 .login-welcome {
   display: flex;
   flex-direction: column;
   gap: var(--lms-space-1);
+}
+.login-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lms-space-2);
+  margin: 0 0 var(--lms-space-1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lms-accent);
+}
+.login-eyebrow__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--lms-radius-pill);
+  background: var(--lms-accent);
 }
 .login-title {
   margin: 0;
@@ -94,6 +118,46 @@ const loginCss = `
   overflow-wrap: anywhere;
 }
 
+/* Password field with inline show/hide toggle */
+.login-pw {
+  position: relative;
+  min-width: 0;
+}
+.login-pw .lms-input {
+  padding-right: 48px;
+}
+.login-pw__toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--lms-text-muted);
+  cursor: pointer;
+  border-radius: var(--lms-radius-sm);
+  transition: color 150ms cubic-bezier(0.2,0,0,1);
+}
+.login-pw__toggle:hover { color: var(--lms-text); }
+.login-pw__toggle:focus-visible {
+  outline: 3px solid var(--lms-focus);
+  outline-offset: -3px;
+}
+.login-pw__toggle svg { width: 20px; height: 20px; }
+.login-caps {
+  display: flex;
+  align-items: center;
+  gap: var(--lms-space-2);
+  margin: 0;
+  font-size: 13px;
+  color: var(--lms-warning-soft-text);
+}
+.login-caps svg { width: 16px; height: 16px; flex-shrink: 0; }
+
 @media (min-width: 641px) {
   .login-split {
     flex-direction: row;
@@ -108,12 +172,16 @@ const loginCss = `
     justify-content: space-between;
     gap: var(--lms-space-6);
     padding: clamp(32px, 5vw, 64px);
-    background: linear-gradient(135deg, var(--lms-accent), var(--lms-accent-hover));
+    background:
+      radial-gradient(120% 120% at 100% 0%, var(--lms-accent-hover) 0%, transparent 55%),
+      radial-gradient(90% 90% at 0% 100%, var(--lms-accent-hover) 0%, transparent 45%),
+      linear-gradient(135deg, var(--lms-accent), var(--lms-accent-hover));
     color: var(--lms-accent-contrast);
     position: relative;
     overflow: hidden;
     min-width: 0;
   }
+  /* soft glow blob */
   .login-showcase::before {
     content: "";
     position: absolute;
@@ -122,8 +190,18 @@ const loginCss = `
     height: 60%;
     border-radius: var(--lms-radius-pill);
     background: var(--lms-accent-soft);
-    opacity: 0.35;
+    opacity: 0.5;
     filter: blur(80px);
+    pointer-events: none;
+  }
+  /* subtle dotted texture */
+  .login-showcase::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(currentColor 1px, transparent 1.4px);
+    background-size: 22px 22px;
+    opacity: 0.08;
     pointer-events: none;
   }
   .login-showcase > * {
@@ -151,7 +229,7 @@ const loginCss = `
 .login-showcase__lead {
   display: flex;
   flex-direction: column;
-  gap: var(--lms-space-3);
+  gap: var(--lms-space-4);
 }
 .login-showcase__headline {
   margin: 0;
@@ -166,7 +244,7 @@ const loginCss = `
   font-size: clamp(1rem, 1.4vw, 1.15rem);
   line-height: 1.5;
   max-width: 40ch;
-  opacity: 0.9;
+  opacity: 0.92;
   overflow-wrap: anywhere;
 }
 .login-highlights {
@@ -175,13 +253,17 @@ const loginCss = `
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--lms-space-4);
+  gap: var(--lms-space-3);
 }
 .login-highlights li {
   display: flex;
   align-items: center;
   gap: var(--lms-space-3);
   min-width: 0;
+  padding: var(--lms-space-3);
+  border-radius: var(--lms-radius-md);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 .login-highlight__icon {
   flex-shrink: 0;
@@ -191,22 +273,32 @@ const loginCss = `
   align-items: center;
   justify-content: center;
   border-radius: var(--lms-radius-md);
-  background: var(--lms-accent-soft);
-  color: var(--lms-accent);
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--lms-accent-contrast);
 }
 .login-highlight__icon svg {
   width: 20px;
   height: 20px;
 }
-.login-showcase__footnote {
-  margin: 0;
-  font-size: 13px;
-  opacity: 0.8;
+.login-highlight__label {
+  font-size: clamp(0.95rem, 1.3vw, 1.05rem);
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
+.login-showcase__footnote {
+  display: flex;
+  align-items: center;
+  gap: var(--lms-space-2);
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.88;
+  overflow-wrap: anywhere;
+}
+.login-showcase__footnote svg { width: 16px; height: 16px; flex-shrink: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .login-card,
+  .login-pw__toggle,
   .login-showcase::before {
     transition: none;
   }
@@ -275,10 +367,90 @@ const HIGHLIGHTS = [
   },
 ];
 
+function EyeIcon() {
+  return (
+    <svg fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M2.5 12S5.7 5.8 12 5.8 21.5 12 21.5 12 18.3 18.2 12 18.2 2.5 12 2.5 12Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M3 3l18 18"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10.6 6.1A9.6 9.6 0 0 1 12 6c6.3 0 9.5 6 9.5 6a16 16 0 0 1-3 3.6M6.3 7.5A16 16 0 0 0 2.5 12S5.7 18 12 18a9.4 9.4 0 0 0 3.9-.8"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.9 9.9a3 3 0 0 0 4.2 4.2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 3 5 6v5c0 4 3 6.5 7 8 4-1.5 7-4 7-8V6l-7-3Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function WarnIcon() {
+  return (
+    <svg fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 4 2.7 20h18.6L12 4Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 10v4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="17" r="0.4" fill="currentColor" stroke="currentColor" />
+    </svg>
+  );
+}
+
 export default function LoginForm({ brand }: { brand: Brand }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
+
+  function trackCaps(e: React.KeyboardEvent<HTMLInputElement>) {
+    setCapsLock(e.getModifierState?.("CapsLock") ?? false);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -341,6 +513,7 @@ export default function LoginForm({ brand }: { brand: Brand }) {
         </div>
 
         <p className="login-showcase__footnote">
+          <ShieldIcon />
           Secure, tenant-isolated administration for every brand.
         </p>
       </div>
@@ -351,6 +524,10 @@ export default function LoginForm({ brand }: { brand: Brand }) {
           <form action="/api/auth/login" method="post" onSubmit={onSubmit}>
             <Stack gap={5}>
               <div className="login-welcome">
+                <p className="login-eyebrow">
+                  <span className="login-eyebrow__dot" aria-hidden="true" />
+                  Admin sign in
+                </p>
                 <h1 className="login-title">Welcome back</h1>
                 <p className="login-subtitle">
                   Sign in to the administration console.
@@ -362,18 +539,54 @@ export default function LoginForm({ brand }: { brand: Brand }) {
                   <Input autoComplete="email" name="email" type="email" />
                 </Field>
 
-                <Field htmlFor="password" label="Password" required>
-                  <Input
-                    autoComplete="current-password"
-                    name="password"
-                    type="password"
-                  />
-                </Field>
+                {/* Password field — built manually so the show/hide toggle can
+                    sit inside the control while the label stays associated with
+                    the input (Field clones a single child and would not). */}
+                <div className="lms-field">
+                  <label className="lms-field__label" htmlFor="password">
+                    Password<span aria-hidden="true"> *</span>
+                  </label>
+                  <div className="login-pw">
+                    <input
+                      aria-describedby={capsLock ? "password-caps" : undefined}
+                      autoComplete="current-password"
+                      className="lms-input"
+                      id="password"
+                      name="password"
+                      onBlur={() => setCapsLock(false)}
+                      onKeyDown={trackCaps}
+                      onKeyUp={trackCaps}
+                      required
+                      type={showPw ? "text" : "password"}
+                    />
+                    <button
+                      aria-label={showPw ? "Hide password" : "Show password"}
+                      aria-pressed={showPw}
+                      className="login-pw__toggle"
+                      onClick={() => setShowPw((v) => !v)}
+                      type="button"
+                    >
+                      {showPw ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  </div>
+                  {capsLock ? (
+                    <p className="login-caps" id="password-caps" role="status">
+                      <WarnIcon />
+                      Caps Lock is on.
+                    </p>
+                  ) : null}
+                </div>
               </Stack>
 
               {error ? <Alert tone="danger">{error}</Alert> : null}
 
-              <Button disabled={busy} fullWidth type="submit">
+              <Button
+                disabled={busy}
+                fullWidth
+                loading={busy}
+                size="lg"
+                type="submit"
+              >
                 {busy ? "Signing in…" : "Sign in"}
               </Button>
 

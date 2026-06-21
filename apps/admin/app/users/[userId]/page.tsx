@@ -1,9 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Avatar,
   Badge,
+  Breadcrumbs,
   Button,
   Card,
   Chip,
@@ -21,6 +21,7 @@ import {
   getDirectoryUserDetail,
   type UserStatus,
 } from "../../lib/directory";
+import { AppShell } from "../../lib/ui";
 import SignOutButton from "../../sign-out-button";
 
 const userCss = `
@@ -109,11 +110,18 @@ export default async function AdminUserDetail({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{userCss}</style>
       <Stack gap={4}>
-        <Button href="/users" size="sm" variant="ghost">
-          ← Back to users
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Console", href: "/" },
+            { label: "Users", href: "/users" },
+            { label: user.name },
+          ]}
+        />
 
-        <PageHeader title="User" subtitle="Account profile, roles, and activity." />
+        <PageHeader
+          title={user.name}
+          subtitle="Account profile, roles, and activity."
+        />
 
         <Card>
           <div className="admin-profile">

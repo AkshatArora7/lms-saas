@@ -171,15 +171,15 @@ const toneTokens: Readonly<Record<Tone, Readonly<ToneTokens>>> = Object.freeze({
     controlH: "40px",
   }),
   web: Object.freeze({
-    bg: "#fafaf8",
+    bg: "#f5f7fa",
     surface: "#ffffff",
-    surface2: "#f2f1ec",
-    surface2Hover: "#eae9e2",
-    border: "#e4e2d9",
-    borderStrong: "#c8c5b8",
-    text: "#1b2430",
-    textMuted: "#46505c",
-    textSubtle: "#6b7480",
+    surface2: "#eef1f6",
+    surface2Hover: "#e5eaf2",
+    border: "#e2e7ef",
+    borderStrong: "#cbd3df",
+    text: "#0f172a",
+    textMuted: "#475467",
+    textSubtle: "#667085",
     danger: "#c2261b",
     dangerContrast: "#ffffff",
     dangerSoftBg: "#fce6e3",
@@ -201,9 +201,10 @@ const toneTokens: Readonly<Record<Tone, Readonly<ToneTokens>>> = Object.freeze({
     fontSize: "16px",
     fontSizeSm: "14px",
     line: "1.6",
-    shadowSm: "0 1px 3px rgba(27, 36, 48, 0.06)",
-    shadowMd: "0 6px 16px rgba(27, 36, 48, 0.10)",
-    shadowLg: "0 16px 40px rgba(27, 36, 48, 0.14)",
+    shadowSm: "0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.04)",
+    shadowMd:
+      "0 4px 10px -2px rgba(16, 24, 40, 0.10), 0 2px 6px -2px rgba(16, 24, 40, 0.06)",
+    shadowLg: "0 24px 48px -12px rgba(16, 24, 40, 0.18)",
     density: "comfortable",
     cardPad: "24px",
     rowPadY: "12px",
@@ -211,7 +212,8 @@ const toneTokens: Readonly<Record<Tone, Readonly<ToneTokens>>> = Object.freeze({
   }),
 });
 
-const defaultFontFamily = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+const defaultFontFamily =
+  '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 const defaultAccentContrast = "#ffffff";
 const defaultRadius: NonNullable<Brand["radius"]> = "soft";
 const fallbackAccent = "#2952cc";

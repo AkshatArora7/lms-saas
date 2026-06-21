@@ -3,6 +3,7 @@ import {
   Alert,
   AppShell,
   Badge,
+  Breadcrumbs,
   Button,
   Card,
   Chip,
@@ -10,9 +11,11 @@ import {
   Grid,
   PageHeader,
   Stack,
+  StatCard,
 } from "@lms/ui";
 import type { BadgeTone } from "@lms/ui";
 
+import { AnnouncementsIcon } from "../../../lib/ui";
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
 import { canTeach, getTaughtCourse } from "../../../lib/teaching";
@@ -30,16 +33,6 @@ import {
 const announcementsCss = `
 .ann-section-title {
   font-size: 16px;
-  margin: 0;
-}
-.ann-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.ann-stat-label {
-  color: var(--lms-text-muted);
   margin: 0;
 }
 .ann-name {
@@ -153,9 +146,13 @@ export default async function CourseAnnouncements({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{announcementsCss}</style>
       <Stack gap={4}>
-        <Button href="/teach" size="sm" variant="ghost">
-          ← Back to teaching
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Teaching", href: "/teach" },
+            { label: course.title, collapsible: true },
+            { label: "Announcements" },
+          ]}
+        />
 
         <PageHeader
           title={`${course.title} - announcements`}
@@ -171,24 +168,9 @@ export default async function CourseAnnouncements({
         {!result.ok ? <Alert tone="warning">{result.error}</Alert> : null}
 
         <Grid gap={4} min="180px">
-          <Card>
-            <Stack gap={1}>
-              <p className="ann-stat">{announcements.length}</p>
-              <p className="ann-stat-label">Total</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="ann-stat">{published}</p>
-              <p className="ann-stat-label">Published</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="ann-stat">{scheduled}</p>
-              <p className="ann-stat-label">Scheduled</p>
-            </Stack>
-          </Card>
+          <StatCard label="Total" value={announcements.length} />
+          <StatCard label="Published" value={published} />
+          <StatCard label="Scheduled" value={scheduled} />
         </Grid>
 
         {announcements.length ? (
@@ -260,7 +242,7 @@ export default async function CourseAnnouncements({
         ) : result.ok ? (
           <EmptyState
             description="Compose your first announcement to keep learners informed."
-            icon="[ ]"
+            icon={<AnnouncementsIcon />}
             title="No announcements yet"
           />
         ) : (

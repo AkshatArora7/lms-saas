@@ -2,7 +2,7 @@ import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import { ThemeStyle, UIStyles } from "../styles.js";
 import type { Brand, Tone } from "../theme.js";
-import { Container } from "./layout.js";
+import { Container, type ContainerWidth } from "./layout.js";
 
 export interface BrandMarkProps {
   brand: Brand;
@@ -15,6 +15,12 @@ export interface AppShellProps {
   tone?: Tone;
   actions?: ReactNode;
   children: ReactNode;
+  /**
+   * Inner content width. Omit (or "default") for the standard 1100px column —
+   * byte-identical to historical behaviour. Pass "wide" to render the content
+   * in the 1280px column (`.lms-container--wide`) for data-dense screens.
+   */
+  width?: ContainerWidth;
   className?: string;
 }
 
@@ -33,6 +39,7 @@ export function AppShell({
   tone = "web",
   actions,
   children,
+  width = "default",
   className,
 }: AppShellProps): ReactElement {
   return (
@@ -48,7 +55,7 @@ export function AppShell({
           {actions ? <div className="lms-topbar__actions">{actions}</div> : null}
         </header>
         <main className="lms-shell__main">
-          <Container>{children}</Container>
+          <Container width={width}>{children}</Container>
         </main>
       </div>
     </>

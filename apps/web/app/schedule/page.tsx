@@ -9,6 +9,7 @@ import {
   Inline,
   PageHeader,
   Stack,
+  StatCard,
   type BadgeTone,
 } from "@lms/ui";
 
@@ -38,15 +39,6 @@ const scheduleCss = `
   border-radius: var(--lms-radius-pill);
   background: var(--sched-accent, var(--lms-accent));
 }
-.sched-stat {
-  color: var(--sched-accent, var(--lms-text));
-  font-size: clamp(2rem, 6vw, 2.75rem);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  margin: 0;
-}
-.sched-stat-label,
 .sched-kicker {
   color: var(--lms-text-muted);
   font-size: 0.75rem;
@@ -244,32 +236,16 @@ export default async function SchedulePage() {
         {entries.length ? (
           <>
             <Grid gap={4} min="13rem">
-              <Card>
-                <div
-                  className="sched-stat-card"
-                  style={
-                    { "--sched-accent": SUMMARY_ACCENTS.classes } as CSSProperties
-                  }
-                >
-                  <Stack gap={1}>
-                    <p className="sched-stat">{summary.totalClasses}</p>
-                    <p className="sched-stat-label">Classes this week</p>
-                  </Stack>
-                </div>
-              </Card>
-              <Card>
-                <div
-                  className="sched-stat-card"
-                  style={
-                    { "--sched-accent": SUMMARY_ACCENTS.days } as CSSProperties
-                  }
-                >
-                  <Stack gap={1}>
-                    <p className="sched-stat">{summary.daysWithClasses}</p>
-                    <p className="sched-stat-label">Teaching days</p>
-                  </Stack>
-                </div>
-              </Card>
+              <StatCard
+                label="Classes this week"
+                tone="accent"
+                value={summary.totalClasses}
+              />
+              <StatCard
+                label="Teaching days"
+                tone="success"
+                value={summary.daysWithClasses}
+              />
               <Card>
                 <div
                   className="sched-stat-card"

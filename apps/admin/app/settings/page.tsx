@@ -3,6 +3,7 @@ import {
   Alert,
   Badge,
   BrandMark,
+  Breadcrumbs,
   Button,
   Card,
   Grid,
@@ -104,9 +105,12 @@ export default async function TenantSettings() {
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{settingsCss}</style>
       <Stack gap={4}>
-        <Button href="/" size="sm" variant="ghost">
-          ← Back to console
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Console", href: "/" },
+            { label: "Tenant settings" },
+          ]}
+        />
 
         <PageHeader
           title="Tenant settings"

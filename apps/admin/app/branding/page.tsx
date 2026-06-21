@@ -3,7 +3,7 @@ import {
   Alert,
   Badge,
   BrandMark,
-  Button,
+  Breadcrumbs,
   Card,
   Grid,
   Inline,
@@ -114,9 +114,12 @@ export default async function BrandingShowcase() {
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{brandingCss}</style>
       <Stack gap={4}>
-        <Button href="/" size="sm" variant="ghost">
-          ← Back to console
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Console", href: "/" },
+            { label: "White-label branding" },
+          ]}
+        />
 
         <PageHeader
           title="White-label branding"

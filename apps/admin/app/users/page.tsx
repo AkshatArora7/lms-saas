@@ -3,12 +3,12 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
   Chip,
   EmptyState,
   Grid,
   PageHeader,
   Stack,
+  StatCard,
 } from "@lms/ui";
 import type { BadgeTone } from "@lms/ui";
 
@@ -21,16 +21,6 @@ import SignOutButton from "../sign-out-button";
 const usersCss = `
 .admin-section-title {
   font-size: 16px;
-  margin: 0;
-}
-.admin-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.admin-stat-label {
-  color: var(--lms-text-muted);
   margin: 0;
 }
 .admin-user-name {
@@ -56,14 +46,16 @@ const usersCss = `
   flex-wrap: wrap;
   gap: var(--lms-space-1);
 }
-.admin-users-table th,
-.admin-users-table td {
-  white-space: nowrap;
-}
-.admin-users-table td:first-child,
-.admin-users-table th:first-child {
-  white-space: normal;
-  min-width: 180px;
+@media (min-width: 601px) {
+  .admin-users-table th,
+  .admin-users-table td {
+    white-space: nowrap;
+  }
+  .admin-users-table td:first-child,
+  .admin-users-table th:first-child {
+    white-space: normal;
+    min-width: 180px;
+  }
 }
 `;
 
@@ -97,7 +89,7 @@ export default async function AdminUsers() {
   const directory = await getDirectory(session.tenantId);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell brand={brand} actions={<SignOutButton />} width="wide">
       <style>{usersCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
@@ -112,26 +104,16 @@ export default async function AdminUsers() {
         {directory ? (
           <>
             <Grid gap={4} min="180px">
-              <Card>
-                <Stack gap={1}>
-                  <p className="admin-stat">{directory.summary.total}</p>
-                  <p className="admin-stat-label">Total users</p>
-                </Stack>
-              </Card>
-              <Card>
-                <Stack gap={1}>
-                  <p className="admin-stat">{directory.summary.admins}</p>
-                  <p className="admin-stat-label">Administrators</p>
-                </Stack>
-              </Card>
-              <Card>
-                <Stack gap={1}>
-                  <p className="admin-stat">
-                    {directory.summary.pendingInvites}
-                  </p>
-                  <p className="admin-stat-label">Pending invites</p>
-                </Stack>
-              </Card>
+              <StatCard label="Total users" value={directory.summary.total} />
+              <StatCard
+                label="Administrators"
+                tone="accent"
+                value={directory.summary.admins}
+              />
+              <StatCard
+                label="Pending invites"
+                value={directory.summary.pendingInvites}
+              />
             </Grid>
 
             <section aria-labelledby="directory-heading">
@@ -146,7 +128,7 @@ export default async function AdminUsers() {
                     role="region"
                     tabIndex={0}
                   >
-                    <table className="lms-table admin-users-table">
+                    <table className="lms-table lms-table--stack admin-users-table">
                       <thead>
                         <tr>
                           <th scope="col">Name</th>
@@ -160,7 +142,7 @@ export default async function AdminUsers() {
                           const status = STATUS_META[user.status];
                           return (
                             <tr key={user.id}>
-                              <td>
+                              <td data-label="Name">
                                 <a
                                   className="admin-user-name"
                                   href={`/users/${user.id}`}
@@ -169,7 +151,7 @@ export default async function AdminUsers() {
                                 </a>
                                 <p className="admin-user-email">{user.email}</p>
                               </td>
-                              <td>
+                              <td data-label="Roles">
                                 <span className="admin-user-roles">
                                   {user.roles.length ? (
                                     user.roles.map((role) => (
@@ -182,10 +164,10 @@ export default async function AdminUsers() {
                                   )}
                                 </span>
                               </td>
-                              <td>
+                              <td data-label="Org unit">
                                 <Badge tone="neutral">{user.orgUnit}</Badge>
                               </td>
-                              <td>
+                              <td data-label="Status">
                                 <Chip tone={status.tone}>{status.label}</Chip>
                               </td>
                             </tr>

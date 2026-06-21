@@ -2,18 +2,20 @@ import { notFound, redirect } from "next/navigation";
 import {
   AppShell,
   Badge,
-  Button,
+  Breadcrumbs,
   Card,
   EmptyState,
   Grid,
   Inline,
   PageHeader,
+  StatCard,
   Stack,
 } from "@lms/ui";
 
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
 import { getCourseDetail } from "../../../lib/dashboard";
+import { GenericIcon } from "../../../lib/ui";
 import {
   getCourseDiscussions,
   relativeTime,
@@ -22,16 +24,6 @@ import {
 import SignOutButton from "../../../sign-out-button";
 
 const discussionsCss = `
-.disc-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.disc-stat-label {
-  color: var(--lms-text-muted);
-  margin: 0;
-}
 .disc-list {
   display: flex;
   flex-direction: column;
@@ -86,9 +78,13 @@ export default async function CourseDiscussionsPage({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{discussionsCss}</style>
       <Stack gap={4}>
-        <Button href={`/courses/${course.id}`} size="sm" variant="ghost">
-          ← Back to {course.code ?? course.title}
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Dashboard", href: "/" },
+            { label: course.code ?? course.title, href: `/courses/${course.id}` },
+            { label: "Discussions" },
+          ]}
+        />
 
         <PageHeader
           title="Discussions"
@@ -101,18 +97,8 @@ export default async function CourseDiscussionsPage({
         {threads.length ? (
           <>
             <Grid gap={4} min="200px">
-              <Card>
-                <Stack gap={1}>
-                  <p className="disc-stat">{summary.total}</p>
-                  <p className="disc-stat-label">Threads</p>
-                </Stack>
-              </Card>
-              <Card>
-                <Stack gap={1}>
-                  <p className="disc-stat">{summary.unanswered}</p>
-                  <p className="disc-stat-label">Unanswered</p>
-                </Stack>
-              </Card>
+              <StatCard label="Threads" value={summary.total} />
+              <StatCard label="Unanswered" value={summary.unanswered} />
             </Grid>
 
             <ul className="disc-list">
@@ -152,7 +138,7 @@ export default async function CourseDiscussionsPage({
         ) : (
           <EmptyState
             description="No discussion threads have been started in this course yet."
-            icon="💬"
+            icon={<GenericIcon />}
             title="No discussions yet"
           />
         )}

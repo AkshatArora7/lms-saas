@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import {
   Alert,
   AppShell,
+  Breadcrumbs,
   Button,
   Card,
   Field,
@@ -18,9 +19,6 @@ import SignOutButton from "../../../../../../../sign-out-button";
 import { updatePostAction } from "../../../../actions";
 
 const formCss = `
-.asg-back {
-  align-self: flex-start;
-}
 .asg-form-card {
   padding: var(--lms-space-5);
 }
@@ -105,6 +103,22 @@ export default async function EditPostPage({
   if (!course) notFound();
 
   const base = `/teach/${courseId}/discussions/${forumId}/${topicId}`;
+  const breadcrumbItems = [
+    { label: "Teaching", href: "/teach" },
+    { label: course.title, collapsible: true },
+    {
+      label: "Discussions",
+      href: `/teach/${courseId}/discussions`,
+      collapsible: true,
+    },
+    {
+      label: "Forum",
+      href: `/teach/${courseId}/discussions/${forumId}`,
+      collapsible: true,
+    },
+    { label: "Thread", href: base },
+    { label: "Edit" },
+  ];
 
   const postsResult = await listPosts(topicId, session.tenantId);
   if (!postsResult.ok) {
@@ -112,9 +126,7 @@ export default async function EditPostPage({
       <AppShell brand={brand} actions={<SignOutButton />}>
         <style>{formCss}</style>
         <Stack gap={4}>
-          <Button className="asg-back" href={base} size="sm" variant="ghost">
-            ← Back to thread
-          </Button>
+          <Breadcrumbs items={breadcrumbItems} />
           <PageHeader title="Edit post" />
           <Alert tone="warning">{postsResult.error}</Alert>
         </Stack>
@@ -133,9 +145,7 @@ export default async function EditPostPage({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{formCss}</style>
       <Stack gap={4}>
-        <Button className="asg-back" href={base} size="sm" variant="ghost">
-          ← Back to thread
-        </Button>
+        <Breadcrumbs items={breadcrumbItems} />
 
         <PageHeader title="Edit post" subtitle={`By ${post.authorId}`} />
 

@@ -8,7 +8,9 @@ import {
   Grid,
   PageHeader,
   Stack,
+  StatCard,
   type BadgeTone,
+  type StatCardTone,
 } from "@lms/ui";
 
 import { getBranding } from "../lib/branding";
@@ -32,29 +34,6 @@ import SignOutButton from "../sign-out-button";
  * horizontal overflow at 360px.
  */
 const assignmentsCss = `
-.asg-summary { margin: 0; }
-.asg-stat-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--lms-space-1);
-  align-items: flex-start;
-}
-.asg-stat {
-  font-size: clamp(1.9rem, 5vw, 2.4rem);
-  font-weight: 700;
-  line-height: 1;
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--lms-stat-accent, var(--lms-text));
-}
-.asg-stat-label {
-  color: var(--lms-text-muted);
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
 .asg-list {
   display: flex;
   flex-direction: column;
@@ -157,11 +136,11 @@ const STATUS_ACCENT: Record<AssignmentStatus, string> = {
 const SUMMARY_CARDS: {
   key: "overdue" | "dueSoon" | "submitted";
   label: string;
-  accent: string;
+  tone: StatCardTone;
 }[] = [
-  { key: "overdue", label: "Overdue", accent: "var(--lms-danger)" },
-  { key: "dueSoon", label: "Due soon", accent: "var(--lms-warning)" },
-  { key: "submitted", label: "Submitted", accent: "var(--lms-success)" },
+  { key: "overdue", label: "Overdue", tone: "danger" },
+  { key: "dueSoon", label: "Due soon", tone: "neutral" },
+  { key: "submitted", label: "Submitted", tone: "success" },
 ];
 
 export default async function AssignmentsPage() {
@@ -194,17 +173,12 @@ export default async function AssignmentsPage() {
           <>
             <Grid gap={4} min="160px">
               {SUMMARY_CARDS.map((stat) => (
-                <Card key={stat.key}>
-                  <div
-                    className="asg-stat-card"
-                    style={
-                      { "--lms-stat-accent": stat.accent } as CSSProperties
-                    }
-                  >
-                    <p className="asg-stat">{summary[stat.key]}</p>
-                    <p className="asg-stat-label">{stat.label}</p>
-                  </div>
-                </Card>
+                <StatCard
+                  key={stat.key}
+                  label={stat.label}
+                  tone={stat.tone}
+                  value={summary[stat.key]}
+                />
               ))}
             </Grid>
 

@@ -11,6 +11,7 @@ import {
   Inline,
   PageHeader,
   Stack,
+  StatCard,
 } from "@lms/ui";
 import type { BadgeTone } from "@lms/ui";
 
@@ -32,13 +33,6 @@ const headingStyle: CSSProperties = {
   overflowWrap: "anywhere",
 };
 
-const statValueStyle: CSSProperties = {
-  fontSize: "1.75rem",
-  fontWeight: 700,
-  lineHeight: 1.1,
-  margin: 0,
-};
-
 const mutedStyle: CSSProperties = {
   color: "var(--lms-text-muted)",
   margin: 0,
@@ -57,12 +51,6 @@ const visuallyHidden: CSSProperties = {
 };
 
 const gradebookCss = `
-.gb-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  border: 1px solid var(--lms-border);
-  border-radius: var(--lms-radius-md);
-}
 .gb-table {
   border-collapse: collapse;
   width: 100%;
@@ -189,40 +177,29 @@ export default async function GradebookPage({
         />
 
         <Grid gap={4} min="160px">
-          <Card>
-            <Stack gap={1}>
-              <p style={statValueStyle}>{summary.learnerCount}</p>
-              <p style={mutedStyle}>Learners</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p style={statValueStyle}>{summary.assignmentCount}</p>
-              <p style={mutedStyle}>Assignments</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p style={statValueStyle}>
+          <StatCard label="Learners" value={summary.learnerCount} />
+          <StatCard label="Assignments" value={summary.assignmentCount} />
+          <StatCard
+            label="Graded submissions"
+            value={
+              <>
                 {summary.gradedCells}
                 <span style={{ fontSize: "1rem", fontWeight: 400 }}>
                   {" "}
                   / {summary.totalCells}
                 </span>
-              </p>
-              <p style={mutedStyle}>Graded submissions</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p style={statValueStyle}>
-                {summary.classAverage === null
-                  ? "—"
-                  : `${summary.classAverage}%`}
-              </p>
-              <p style={mutedStyle}>Class average</p>
-            </Stack>
-          </Card>
+              </>
+            }
+          />
+          <StatCard
+            label="Class average"
+            tone="accent"
+            value={
+              summary.classAverage === null
+                ? "—"
+                : `${summary.classAverage}%`
+            }
+          />
         </Grid>
 
         <section aria-labelledby="gb-heading">
@@ -230,8 +207,8 @@ export default async function GradebookPage({
             <h2 id="gb-heading" style={headingStyle}>
               Scores
             </h2>
-            <div className="gb-scroll">
-              <table className="gb-table">
+            <div className="lms-table-wrap">
+              <table className="gb-table lms-table--sticky lms-table--sticky-col">
                 <caption style={visuallyHidden}>
                   {gradebook.title} scores by learner and assignment
                 </caption>

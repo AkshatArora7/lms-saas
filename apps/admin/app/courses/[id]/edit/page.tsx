@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
+  Breadcrumbs,
   Button,
   Card,
   Chip,
@@ -15,6 +15,7 @@ import {
 import { getBranding } from "../../../lib/branding";
 import { getSession, isAdmin } from "../../../lib/auth";
 import { getCourse } from "../../../lib/courses-api";
+import { AppShell } from "../../../lib/ui";
 import SignOutButton from "../../../sign-out-button";
 import {
   deleteCourseAction,
@@ -187,9 +188,13 @@ export default async function EditCourse({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{formCss}</style>
       <Stack gap={4}>
-        <Button className="asg-back" href="/courses" size="sm" variant="ghost">
-          ← Back to catalogue
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Console", href: "/" },
+            { label: "Courses", href: "/courses" },
+            { label: course.title },
+          ]}
+        />
 
         <PageHeader
           title="Edit course"

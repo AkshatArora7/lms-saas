@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import {
   Alert,
   AppShell,
+  Breadcrumbs,
   Button,
   Card,
   Field,
@@ -28,9 +29,6 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const formCss = `
-.asg-back {
-  align-self: flex-start;
-}
 .asg-form-card {
   padding: var(--lms-space-5);
 }
@@ -157,9 +155,13 @@ export default async function EditRosterMember({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{formCss}</style>
       <Stack gap={4}>
-        <Button className="asg-back" href={base} size="sm" variant="ghost">
-          ← Back to roster
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Teaching", href: "/teach" },
+            { label: "Roster", href: base, collapsible: true },
+            { label: enrollment.userId },
+          ]}
+        />
 
         <PageHeader title="Change role" subtitle={enrollment.userId} />
 

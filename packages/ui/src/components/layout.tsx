@@ -2,8 +2,16 @@ import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 export type SpaceScale = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
+export type ContainerWidth = "default" | "wide";
+
 export interface ContainerProps {
   children: ReactNode;
+  /**
+   * Content width. "default" keeps the standard 1100px column (the historical,
+   * byte-identical behaviour). "wide" opts into the 1280px column via the
+   * `.lms-container--wide` token class (Wave-1) for data-dense screens.
+   */
+  width?: ContainerWidth;
   className?: string;
 }
 
@@ -28,8 +36,18 @@ export interface GridProps {
   className?: string;
 }
 
-export function Container({ children, className }: ContainerProps): ReactElement {
-  return <div className={joinClassNames("lms-container", className)}>{children}</div>;
+export function Container({ children, width = "default", className }: ContainerProps): ReactElement {
+  return (
+    <div
+      className={joinClassNames(
+        "lms-container",
+        width === "wide" ? "lms-container--wide" : undefined,
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function Stack({ children, gap = 4, className }: StackProps): ReactElement {

@@ -9,6 +9,7 @@ import {
   PageHeader,
   ProgressBar,
   Stack,
+  StatCard,
 } from "@lms/ui";
 
 import { getBranding } from "../lib/branding";
@@ -20,16 +21,6 @@ import SignOutButton from "../sign-out-button";
 const reportsCss = `
 .admin-section-title {
   font-size: 16px;
-  margin: 0;
-}
-.admin-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.admin-stat-label {
-  color: var(--lms-text-muted);
   margin: 0;
 }
 .school-name {
@@ -91,7 +82,7 @@ export default async function AdminReports() {
   const { orgUnits, summary } = await getReport(session.tenantId);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell brand={brand} actions={<SignOutButton />} width="wide">
       <style>{reportsCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
@@ -111,32 +102,21 @@ export default async function AdminReports() {
         {orgUnits.length ? (
           <>
             <Grid gap={4} min="180px">
-              <Card>
-                <Stack gap={1}>
-                  <p className="admin-stat">{summary.orgUnitCount}</p>
-                  <p className="admin-stat-label">Schools</p>
-                </Stack>
-              </Card>
-              <Card>
-                <Stack gap={1}>
-                  <p className="admin-stat">
-                    {summary.enrollmentCount.toLocaleString()}
-                  </p>
-                  <p className="admin-stat-label">Enrollments</p>
-                </Stack>
-              </Card>
-              <Card>
-                <Stack gap={1}>
-                  <p className="admin-stat">{pct(summary.attendanceRate)}</p>
-                  <p className="admin-stat-label">Avg attendance</p>
-                </Stack>
-              </Card>
-              <Card>
-                <Stack gap={1}>
-                  <p className="admin-stat">{pct(summary.averageGrade)}</p>
-                  <p className="admin-stat-label">Avg grade</p>
-                </Stack>
-              </Card>
+              <StatCard label="Schools" value={summary.orgUnitCount} />
+              <StatCard
+                label="Enrollments"
+                tone="accent"
+                value={summary.enrollmentCount.toLocaleString()}
+              />
+              <StatCard
+                label="Avg attendance"
+                tone="success"
+                value={pct(summary.attendanceRate)}
+              />
+              <StatCard
+                label="Avg grade"
+                value={pct(summary.averageGrade)}
+              />
             </Grid>
 
             <section aria-labelledby="schools-heading">

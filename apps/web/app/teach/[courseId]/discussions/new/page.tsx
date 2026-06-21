@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import {
   Alert,
   AppShell,
+  Breadcrumbs,
   Button,
   Card,
   Field,
@@ -17,9 +18,6 @@ import SignOutButton from "../../../../sign-out-button";
 import { createForumAction } from "../actions";
 
 const formCss = `
-.asg-back {
-  align-self: flex-start;
-}
 .asg-form-card {
   padding: var(--lms-space-5);
 }
@@ -108,9 +106,14 @@ export default async function NewForumPage({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{formCss}</style>
       <Stack gap={4}>
-        <Button className="asg-back" href={base} size="sm" variant="ghost">
-          ← Back to discussions
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Teaching", href: "/teach" },
+            { label: course.title, collapsible: true },
+            { label: "Discussions", href: base },
+            { label: "New" },
+          ]}
+        />
 
         <PageHeader
           title="New forum"

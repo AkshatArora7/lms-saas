@@ -6,20 +6,52 @@ export { defaultBrand, defaultTone, brandRegistry, demoSchoolBrands, resolveBran
 export { UIStyles, ThemeStyle, componentCss } from "./styles.js";
 
 // Layout
-export type { ContainerProps, StackProps, InlineProps, GridProps } from "./components/layout.js";
+export type { ContainerProps, ContainerWidth, StackProps, InlineProps, GridProps } from "./components/layout.js";
 export { Container, Stack, Inline, Grid } from "./components/layout.js";
 
 // Surfaces
-export type { CardProps, PageHeaderProps, EmptyStateProps, DividerProps } from "./components/surfaces.js";
-export { Card, PageHeader, EmptyState, Divider } from "./components/surfaces.js";
+export type {
+  CardProps,
+  PageHeaderProps,
+  EmptyStateProps,
+  DividerProps,
+  StatCardProps,
+  StatCardTone,
+  CourseCardProps,
+  BreadcrumbsProps,
+  BreadcrumbItem,
+} from "./components/surfaces.js";
+export { Card, PageHeader, EmptyState, Divider, StatCard, CourseCard, Breadcrumbs } from "./components/surfaces.js";
 
 // Forms
-export type { FieldProps, InputProps, TextareaProps, SelectProps, ButtonProps } from "./components/forms.js";
-export { Field, Input, Textarea, Select, Button } from "./components/forms.js";
+export type {
+  FieldProps,
+  InputProps,
+  TextareaProps,
+  SelectProps,
+  ButtonProps,
+  CheckboxProps,
+  RadioProps,
+  FileInputProps,
+} from "./components/forms.js";
+export { Field, Input, Textarea, Select, Button, Checkbox, Radio, FileInput } from "./components/forms.js";
 
 // Status
-export type { BadgeProps, ChipProps, AvatarProps, ProgressBarProps, AlertProps, SpinnerProps, SkeletonProps, BadgeTone, AlertTone } from "./components/status.js";
-export { Badge, Chip, Avatar, ProgressBar, Alert, Spinner, Skeleton } from "./components/status.js";
+export type {
+  BadgeProps,
+  ChipProps,
+  AvatarProps,
+  ProgressBarProps,
+  AlertProps,
+  SpinnerProps,
+  SkeletonProps,
+  BadgeTone,
+  AlertTone,
+  ToastProps,
+  ToastRegionProps,
+  ToastTone,
+} from "./components/status.js";
+export { Badge, Chip, Avatar, ProgressBar, Alert, Spinner, Skeleton, Toast, ToastRegion } from "./components/status.js";
 
 // Shell
 export type { BrandMarkProps, AppShellProps } from "./components/shell.js";

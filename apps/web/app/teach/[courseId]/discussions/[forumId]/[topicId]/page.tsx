@@ -5,6 +5,7 @@ import {
   AppShell,
   Avatar,
   Badge,
+  Breadcrumbs,
   Button,
   Card,
   EmptyState,
@@ -14,6 +15,7 @@ import {
   Textarea,
 } from "@lms/ui";
 
+import { GenericIcon } from "../../../../../lib/ui";
 import { getBranding } from "../../../../../lib/branding";
 import { getSession } from "../../../../../lib/auth";
 import { canTeach, getTaughtCourse } from "../../../../../lib/teaching";
@@ -238,9 +240,19 @@ export default async function TopicThreadPage({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{threadCss}</style>
       <Stack gap={4}>
-        <Button href={forumBase} size="sm" variant="ghost">
-          ← Back to topics
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Teaching", href: "/teach" },
+            { label: course.title, collapsible: true },
+            {
+              label: "Discussions",
+              href: `/teach/${courseId}/discussions`,
+              collapsible: true,
+            },
+            { label: "Forum", href: forumBase },
+            { label: topic ? topic.title : "Thread" },
+          ]}
+        />
 
         <PageHeader
           title={topic ? topic.title : "Thread"}
@@ -260,7 +272,7 @@ export default async function TopicThreadPage({
           <Alert tone="warning">{postsResult.error}</Alert>
         ) : threaded.length === 0 ? (
           <EmptyState
-            icon="💬"
+            icon={<GenericIcon />}
             title="No posts yet"
             description="Start the conversation below."
           />

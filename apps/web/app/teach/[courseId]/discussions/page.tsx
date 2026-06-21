@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import {
   Alert,
   AppShell,
+  Breadcrumbs,
   Button,
   Card,
   EmptyState,
@@ -9,6 +10,7 @@ import {
   Stack,
 } from "@lms/ui";
 
+import { GenericIcon } from "../../../lib/ui";
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
 import { canTeach, getTaughtCourse } from "../../../lib/teaching";
@@ -109,9 +111,13 @@ export default async function DiscussionsPage({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{forumsCss}</style>
       <Stack gap={4}>
-        <Button href="/teach" size="sm" variant="ghost">
-          ← Back to teaching
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Teaching", href: "/teach" },
+            { label: course.title, collapsible: true },
+            { label: "Discussions" },
+          ]}
+        />
 
         <PageHeader
           title="Discussions"
@@ -125,7 +131,7 @@ export default async function DiscussionsPage({
           <Alert tone="warning">{result.error}</Alert>
         ) : result.forums.length === 0 ? (
           <EmptyState
-            icon="💬"
+            icon={<GenericIcon />}
             title="No forums yet"
             description="Create a forum to start course discussions."
           />

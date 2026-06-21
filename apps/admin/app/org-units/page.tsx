@@ -10,6 +10,7 @@ import {
   Inline,
   PageHeader,
   Stack,
+  StatCard,
 } from "@lms/ui";
 
 import { getBranding } from "../lib/branding";
@@ -26,16 +27,6 @@ import SignOutButton from "../sign-out-button";
 const orgCss = `
 .admin-section-title {
   font-size: 16px;
-  margin: 0;
-}
-.admin-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.admin-stat-label {
-  color: var(--lms-text-muted);
   margin: 0;
 }
 /* Data-dense org hierarchy. The recursive tree is the correct representation
@@ -161,7 +152,7 @@ export default async function AdminOrgUnits() {
   const stats = summarizeOrgTree(units);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell brand={brand} actions={<SignOutButton />} width="wide">
       <style>{orgCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
@@ -174,18 +165,8 @@ export default async function AdminOrgUnits() {
         />
 
         <Grid gap={4} min="180px">
-          <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{stats.unitCount}</p>
-              <p className="admin-stat-label">Total units</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{stats.depth}</p>
-              <p className="admin-stat-label">Levels deep</p>
-            </Stack>
-          </Card>
+          <StatCard label="Total units" value={stats.unitCount} />
+          <StatCard label="Levels deep" tone="accent" value={stats.depth} />
         </Grid>
 
         <section aria-labelledby="org-tree-heading">

@@ -1657,6 +1657,26 @@
             "typecheck + lint + build are green for the touched packages/apps (qa-agent confirms)",
             "Branch only - no push, no PR (human reviews locally)"
           ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 13,
+          "title": "UI/UX rollout: professional dual-tone upgrade across all web + admin pages",
+          "as_a": "instructional designer",
+          "i_want": "every important page across the learner/teacher web app (apps/web) and the admin console (apps/admin) to be upgraded to a polished, professional, consistent look driven entirely through the @lms/ui dual-tone design system, with no functional changes",
+          "so_that": "users on both surfaces experience one calm, credible, accessible visual language end to end, while all existing behaviour and per-tenant white-label branding are fully preserved",
+          "ac": [
+            "UI/UX upgrade ONLY. Nothing existing breaks: no removed/renamed/damaged routes, APIs, state, forms, validations, backend connections, auth flow, DB logic, data fetching, permissions, or business logic.",
+            "Improvement is MAJOR and visible on every important page - not cosmetic tweaks.",
+            "Tenant-safety invariant sacred: tone only sets neutrals/semantics/type-scale/shadows/density; NEVER brand-owned fields (accent, accentHover, accentContrast, accentSoft, fontSans, radius*). Brand fields come from brand.*. A red/sharp tenant and a teal/round tenant both render correctly.",
+            "Prefer existing CSS-variable design system. NO Tailwind, NO UI kit. New dependency only if absolutely necessary (default none). Inter already loaded via <link>.",
+            "Keep all functionality: reuse existing components, props, data fetching, server actions, form bindings/validation, auth. Centralize repeated styles into @lms/ui.",
+            "Accessibility (WCAG 2.2 AA): semantic elements, label/for, visible focus, aria where needed, keyboard-friendly, prefers-reduced-motion respected; text contrast >= 4.5:1.",
+            "Responsive at 375 / 768 / 1024 / 1440 - no horizontal overflow, no broken cards/tables/nav.",
+            "Commit hygiene: Conventional Commits referencing the issue; NO AI/co-author trailers; attribute solely to the user.",
+            "Verification (qa-agent): typecheck + lint green for @lms/ui, @lms/web, @lms/admin; then sequential builds - web build THEN admin build (never parallel) - all green. No local Postgres / no test scripts."
+          ]
         }
       ]
     }

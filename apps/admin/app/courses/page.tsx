@@ -9,6 +9,7 @@ import {
   Grid,
   PageHeader,
   Stack,
+  StatCard,
 } from "@lms/ui";
 
 import { getBranding } from "../lib/branding";
@@ -21,16 +22,6 @@ import { deleteCourseAction, publishCourseAction } from "./actions";
 const coursesCss = `
 .admin-section-title {
   font-size: 16px;
-  margin: 0;
-}
-.admin-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.admin-stat-label {
-  color: var(--lms-text-muted);
   margin: 0;
 }
 .cat-meta {
@@ -52,9 +43,11 @@ const coursesCss = `
   margin: 0;
   overflow-wrap: anywhere;
 }
-.admin-courses-table td:first-child,
-.admin-courses-table th:first-child {
-  min-width: 220px;
+@media (min-width: 601px) {
+  .admin-courses-table td:first-child,
+  .admin-courses-table th:first-child {
+    min-width: 220px;
+  }
 }
 .cat-actions {
   display: flex;
@@ -113,7 +106,7 @@ export default async function AdminCourses({
   const published = courses.filter((c) => c.isPublished).length;
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell brand={brand} actions={<SignOutButton />} width="wide">
       <style>{coursesCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
@@ -134,24 +127,9 @@ export default async function AdminCourses({
         {!result.ok ? <Alert tone="warning">{result.error}</Alert> : null}
 
         <Grid gap={4} min="180px">
-          <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{courses.length}</p>
-              <p className="admin-stat-label">Total courses</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{published}</p>
-              <p className="admin-stat-label">Published</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{courses.length - published}</p>
-              <p className="admin-stat-label">Drafts</p>
-            </Stack>
-          </Card>
+          <StatCard label="Total courses" value={courses.length} />
+          <StatCard label="Published" tone="success" value={published} />
+          <StatCard label="Drafts" value={courses.length - published} />
         </Grid>
 
         {courses.length ? (
@@ -166,7 +144,7 @@ export default async function AdminCourses({
                 role="region"
                 tabIndex={0}
               >
-                <table className="lms-table admin-courses-table">
+                <table className="lms-table lms-table--stack admin-courses-table">
                   <thead>
                     <tr>
                       <th scope="col">Course</th>
@@ -179,21 +157,21 @@ export default async function AdminCourses({
                       const range = dateRange(course);
                       return (
                         <tr key={course.id}>
-                          <td>
+                          <td data-label="Course">
                             <p className="admin-course-name">{course.title}</p>
                             <p className="admin-course-meta">
                               {course.description ?? "No description"}
                               {range ? ` - ${range}` : ""}
                             </p>
                           </td>
-                          <td>
+                          <td data-label="Status">
                             <Chip
                               tone={course.isPublished ? "success" : "warning"}
                             >
                               {course.isPublished ? "Published" : "Draft"}
                             </Chip>
                           </td>
-                          <td>
+                          <td data-label="Actions">
                             <div className="cat-actions">
                               <Button
                                 href={`/courses/${course.id}/edit`}

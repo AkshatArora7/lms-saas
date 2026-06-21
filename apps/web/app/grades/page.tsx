@@ -9,6 +9,7 @@ import {
   PageHeader,
   ProgressBar,
   Stack,
+  StatCard,
 } from "@lms/ui";
 
 import { getBranding } from "../lib/branding";
@@ -28,28 +29,6 @@ import SignOutButton from "../sign-out-button";
  * screens with no horizontal overflow at 360px.
  */
 const gradesCss = `
-.grd-stat-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--lms-space-1);
-  align-items: flex-start;
-}
-.grd-stat {
-  font-size: clamp(2rem, 6vw, 2.6rem);
-  font-weight: 700;
-  line-height: 1;
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--lms-stat-accent, var(--lms-text));
-}
-.grd-stat-label {
-  color: var(--lms-text-muted);
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
 .grd-section-heading {
   font-size: clamp(1.15rem, 3vw, 1.4rem);
   font-weight: 700;
@@ -200,23 +179,12 @@ export default async function Grades() {
         {grades.length ? (
           <>
             <Grid gap={4} min="200px">
-              <Card>
-                <div
-                  className="grd-stat-card"
-                  style={
-                    { "--lms-stat-accent": "var(--lms-accent)" } as CSSProperties
-                  }
-                >
-                  <p className="grd-stat">{summary.average ?? "—"}%</p>
-                  <p className="grd-stat-label">Average across courses</p>
-                </div>
-              </Card>
-              <Card>
-                <div className="grd-stat-card">
-                  <p className="grd-stat">{summary.courseCount}</p>
-                  <p className="grd-stat-label">Graded courses</p>
-                </div>
-              </Card>
+              <StatCard
+                label="Average across courses"
+                tone="accent"
+                value={`${summary.average ?? "—"}%`}
+              />
+              <StatCard label="Graded courses" value={summary.courseCount} />
             </Grid>
 
             <section aria-labelledby="grades-heading">

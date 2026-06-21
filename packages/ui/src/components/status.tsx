@@ -2,6 +2,7 @@ import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 export type BadgeTone = "neutral" | "accent" | "success" | "danger" | "warning";
 export type AlertTone = "info" | "success" | "warning" | "danger";
+export type ToastTone = "info" | "success" | "warning" | "danger";
 
 export interface BadgeProps {
   children: ReactNode;
@@ -42,6 +43,21 @@ export interface SkeletonProps {
   width?: string;
   height?: string;
   radius?: string;
+  className?: string;
+}
+
+export interface ToastProps {
+  tone?: ToastTone;
+  icon?: ReactNode;
+  children: ReactNode;
+  onDismiss?: () => void;
+  dismissLabel?: string;
+  className?: string;
+}
+
+export interface ToastRegionProps {
+  children: ReactNode;
+  label?: string;
   className?: string;
 }
 
@@ -122,6 +138,66 @@ export function Skeleton({
   };
 
   return <span className={joinClassNames("lms-skeleton", className)} style={style} />;
+}
+
+export function Toast({
+  tone = "info",
+  icon,
+  children,
+  onDismiss,
+  dismissLabel = "Dismiss",
+  className,
+}: ToastProps): ReactElement {
+  const role = tone === "danger" || tone === "warning" ? "alert" : "status";
+  const ariaLive = tone === "danger" || tone === "warning" ? "assertive" : "polite";
+
+  return (
+    <div
+      aria-live={ariaLive}
+      className={joinClassNames("lms-toast", `lms-toast--${tone}`, className)}
+      role={role}
+    >
+      {icon ? <div className="lms-toast__icon">{icon}</div> : null}
+      <div className="lms-toast__body">{children}</div>
+      {onDismiss ? (
+        <button
+          aria-label={dismissLabel}
+          className="lms-toast__dismiss"
+          onClick={onDismiss}
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            viewBox="0 0 24 24"
+          >
+            <line x1="18" x2="6" y1="6" y2="18" />
+            <line x1="6" x2="18" y1="6" y2="18" />
+          </svg>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export function ToastRegion({
+  children,
+  label = "Notifications",
+  className,
+}: ToastRegionProps): ReactElement {
+  return (
+    <div
+      aria-label={label}
+      className={joinClassNames("lms-toast-region", className)}
+      role="region"
+    >
+      {children}
+    </div>
+  );
 }
 
 function getInitials(value: string, maxLetters: number): string {

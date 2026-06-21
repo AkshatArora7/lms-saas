@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import type { CSSProperties } from "react";
 import {
   Alert,
   AppShell,
@@ -12,7 +11,10 @@ import {
   PageHeader,
   ProgressBar,
   Stack,
+  StatCard,
 } from "@lms/ui";
+
+import { CoursesIcon } from "../lib/ui";
 
 import {
   type CourseEngagementResult,
@@ -61,28 +63,6 @@ function countAtRisk(items: CourseWithEngagement[]): number {
  * phones to a two-up grid on desktop with no horizontal overflow at 360px.
  */
 const teachCss = `
-.tch-stat-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--lms-space-1);
-  align-items: flex-start;
-}
-.tch-stat {
-  font-size: clamp(1.9rem, 5vw, 2.4rem);
-  font-weight: 700;
-  line-height: 1;
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--lms-stat-accent, var(--lms-text));
-}
-.tch-stat-label {
-  color: var(--lms-stat-accent, var(--lms-text-muted));
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
 .tch-section-heading {
   font-size: clamp(1.15rem, 3vw, 1.4rem);
   font-weight: 700;
@@ -229,9 +209,6 @@ const teachCss = `
 }
 `;
 
-const statAccent = (color: string): CSSProperties =>
-  ({ "--lms-stat-accent": color }) as CSSProperties;
-
 const QUICK_ACTIONS: {
   key: string;
   label: string;
@@ -355,7 +332,7 @@ function CourseAtRiskPanel({
         At-risk learners{atRisk.length ? ` (${atRisk.length})` : ""}
       </p>
       {atRisk.length === 0 ? (
-        <p className="tch-muted">No at-risk learners 🎉</p>
+        <p className="tch-muted">No at-risk learners</p>
       ) : (
         <ul className="tch-risk-list">
           {atRisk.map((learner) => {
@@ -443,37 +420,21 @@ export default async function Teach() {
         {courses.length ? (
           <>
             <Grid gap={4} min="200px">
-              <Card>
-                <div
-                  className="tch-stat-card"
-                  style={statAccent("var(--lms-text)")}
-                >
-                  <p className="tch-stat">{summary.courseCount}</p>
-                  <p className="tch-stat-label">Courses taught</p>
-                </div>
-              </Card>
-              <Card>
-                <div
-                  className="tch-stat-card"
-                  style={statAccent("var(--lms-text)")}
-                >
-                  <p className="tch-stat">{summary.totalEnrolled}</p>
-                  <p className="tch-stat-label">Learners enrolled</p>
-                </div>
-              </Card>
-              <Card>
-                <div
-                  className="tch-stat-card"
-                  style={statAccent(
-                    atRiskTotal > 0
-                      ? "var(--lms-warning, var(--lms-text))"
-                      : "var(--lms-text)",
-                  )}
-                >
-                  <p className="tch-stat">{atRiskTotal}</p>
-                  <p className="tch-stat-label">At-risk learners</p>
-                </div>
-              </Card>
+              <StatCard
+                label="Courses taught"
+                tone="neutral"
+                value={summary.courseCount}
+              />
+              <StatCard
+                label="Learners enrolled"
+                tone="neutral"
+                value={summary.totalEnrolled}
+              />
+              <StatCard
+                label="At-risk learners"
+                tone={atRiskTotal > 0 ? "danger" : "neutral"}
+                value={atRiskTotal}
+              />
             </Grid>
 
             <section aria-labelledby="teach-heading">
@@ -519,7 +480,7 @@ export default async function Teach() {
         ) : (
           <EmptyState
             description="When you teach courses with enrolled learners, they appear here."
-            icon="🧑‍🏫"
+            icon={<CoursesIcon />}
             title="No teaching data yet"
           />
         )}

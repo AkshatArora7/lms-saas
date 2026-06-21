@@ -6,19 +6,30 @@ import {
   Button,
   Card,
   Chip,
+  CourseCard,
   EmptyState,
   Grid,
   Inline,
+  StatCard,
   Stack,
 } from "@lms/ui";
 
 import { getBranding } from "./lib/branding";
-import { AppShell, CoursesIcon, GenericIcon, SuccessIcon } from "./lib/ui";
+import {
+  AnnouncementsIcon,
+  AppShell,
+  AssignmentsIcon,
+  CoursesIcon,
+  GenericIcon,
+  ScheduleIcon,
+  SuccessIcon,
+} from "./lib/ui";
 import { getSession } from "./lib/auth";
 import { getDashboardCourses } from "./lib/dashboard";
 import {
   formatDue,
   getAssignments,
+  summarizeAssignments,
   type AssignmentView,
 } from "./lib/assignments";
 import {
@@ -119,14 +130,35 @@ const DASHBOARD_STYLES = `
   overflow: hidden;
   color: var(--lms-text-muted);
 }
+.lms-dash__eyebrow {
+  margin: 0 0 var(--lms-space-1);
+  font-size: var(--lms-font-size-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lms-accent);
+  overflow-wrap: anywhere;
+}
+.lms-dash__hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(20px, 4vw, 36px);
+  border-radius: var(--lms-radius-lg);
+  border: 1px solid var(--lms-border);
+  background:
+    radial-gradient(130% 150% at 100% 0%, var(--lms-accent-soft) 0%, transparent 58%),
+    var(--lms-surface);
+  box-shadow: var(--lms-shadow-sm);
+}
+.lms-dash__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--lms-space-3);
+}
+@media (min-width: 721px) {
+  .lms-dash__stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 `;
-
-const sectionTitleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: "1rem",
-  lineHeight: 1.3,
-  overflowWrap: "anywhere",
-};
 
 const bodyTextStyle: CSSProperties = {
   margin: 0,
@@ -186,18 +218,25 @@ export default async function Home() {
   const announcementsSummary = summarizeAnnouncements(allAnnouncements);
   const recentAnnouncements = allAnnouncements.slice(0, 3);
 
-  const upNext: AssignmentView[] = (
-    await getAssignments(session.userId, session.tenantId)
-  )
+  const assignments = await getAssignments(session.userId, session.tenantId);
+  const assignmentsSummary = summarizeAssignments(assignments);
+  const upNext: AssignmentView[] = assignments
     .filter((a) => a.status === "overdue" || a.status === "not_started")
     .slice(0, 4);
+
+  const todayLabel = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{DASHBOARD_STYLES}</style>
 
       <div className="lms-dash">
-        <header>
+        <header className="lms-dash__hero">
+          <p className="lms-dash__eyebrow">{todayLabel}</p>
           <h1 className="lms-dash__hero-title">Welcome back</h1>
           <p className="lms-dash__hero-subtitle">
             Here&apos;s your learning at a glance.
@@ -229,6 +268,33 @@ export default async function Home() {
           </nav>
         </header>
 
+        <section aria-label="At a glance" className="lms-dash__stats">
+          <StatCard
+            icon={<CoursesIcon />}
+            label="Active courses"
+            tone="neutral"
+            value={courses.length}
+          />
+          <StatCard
+            icon={<ScheduleIcon />}
+            label="Due soon"
+            tone="neutral"
+            value={assignmentsSummary.dueSoon}
+          />
+          <StatCard
+            icon={<AssignmentsIcon />}
+            label="Overdue"
+            tone={assignmentsSummary.overdue > 0 ? "danger" : "neutral"}
+            value={assignmentsSummary.overdue}
+          />
+          <StatCard
+            icon={<AnnouncementsIcon />}
+            label="Unread news"
+            tone="neutral"
+            value={announcementsSummary.unread}
+          />
+        </section>
+
         <div className="lms-dash__main">
           <Stack gap={5}>
             <section aria-labelledby="courses-heading">
@@ -237,30 +303,24 @@ export default async function Home() {
                 {courses.length ? (
                   <Grid min="240px">
                     {courses.map((course) => (
-                      <Card
-                        aria-label={`Open ${course.title}`}
-                        as="a"
-                        href={`/courses/${course.id}`}
-                        interactive
-                        key={course.id}
-                      >
-                        <Stack gap={3}>
-                          {course.code || course.term ? (
-                            <Inline gap={2} justify="space-between">
+                      <CourseCard
+                        badges={
+                          course.code || course.term ? (
+                            <>
                               {course.code ? (
                                 <Badge tone="accent">{course.code}</Badge>
-                              ) : (
-                                <span />
-                              )}
+                              ) : null}
                               {course.term ? (
                                 <Badge tone="neutral">{course.term}</Badge>
                               ) : null}
-                            </Inline>
-                          ) : null}
-                          <h3 style={sectionTitleStyle}>{course.title}</h3>
-                          <Chip tone="accent">{course.role}</Chip>
-                        </Stack>
-                      </Card>
+                            </>
+                          ) : undefined
+                        }
+                        href={`/courses/${course.id}`}
+                        key={course.id}
+                        roleChip={<Chip tone="accent">{course.role}</Chip>}
+                        title={course.title}
+                      />
                     ))}
                   </Grid>
                 ) : (

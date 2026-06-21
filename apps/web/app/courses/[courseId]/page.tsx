@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Badge,
+  Breadcrumbs,
   Button,
   Card,
   Chip,
@@ -167,9 +168,9 @@ export default async function CoursePage({
       <style>{COURSE_STYLES}</style>
 
       <div className="lms-cd">
-        <Button href="/" size="sm" variant="ghost">
-          ← Back to dashboard
-        </Button>
+        <Breadcrumbs
+          items={[{ label: "Dashboard", href: "/" }, { label: course.title }]}
+        />
 
         <Card>
           <header className="lms-cd__header">

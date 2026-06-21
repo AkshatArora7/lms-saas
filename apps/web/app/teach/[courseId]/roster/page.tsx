@@ -3,6 +3,7 @@ import {
   Alert,
   AppShell,
   Badge,
+  Breadcrumbs,
   Button,
   Card,
   Chip,
@@ -10,8 +11,10 @@ import {
   Grid,
   PageHeader,
   Stack,
+  StatCard,
 } from "@lms/ui";
 
+import { CoursesIcon } from "../../../lib/ui";
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
 import { canTeach, getTaughtCourse } from "../../../lib/teaching";
@@ -25,16 +28,6 @@ import {
 const rosterCss = `
 .ros-section-title {
   font-size: 16px;
-  margin: 0;
-}
-.ros-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.ros-stat-label {
-  color: var(--lms-text-muted);
   margin: 0;
 }
 .ros-name {
@@ -135,9 +128,13 @@ export default async function CourseRoster({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{rosterCss}</style>
       <Stack gap={4}>
-        <Button href="/teach" size="sm" variant="ghost">
-          ← Back to teaching
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Teaching", href: "/teach" },
+            { label: course.title, collapsible: true },
+            { label: "Roster" },
+          ]}
+        />
 
         <PageHeader
           title={`${course.title} - roster`}
@@ -153,24 +150,9 @@ export default async function CourseRoster({
         {!result.ok ? <Alert tone="warning">{result.error}</Alert> : null}
 
         <Grid gap={4} min="180px">
-          <Card>
-            <Stack gap={1}>
-              <p className="ros-stat">{roster.length}</p>
-              <p className="ros-stat-label">Active members</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="ros-stat">{learners}</p>
-              <p className="ros-stat-label">Learners</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="ros-stat">{staff}</p>
-              <p className="ros-stat-label">Staff</p>
-            </Stack>
-          </Card>
+          <StatCard label="Active members" value={roster.length} />
+          <StatCard label="Learners" value={learners} />
+          <StatCard label="Staff" value={staff} />
         </Grid>
 
         {roster.length ? (
@@ -249,7 +231,7 @@ export default async function CourseRoster({
         ) : result.ok ? (
           <EmptyState
             description="Enroll your first learner to start building the roster."
-            icon="[ ]"
+            icon={<CoursesIcon />}
             title="No one enrolled yet"
           />
         ) : (

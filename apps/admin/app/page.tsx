@@ -8,6 +8,7 @@ import {
   Inline,
   PageHeader,
   Stack,
+  StatCard,
 } from "@lms/ui";
 
 import { getBranding } from "./lib/branding";
@@ -44,17 +45,6 @@ const adminCss = `
   color: var(--lms-text-muted);
   margin: 0;
   overflow-wrap: anywhere;
-}
-.admin-stat {
-  font-size: clamp(1.6rem, 5vw, 2rem);
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.admin-stat-label {
-  color: var(--lms-text-muted);
-  margin: 0;
 }
 .admin-nav-card {
   display: flex;
@@ -188,26 +178,12 @@ export default async function AdminHome() {
         />
 
         <Grid gap={4} min="180px">
-          <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{session.roles.length}</p>
-              <p className="admin-stat-label">
-                {session.roles.length === 1 ? "Your role" : "Your roles"}
-              </p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{session.scopes.length}</p>
-              <p className="admin-stat-label">Access scopes</p>
-            </Stack>
-          </Card>
-          <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{session.tier}</p>
-              <p className="admin-stat-label">Tenant tier</p>
-            </Stack>
-          </Card>
+          <StatCard
+            label={session.roles.length === 1 ? "Your role" : "Your roles"}
+            value={session.roles.length}
+          />
+          <StatCard label="Access scopes" value={session.scopes.length} />
+          <StatCard label="Tenant tier" tone="accent" value={session.tier} />
         </Grid>
 
         <section aria-labelledby="manage-heading">

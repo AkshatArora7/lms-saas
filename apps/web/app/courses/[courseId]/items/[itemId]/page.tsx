@@ -4,6 +4,7 @@ import {
   AppShell,
   Alert,
   Badge,
+  Breadcrumbs,
   Button,
   Card,
   Chip,
@@ -319,9 +320,14 @@ export default async function ContentItemPage({
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{itemCss}</style>
       <Stack gap={4}>
-        <Button href={`/courses/${course.id}`} size="sm" variant="ghost">
-          ← Back to {course.title}
-        </Button>
+        <Breadcrumbs
+          items={[
+            { label: "Dashboard", href: "/" },
+            { label: course.title, href: `/courses/${course.id}` },
+            { label: module.title, collapsible: true },
+            { label: item.title },
+          ]}
+        />
 
         <PageHeader
           title={item.title}

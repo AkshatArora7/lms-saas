@@ -81,14 +81,19 @@ rollout and roll back on SLO breach.
 
 ## Run the full app in one command (Docker)
 
-`docker-compose.yml` (root) is the **canonical** compose file: a bare
+`docker-compose.yml` (root) is the **canonical** compose file. There are two ways
+to bring the whole platform up — pull prebuilt images, or build everything from
+local source:
 
-```bash
-docker compose up -d   # or: pnpm start
-```
+| | Build from source (collaborators) | Pull prebuilt images (owner / CI) |
+| --- | --- | --- |
+| **Command** | `pnpm start:build` | `pnpm start` (= `docker compose up -d`) |
+| **Raw** | `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build` | `docker compose up -d` |
+| **Needs** | only Docker Desktop + this repo | access to the owner's private GHCR images |
+| **Accounts** | **none** | GHCR pull access |
 
-brings up the **entire** platform on one network, wired together by DNS service
-names:
+Either way, one command brings up the **entire** platform on one network, wired
+together by DNS service names:
 
 - **Postgres** (`pgvector/pgvector:pg15`, port 5432) and **Redis**
   (`redis:7-alpine`, port 6379) — both always up (not behind a profile).
@@ -105,29 +110,78 @@ Public surfaces: <http://localhost:3000> (web), <http://localhost:3001> (admin),
 <http://localhost:4000> (gateway). Each service is also published on its own
 `40xx` port for direct inspection.
 
+> **Local vs prod exposure.** The per-service `40xx` host ports are a **dev-only
+> convenience**. In production the domain services MUST be **internal-only** —
+> reachable only via the gateway (or the trusted web BFF) — otherwise a direct
+> caller could self-stamp trusted identity headers and bypass the gateway. See
+> [ADR-0027](ADR-0027-trusted-identity-headers.md) and the deployment-hardening
+> follow-up (#295).
+
+**Demo logins** (seeded automatically on first boot, at `/login`):
+`admin@demo.school` or `student@demo.school`, password `password123`.
+
+**Tear down:**
+
+```bash
+pnpm down       # stop the stack, KEEP the Postgres data (= docker compose down)
+pnpm down:clean # stop AND wipe the Postgres volume (re-seeds next up; = down -v)
+pnpm ps         # container status   ·   pnpm logs   # tail logs
+```
+
+> **First run builds ~29 images** on the build-from-source path (26 services +
+> seed + web + admin) and can take a while; later runs are cached.
+
 ### Database: bundled Postgres by default, Supabase opt-in
 
 By default the mesh runs against the **in-compose Postgres**, which
 **auto-applies** `database/schema.sql` then `database/policies/rls.sql` on first
 boot via `/docker-entrypoint-initdb.d` — so tenant RLS is enforced with **zero
-external setup**. To point the whole mesh at Supabase (or any external Postgres),
-set `DATABASE_URL` in `.env` (gitignored; Compose reads it automatically for
+external setup**.
+
+> **⚠️ Collaborators: leave the DB URLs empty.** For the local Docker run keep
+> `DATABASE_URL` / `MIGRATION_DATABASE_URL` / `DIRECT_URL` /
+> `CONTROL_PLANE_DATABASE_URL` **empty in `.env`** (that is how `.env.example`
+> ships them) so the bundled `postgresql://app_user:app_user@postgres:5432/lms`
+> fallback is used. ANY non-empty value overrides the `${VAR:-default}`
+> interpolation and points the mesh away from the bundled DB.
+
+To point the whole mesh at Supabase (or any external Postgres), set
+`DATABASE_URL` in `.env` (gitignored; Compose reads it automatically for
 `${VAR}` interpolation); `DIRECT_URL` and `CONTROL_PLANE_DATABASE_URL` fall back
-to it. `JWT_SECRET` and `GROQ_API_KEY` are likewise sourced from `.env` — the
-in-compose `JWT_SECRET` fallback is a **dev-only** placeholder, so set a real one
-before any real deployment.
+to it. A remote deploy also needs the **least-privilege runtime app role** split
+from the migration/owner role — the **two-role model** that makes
+`FORCE ROW LEVEL SECURITY` actually enforce; see
+[ADR-0026](ADR-0026-runtime-app-role-rls-enforcement.md) and `SETUP.md` §5.
+`JWT_SECRET` and `GROQ_API_KEY` are likewise sourced from `.env` — the in-compose
+`JWT_SECRET` fallback is a **dev-only** placeholder, so set a real one before any
+real deployment.
 
 > **Supabase + IPv4:** the direct `db.<ref>.supabase.co` host is IPv6-only. On
 > IPv4-only or serverless networks, use the Supabase **connection pooler**
 > (Supavisor) URL — `...pooler.supabase.com:6543?pgbouncer=true`.
 
-### Images: GHCR by default, local build fallback
+### Images: GHCR by default, build-from-source override
 
-The gateway, the 26 services, `web` and `admin` all default to the owner-built
-GHCR images `ghcr.io/akshatarora7/lms-saas/<name>:latest` (built and published
-from this repo). A bare `up` **pulls** them on first run. To **build** the images
-locally instead, uncomment the `build:` block kept above each `image:` line in
-`docker-compose.yml`.
+A bare `docker compose up -d` (`pnpm start`) defaults the gateway, the 26
+services, `web` and `admin` to the owner-built GHCR images
+`ghcr.io/akshatarora7/lms-saas/<name>:latest` and **pulls** them on first run —
+which requires access to those (private) images.
+
+Collaborators who can't pull GHCR — or who want to run the **current source** —
+build every image locally with the **`docker-compose.build.yml` override**:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+# shortcut:
+pnpm start:build
+```
+
+The override adds **only** a `build:` block (context `.` + each service's
+existing `services/<name>/Dockerfile`) to all 29 buildable services (26
+microservices + `seed` + `web` + `admin`). Compose deep-merges it onto the base
+file, so every service keeps its base env / ports / `depends_on` / healthcheck
+and its existing `image:` tag — the locally built image is just tagged with that
+same name.
 
 ### Topology & teardown
 
@@ -139,9 +193,9 @@ and course — so first page loads don't 502. The apps' server-side `*_URL` env
 points at compose DNS names (e.g. `IDENTITY_URL=http://identity:4001`).
 
 ```bash
-docker compose down       # stop the stack (or: pnpm stop)
-docker compose down -v    # also wipe the Postgres volume (re-applies schema next up)
-pnpm logs                 # tail logs
+pnpm down       # stop the stack, keep data (= docker compose down)
+pnpm down:clean # also wipe the Postgres volume — re-applies schema + re-seeds next up (= down -v)
+pnpm logs       # tail logs   ·   pnpm ps   # container status
 ```
 
 ### Infra-only stack (integration tests)

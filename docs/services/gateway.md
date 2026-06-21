@@ -35,7 +35,7 @@ _None_
 
 ## Notes
 
-Stateless; horizontally scalable. Adds `X-Tenant-Id` and trace headers downstream.
+Stateless; horizontally scalable. The single trust boundary: validates the JWT and stamps trusted identity headers downstream from the VERIFIED claims, stripping any client-supplied copies first (anti-spoof) -- `x-tenant-id` (tenant), plus `x-user-id` (= `claims.sub`) and `x-user-roles` (= `claims.roles.join(",")`, comma-separated). Backend services treat these as trusted ONLY because the gateway guarantees them, and layer per-resource authorization ON TOP of tenant RLS (first consumer: analytics `GET /reports/engagement`). The web BFF forwards the same identity headers from its server session when it calls a service directly. See [ADR-0027](../ADR-0027-trusted-identity-headers.md). Also adds trace headers downstream.
 
 ## Cross-cutting
 

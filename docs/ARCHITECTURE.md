@@ -108,6 +108,15 @@ app exposes only `GET /health` and a manual `POST /relay/run`):
 - **Auth**: OAuth2 + OIDC via external CIAM; auth-code + PKCE for web/mobile
   through the BFF (tokens kept server-side in the auth cookie); client-credentials
   for service-to-service and LTI AGS/NRPS.
+- **Trusted identity headers**: the gateway is the single trust boundary — it
+  validates the JWT and stamps trusted `x-tenant-id`, `x-user-id` (`claims.sub`)
+  and `x-user-roles` (`claims.roles.join(",")`) downstream from the verified
+  claims, **stripping any client-supplied copies first** (anti-spoof). Services
+  treat these as trusted only because the gateway guarantees them and layer
+  per-resource authz **on top of** tenant RLS; the web BFF forwards the same
+  headers from its server session when it calls a service directly. See
+  [ADR-0027](ADR-0027-trusted-identity-headers.md). In production, domain
+  services must stay internal-only so identity can't be self-stamped.
 - **Messaging**: transactional **outbox** + **inbox** (exactly-once) tables,
   drained by the `relay` worker through an abstracted transport (in-process / HTTP
   today; QStash a future seam). Consumer dedupe is keyed on `event_inbox

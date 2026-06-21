@@ -89,6 +89,11 @@ export function authGuard(config: AppConfig): preHandlerHookHandler {
     req.tenant = tenantFromClaims(claims, config);
     // Trusted, gateway-resolved tenant for downstream RLS scoping.
     req.headers["x-tenant-id"] = claims.tenantId;
+    // Trusted, gateway-resolved caller identity for downstream authorization
+    // (e.g. analytics' teacher-owns-course guard, #284). Stamped from the
+    // VERIFIED claims so a client can never spoof who they are.
+    req.headers["x-user-id"] = claims.sub;
+    req.headers["x-user-roles"] = claims.roles.join(",");
   };
 }
 

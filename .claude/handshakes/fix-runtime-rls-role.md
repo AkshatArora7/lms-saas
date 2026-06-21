@@ -28,7 +28,7 @@
 | Architecture | architect | ☑ done | §4 below + ADR-0026 (`docs/ADR-0026-runtime-app-role-rls-enforcement.md`) |
 | UX design | ux-designer | ☐ n/a | |
 | Data & RLS | schema-agent | ☑ done | §4 Data shapes below — `database/roles.sql` authored, pglast OK, FORCE RLS confirmed |
-| Backend | service-builder | ☐ todo | |
+| Backend | service-builder | ☑ done | §4 Implementation below — compose split wired; fresh-volume e2e proven (seed exit 0 as lms; app_user super=f/bypassrls=f; cross-tenant read empty) |
 | Frontend | frontend-dev | ☐ n/a | |
 | QA / tests | qa-agent | ☐ todo | |
 | Security & DoD | security-agent | ☐ todo | |
@@ -122,14 +122,41 @@ PASS = `rolsuper=f AND rolbypassrls=f`. Real creds are (correctly) not in the re
   - **Apply ordering:** mounted in compose as `/docker-entrypoint-initdb.d/03-roles.sql` (after 01-schema, 02-rls), runs as owner `lms` (docker-compose.yml postgres volumes). No `pnpm db:apply`/scripts exist; the only non-compose path is the manual `psql` block in `SETUP.md:124-128` → left to **docs-agent** to add `psql "$DIRECT_URL" -f database/roles.sql`.
   - **Boundary left for service-builder:** per-service `DATABASE_URL` split is NOT done here — `x-common-env` still defaults to `lms`. service-builder switches runtime services → `postgresql://app_user:app_user@postgres:5432/lms` and points `seed` → `MIGRATION_DATABASE_URL` (`lms`) per §4.3. I only added the `03-roles.sql` initdb mount.
 
+### Implementation (service-builder) — compose two-role split wired ✅
+
+**Effective DATABASE_URL per service class (compose defaults):**
+- **Runtime services (all 26 backend services via `<<: *common-env`):** `DATABASE_URL=postgresql://app_user:app_user@postgres:5432/lms` (set at the `x-common-env` anchor, `docker-compose.yml:51`). `DIRECT_URL`/`CONTROL_PLANE_DATABASE_URL` inherit it (lines 52-53) → app_user, correct.
+- **seed one-shot:** overrides the inherited app_user value with `DATABASE_URL=${MIGRATION_DATABASE_URL:-postgresql://lms:lms@postgres:5432/lms}` (`docker-compose.yml:124`) → connects as privileged owner `lms` to write demo data. Implemented as a per-service `environment` key placed AFTER `<<: *common-env` so it wins the merge.
+- **postgres service:** UNCHANGED — `POSTGRES_USER/PASSWORD/DB = lms/lms/lms` (owner/migrator runs initdb 01-schema, 02-rls, 03-roles).
+- **apps/web, apps/admin:** UNTOUCHED — they have their own explicit `environment:` blocks (no `<<: *common-env`, no `DATABASE_URL`); HTTP BFFs, no DB. Confirmed `docker-compose.yml:615-630` (web), admin likewise.
+
+**Files changed:** `docker-compose.yml` (anchor DATABASE_URL → app_user + comment; seed DATABASE_URL override → lms + comment), `.env.example` (documented two-role model + new `MIGRATION_DATABASE_URL` for real/Supabase deploys).
+
+**Password match:** runtime URL password `app_user` matches `database/roles.sql` `CREATE ROLE app_user ... PASSWORD 'app_user'`. ✓
+
+**Startup-migration check:** no runtime service runs `prisma migrate deploy`/`db push`/DDL at boot (only `packages/db/package.json` has `migrate:dev`/`migrate:deploy` scripts, NOT invoked by any service Dockerfile/entrypoint; schema applied via initdb). app_user (no DDL) is safe for all runtime paths. ✓
+
+**Live fresh-volume e2e proof (Docker available; `down -v` → `up -d`, images reused since change is env-only):**
+- ⚠️ `qa MUST run on a FRESH volume` — initdb (03-roles.sql → app_user) only runs on an empty `lms_pgdata`. Existing volumes won't create app_user; `docker compose down -v` first.
+- The operator's git-ignored `.env` overrides `DATABASE_URL` to a **privileged Supabase pooler URL** (`postgres.keyujwtjhvbkigntyoee`), so a naive `up` pointed runtime services at Supabase as a privileged role and **reproduced the cross-tenant leak** — confirming AC 1's "real/Supabase deploys" clause is NOT satisfied until the operator provisions a least-priv Supabase role and sets `.env DATABASE_URL` to it (+ `MIGRATION_DATABASE_URL`=privileged). **Open ops/docs item for AC 5** (see §6).
+- Proven the **compose default** by temporarily moving `.env` aside (restored after): fresh volume, `up -d`:
+  - `seed` exited **0** (connected as `lms`, seeded demo tenant 1111…). ✓
+  - `SELECT rolname, rolsuper, rolbypassrls ...` → **app_user: super=`f`, bypassrls=`f`**; lms: super=`t`, bypassrls=`t`. ✓
+  - `GET /courses` (course svc :4005) with `x-tenant-id: 1111…` → **HTTP 200, non-empty** (app_user reads work; grants not too narrow, NO permission errors). ✓
+  - `GET /courses` with `x-tenant-id: 2222…` → **HTTP 200, `{"courses":[]}` (EMPTY)** — original cross-tenant leak is DEAD; RLS now enforced under app_user. ✓
+  - `.env` restored. ✓
+- No missing-GRANT 500s encountered.
+
 ## 5. Verification  (real output only — paste, don't summarize away errors)
 - **QA (qa-agent):** typecheck / lint / test / build counts; per-AC test mapping; root-cause notes for any failure.
 - **Security & DoD (security-agent):** isolation/authz/secrets findings; APPROVE / CHANGES REQUESTED.
 
 ## 6. Open questions / blockers
 - Real/Supabase runtime role privileges are NOT determinable from the repo (creds not committed — correct). Resolved as: ship the verification query (§4.5) + docs; qa/security run it against the live DB and record the finding (AC 5).
+- **⚠ AC 1 (real/Supabase) NOT yet satisfied on this machine:** the operator's `.env` sets `DATABASE_URL` to the privileged `postgres.<ref>` Supabase role for runtime — service-builder reproduced the cross-tenant leak through it. The compose default is fixed, but the live Supabase deploy needs: (a) provision a NOSUPERUSER/NOBYPASSRLS app role on Supabase + run `database/roles.sql` (or equivalent grants) there; (b) set `.env DATABASE_URL` → that least-priv role; (c) set `.env MIGRATION_DATABASE_URL` → the privileged role. **→ ops/docs-agent follow-up + qa runs the §4.5 `pg_roles` query against live Supabase as the runtime role.**
 
 ## 7. Handshake log  (append-only; one line per hand-off)
 - 2026-06-21 12:14 · orchestrator · claimed #286, branch fix/runtime-rls-role off main@cd3de16, board → In Progress, handshake seeded · **next owner → architect**
 - 2026-06-21 12:20 · architect · recorded two-role design + build sequence (§4), authored ADR-0026 · **next owner → schema-agent** (author `database/roles.sql` + pglast validate)
 - 2026-06-21 12:21 · schema-agent · authored `database/roles.sql` (idempotent app_user, NOSUPERUSER/NOBYPASSRLS, CRUD + future ALTER DEFAULT PRIVILEGES); added `03-roles.sql` initdb mount to docker-compose.yml; FORCE RLS confirmed on all tenant tables + role_permission; pglast OK on roles/schema/rls · **next owner → service-builder** (split `DATABASE_URL` → app_user for runtime services, seed → MIGRATION_DATABASE_URL=lms per §4.3)
+- 2026-06-21 12:25 · service-builder · wired compose two-role split: `x-common-env` DATABASE_URL → `app_user:app_user@postgres` (all 26 runtime services); `seed` overrides → `${MIGRATION_DATABASE_URL:-lms@postgres}`; postgres + web/admin untouched; documented `MIGRATION_DATABASE_URL` in `.env.example`. Live fresh-volume e2e (with `.env` moved aside): seed exit 0 as lms, app_user super=f/bypassrls=f, demo-tenant read 200+data, cross-tenant read 200 EMPTY (leak dead), no missing-GRANT 500s. NOTE: live Supabase `.env` still points runtime at privileged role → AC 1/5 ops follow-up (§6). · **next owner → qa-agent** (full enforcement suite: DB-level appPool + curl 2222 vs 1111; §4.5 pg_roles on live Supabase; full stack green — qa MUST `docker compose down -v` first)

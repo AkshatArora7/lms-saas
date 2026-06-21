@@ -42,9 +42,13 @@ x-common-env: &common-env
   NODE_ENV: production
   TENANT_MODE: ${TENANT_MODE:-hybrid}
   DEFAULT_TENANT_TIER: ${DEFAULT_TENANT_TIER:-pool}
-  # Defaults to the in-compose Postgres. Override by setting DATABASE_URL in .env
-  # (e.g. a Supabase pooler URL for IPv4) to point the whole mesh at Supabase.
-  DATABASE_URL: ${DATABASE_URL:-postgresql://lms:lms@postgres:5432/lms}
+  # Two-role DB model (#286 / ADR-0026): RUNTIME services connect as the
+  # least-privilege `app_user` (NOSUPERUSER NOBYPASSRLS, non-owner) so Postgres
+  # FORCE RLS is enforced. The privileged owner/migrator role `lms` is used ONLY
+  # by initdb (schema+rls+roles) and the one-shot `seed` service (which overrides
+  # DATABASE_URL below). Override DATABASE_URL in .env (e.g. a Supabase pooler URL
+  # for IPv4, pointed at a least-priv role) to point the whole mesh at Supabase.
+  DATABASE_URL: ${DATABASE_URL:-postgresql://app_user:app_user@postgres:5432/lms}
   DIRECT_URL: ${DIRECT_URL:-${DATABASE_URL}}
   CONTROL_PLANE_DATABASE_URL: ${CONTROL_PLANE_DATABASE_URL:-${DATABASE_URL}}
   JWT_SECRET: ${JWT_SECRET:-local-compose-dev-secret-change-me-please}
@@ -114,6 +118,10 @@ services:
     image: ghcr.io/akshatarora7/lms-saas/seed:latest
     environment:
       <<: *common-env
+      # Seed writes the control-plane tenant row + demo dataset, so it MUST use
+      # the privileged owner/migrator role `lms` (not the runtime app_user, which
+      # is RLS-enforced and non-owner). Overrides the inherited app_user URL.
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:-postgresql://lms:lms@postgres:5432/lms}
     depends_on:
       postgres:
         condition: service_healthy

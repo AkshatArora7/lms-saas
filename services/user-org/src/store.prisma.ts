@@ -1,6 +1,7 @@
 import { withTenant } from "@lms/db";
 import { EVENT_TYPES } from "@lms/events";
 
+import { groupMembershipsByUser } from "./store.js";
 import type {
   AssignRoleInput,
   AssignRoleResult,
@@ -48,6 +49,11 @@ interface MembershipRow {
   role_name: string;
   org_unit_id: string;
   cascade: boolean;
+}
+
+/** Batched membership row carrying its owning user_id, for `listUsers`. */
+interface UserMembershipRow extends MembershipRow {
+  user_id: string;
 }
 
 function iso(value: Date | string): string {
@@ -340,7 +346,28 @@ export function createPrismaStore(): UserOrgStore {
             ORDER BY u.display_name`,
           ...params,
         );
-        return rows.map(toUser);
+        const users = rows.map(toUser);
+        if (users.length === 0) return [];
+
+        // Second (and final) round-trip: one batched membership read over the
+        // page's user ids — never a per-user query loop. The uuid[] param is
+        // bound and cast ($1::uuid[]) per the #267 rule. RLS on
+        // role_assignment/role keeps this tenant-scoped automatically.
+        const userIds = users.map((u) => u.id);
+        const membershipRows = await db.$queryRawUnsafe<UserMembershipRow[]>(
+          `SELECT ra.user_id, ra.id, ra.role_id, r.name AS role_name,
+                  ra.org_unit_id, ra.cascade
+             FROM role_assignment ra
+             JOIN role r ON r.id = ra.role_id
+            WHERE ra.user_id = ANY($1::uuid[])
+            ORDER BY ra.created_at`,
+          userIds,
+        );
+        const memberships = membershipRows.map((row) => ({
+          userId: row.user_id,
+          ...toMembership(row),
+        }));
+        return groupMembershipsByUser(users, memberships);
       });
     },
 

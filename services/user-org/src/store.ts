@@ -84,6 +84,31 @@ export interface UserProfile extends UserRecord {
   memberships: MembershipRecord[];
 }
 
+/** A membership tagged with the user it belongs to, for batched grouping. */
+export type UserMembership = MembershipRecord & { userId: string };
+
+/**
+ * Pure helper: attach each user's memberships from a flat, batched list of
+ * `(userId, membership)` rows. Used by both stores so memory and Postgres agree
+ * on the enriched `listUsers` shape, and unit-testable without a DB. Users with
+ * no assignments get `memberships: []`. Input order of `users` is preserved.
+ */
+export function groupMembershipsByUser(
+  users: UserRecord[],
+  memberships: UserMembership[],
+): UserProfile[] {
+  const byUser = new Map<string, MembershipRecord[]>();
+  for (const { userId, ...membership } of memberships) {
+    const list = byUser.get(userId);
+    if (list) list.push(membership);
+    else byUser.set(userId, [membership]);
+  }
+  return users.map((user) => ({
+    ...user,
+    memberships: byUser.get(user.id) ?? [],
+  }));
+}
+
 export interface NewUserInput {
   email: string;
   displayName: string;
@@ -158,7 +183,7 @@ export interface UserOrgStore {
 
   getUser(ctx: TenantContext, id: string): Promise<UserProfile | null>;
 
-  listUsers(ctx: TenantContext, filter?: UserFilter): Promise<UserRecord[]>;
+  listUsers(ctx: TenantContext, filter?: UserFilter): Promise<UserProfile[]>;
 
   updateUser(
     ctx: TenantContext,

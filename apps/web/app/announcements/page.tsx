@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import {
-  AppShell,
   Alert,
   Badge,
   Button,
@@ -19,6 +18,7 @@ import {
   summarizeAnnouncements,
   type AnnouncementScope,
 } from "../lib/announcements";
+import { AnnouncementsIcon, AppShell } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
 /**
@@ -179,7 +179,7 @@ export default async function AnnouncementsPage({
         {all.length === 0 ? (
           <EmptyState
             description="When your school or your courses post updates, they'll show up here."
-            icon="📣"
+            icon={<AnnouncementsIcon />}
             title="No announcements yet"
           />
         ) : visible.length === 0 ? (

@@ -1638,6 +1638,25 @@
             "Login and home reflect the tenant's brand name",
             "Defaults apply cleanly when a tenant has no custom branding"
           ]
+        },
+        {
+          "type": "story",
+          "priority": "P1",
+          "points": 8,
+          "title": "UI modernization: tenant-safe dual-tone design system in @lms/ui",
+          "as_a": "platform engineer",
+          "i_want": "to modernize @lms/ui into a tenant-safe dual-tone design system (admin = data-dense professional, web = approachable/credible) by upgrading the foundation token + component layer and proving it on a couple of sample screens per app",
+          "so_that": "both apps share one calm, legible, accessible visual language without weakening per-tenant white-label branding",
+          "ac": [
+            "@lms/ui token layer upgraded - refined neutral palette, type scale (base ~16px), spacing rhythm, shadow scale, radius scale, focus ring, and component states (hover/focus/disabled) for tables, cards/surfaces, forms, status/badges, and shell/nav; tenant-safe: only neutrals + semantics + fallback brand are touched and per-tenant accent/font/radius are never overridden",
+            "A clean dual-tone mechanism (admin vs web) is expressed via theme options/variants, not ad-hoc forked styles",
+            "Dual-tone supports BOTH apps with no hardcoded brand accent/font/radius",
+            "1-2 representative screens per app are updated to demonstrate the system (admin = data-dense like users/reports; web = learner course/dashboard)",
+            "No emojis as icons (replaced with inline SVG); cursor pointer on clickables; hover transitions 150-300ms; text contrast >=4.5:1; visible focus; respects prefers-reduced-motion; responsive at 375/768/1024/1440 with no horizontal scroll on mobile",
+            "NO DB/schema/RLS changes (presentation-only)",
+            "typecheck + lint + build are green for the touched packages/apps (qa-agent confirms)",
+            "Branch only - no push, no PR (human reviews locally)"
+          ]
         }
       ]
     }

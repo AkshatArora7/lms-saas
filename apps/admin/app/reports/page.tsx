@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Badge,
   Button,
   Card,
@@ -15,6 +14,7 @@ import {
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
 import { getReport } from "../lib/reports";
+import { AppShell } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
 const reportsCss = `

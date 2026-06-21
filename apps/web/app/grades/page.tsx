@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import type { CSSProperties } from "react";
 import {
-  AppShell,
   Badge,
   Button,
   Card,
@@ -15,6 +14,7 @@ import {
 import { getBranding } from "../lib/branding";
 import { getSession } from "../lib/auth";
 import { getCourseGrades, summarizeGrades } from "../lib/grades";
+import { AppShell, GradesIcon } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
 /**
@@ -293,7 +293,7 @@ export default async function Grades() {
         ) : (
           <EmptyState
             description="Grades will appear here once your work has been graded."
-            icon="📊"
+            icon={<GradesIcon />}
             title="No grades yet"
           />
         )}

@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Badge,
   BrandMark,
   Button,
@@ -15,6 +14,7 @@ import {
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
 import { getTenantOverview } from "../lib/tenant";
+import { AppShell } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
 const settingsCss = `
@@ -41,7 +41,7 @@ const settingsCss = `
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--lms-space-2);
+  gap: var(--lms-space-1);
 }
 .set-settings li {
   display: flex;
@@ -49,11 +49,15 @@ const settingsCss = `
   align-items: baseline;
   justify-content: space-between;
   gap: var(--lms-space-2);
+  min-width: 0;
   border-bottom: 1px solid var(--lms-border);
-  padding-bottom: var(--lms-space-2);
+  padding: var(--lms-row-pad-y) 0;
+}
+.set-settings li:last-child {
+  border-bottom: none;
 }
 .set-settings code {
-  font-size: 13px;
+  font-size: var(--lms-font-size-sm);
   overflow-wrap: anywhere;
 }
 `;

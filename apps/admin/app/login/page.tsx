@@ -1,6 +1,7 @@
-import { ThemeStyle, UIStyles } from "@lms/ui";
+import { UIStyles } from "@lms/ui";
 
 import { getBranding } from "../lib/branding";
+import { ThemeStyle } from "../lib/ui";
 import LoginForm from "./login-form";
 
 /** Server component: resolves tenant branding, then renders the sign-in form. */
@@ -11,7 +12,7 @@ export default function LoginPage() {
     <>
       <UIStyles />
       <ThemeStyle brand={brand} />
-      <div className="lms-theme">
+      <div className="lms-theme" data-tone="admin">
         <LoginForm brand={brand} />
       </div>
     </>

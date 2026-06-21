@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import type { CSSProperties } from "react";
 import {
-  AppShell,
   Badge,
   Button,
   Card,
@@ -20,6 +19,7 @@ import {
   summarizeAssignments,
   type AssignmentStatus,
 } from "../lib/assignments";
+import { AppShell, AssignmentsIcon } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
 /**
@@ -269,7 +269,7 @@ export default async function AssignmentsPage() {
         ) : (
           <EmptyState
             description="When your courses post assignments, quizzes and projects, they'll appear here."
-            icon="📝"
+            icon={<AssignmentsIcon />}
             title="No assignments yet"
           />
         )}

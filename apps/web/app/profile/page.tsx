@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Avatar,
   Badge,
   Button,
@@ -15,6 +14,7 @@ import {
 import { getBranding } from "../lib/branding";
 import { getSession } from "../lib/auth";
 import { getProfile } from "../lib/profile";
+import { AppShell } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
 /**

@@ -17,7 +17,10 @@ import type { BadgeTone } from "@lms/ui";
 
 import { getBranding } from "../../lib/branding";
 import { getSession, isAdmin } from "../../lib/auth";
-import { getDirectoryUser, type UserStatus } from "../../lib/directory";
+import {
+  getDirectoryUserDetail,
+  type UserStatus,
+} from "../../lib/directory";
 import SignOutButton from "../../sign-out-button";
 
 const userCss = `
@@ -50,7 +53,7 @@ const userCss = `
 const STATUS_META: Record<UserStatus, { label: string; tone: BadgeTone }> = {
   active: { label: "Active", tone: "success" },
   invited: { label: "Invited", tone: "accent" },
-  suspended: { label: "Suspended", tone: "danger" },
+  inactive: { label: "Inactive", tone: "neutral" },
 };
 
 export default async function AdminUserDetail({
@@ -78,10 +81,29 @@ export default async function AdminUserDetail({
     );
   }
 
-  const user = getDirectoryUser(params.userId, session.tenantId);
-  if (!user) notFound();
+  const result = await getDirectoryUserDetail(params.userId, session.tenantId);
+  if (result.status === "not_found") notFound();
 
+  if (result.status === "offline") {
+    return (
+      <AppShell brand={brand} actions={<SignOutButton />}>
+        <Stack gap={4}>
+          <Button href="/users" size="sm" variant="ghost">
+            ← Back to users
+          </Button>
+          <PageHeader title="User" subtitle="Account profile, roles, and activity." />
+          <Alert tone="warning">
+            The user &amp; org service is unreachable, so this profile can&apos;t
+            be loaded right now. Start the service and refresh.
+          </Alert>
+        </Stack>
+      </AppShell>
+    );
+  }
+
+  const user = result.user;
   const status = STATUS_META[user.status];
+  const orgUnitLabel = user.orgUnits.length ? user.orgUnits.join(", ") : "—";
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
@@ -113,7 +135,7 @@ export default async function AdminUserDetail({
                   <strong>Status:</strong> {status.label}
                 </p>
                 <p className="admin-detail">
-                  <strong>Org unit:</strong> {user.orgUnit}
+                  <strong>Org unit:</strong> {orgUnitLabel}
                 </p>
                 <p className="admin-detail">
                   <strong>User ID:</strong> {user.id}

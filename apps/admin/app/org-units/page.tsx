@@ -63,17 +63,16 @@ const orgCss = `
   margin: 0;
   overflow-wrap: anywhere;
 }
-.org-node__count {
-  color: var(--lms-text-muted);
-  white-space: nowrap;
-}
 `;
 
 const TYPE_LABEL: Record<OrgUnitType, string> = {
-  district: "District",
-  school: "School",
+  organization: "Organization",
   department: "Department",
-  grade: "Grade",
+  semester: "Semester",
+  course_template: "Course template",
+  course_offering: "Course offering",
+  section: "Section",
+  group: "Group",
 };
 
 function OrgNode({ unit }: { unit: OrgUnit }): ReactElement {
@@ -84,9 +83,6 @@ function OrgNode({ unit }: { unit: OrgUnit }): ReactElement {
           <Badge tone="accent">{TYPE_LABEL[unit.type]}</Badge>
           <p className="org-node__name">{unit.name}</p>
         </Inline>
-        <span className="org-node__count">
-          {unit.memberCount} {unit.memberCount === 1 ? "member" : "members"}
-        </span>
       </div>
       {unit.children.length ? (
         <ul>
@@ -120,7 +116,29 @@ export default async function AdminOrgUnits() {
     );
   }
 
-  const units = getOrgUnits(session.tenantId);
+  const units = await getOrgUnits(session.tenantId);
+
+  if (!units) {
+    return (
+      <AppShell brand={brand} actions={<SignOutButton />}>
+        <style>{orgCss}</style>
+        <Stack gap={4}>
+          <Button href="/" size="sm" variant="ghost">
+            ← Back to console
+          </Button>
+          <PageHeader
+            title="Org units"
+            subtitle="The hierarchy of districts, schools, departments, and grades in this tenant."
+          />
+          <Alert tone="warning">
+            The user &amp; org service is unreachable, so the hierarchy can&apos;t
+            be loaded right now. Start the service and refresh.
+          </Alert>
+        </Stack>
+      </AppShell>
+    );
+  }
+
   const stats = summarizeOrgTree(units);
 
   return (

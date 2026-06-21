@@ -1,17 +1,22 @@
 import { TENANT_ID } from "./auth";
+import {
+  getUser,
+  listOrgUnits,
+  listUsers,
+  type UserStatus,
+} from "./user-org-api";
 
 /**
- * Directory data for the admin console.
+ * Directory presentation layer for the admin console.
  *
- * In production these come from the identity + org microservices (tenant-scoped,
- * via the gateway). Until that read path is wired into this surface, we resolve a
- * small, deterministic set of demo users for the seeded demo tenant and an empty
- * collection for everyone else, so the console renders a real happy path and a
- * real empty state with no backend dependency.
+ * Resolves people from the user-org microservice (tenant-scoped, via the BFF
+ * client in `user-org-api.ts`) and shapes them for the directory screens. The
+ * list payload omits roles/org-unit, so we enrich each user from its profile and
+ * an org-unit name map. Returns `null`/`offline` on a service failure so the
+ * pages render a graceful offline state — there is no demo fallback.
  */
 
-/** The lifecycle state of a user account within the tenant. */
-export type UserStatus = "active" | "invited" | "suspended";
+export type { UserStatus };
 
 export interface DirectoryUser {
   id: string;
@@ -19,80 +24,9 @@ export interface DirectoryUser {
   email: string;
   roles: string[];
   status: UserStatus;
-  /** The org unit the user primarily belongs to. */
+  /** The org unit the user is primarily assigned to (first membership). */
   orgUnit: string;
 }
-
-const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
-
-const DEMO_USERS: DirectoryUser[] = [
-  {
-    id: "u-amelia",
-    name: "Amelia Stone",
-    email: "amelia.stone@demo.edu",
-    roles: ["org_admin"],
-    status: "active",
-    orgUnit: "District Office",
-  },
-  {
-    id: "u-priya",
-    name: "Dr. Priya Natarajan",
-    email: "priya.natarajan@demo.edu",
-    roles: ["instructor"],
-    status: "active",
-    orgUnit: "Mathematics",
-  },
-  {
-    id: "u-daniel",
-    name: "Daniel Okoro",
-    email: "daniel.okoro@demo.edu",
-    roles: ["instructor"],
-    status: "active",
-    orgUnit: "Science",
-  },
-  {
-    id: "u-aisha",
-    name: "Aisha Rahman",
-    email: "aisha.rahman@demo.edu",
-    roles: ["instructor", "org_admin"],
-    status: "active",
-    orgUnit: "Humanities",
-  },
-  {
-    id: "u-marcus",
-    name: "Marcus Bell",
-    email: "marcus.bell@demo.edu",
-    roles: ["instructor"],
-    status: "suspended",
-    orgUnit: "Humanities",
-  },
-  {
-    id: "u-jordan",
-    name: "Jordan Lee",
-    email: "jordan.lee@demo.edu",
-    roles: ["student"],
-    status: "active",
-    orgUnit: "Grade 9",
-  },
-  {
-    id: "u-sam",
-    name: "Sam Carter",
-    email: "sam.carter@demo.edu",
-    roles: ["student"],
-    status: "invited",
-    orgUnit: "Grade 10",
-  },
-  {
-    id: "u-nina",
-    name: "Nina Alvarez",
-    email: "nina.alvarez@demo.edu",
-    roles: ["support"],
-    status: "invited",
-    orgUnit: "District Office",
-  },
-];
-
-const ADMIN_ROLES = ["org_admin", "super_admin"];
 
 export interface DirectorySummary {
   total: number;
@@ -100,34 +34,110 @@ export interface DirectorySummary {
   pendingInvites: number;
 }
 
-/**
- * Resolve the users to show in the admin directory for the given tenant. Returns
- * an empty array (driving the empty state) for tenants without seeded demo data.
- */
-export function getDirectoryUsers(
-  tenantId: string = TENANT_ID,
-): DirectoryUser[] {
-  return tenantId === DEMO_TENANT_ID ? DEMO_USERS : [];
+export interface DirectoryUserDetail {
+  id: string;
+  name: string;
+  email: string;
+  status: UserStatus;
+  locale: string | null;
+  roles: string[];
+  orgUnits: string[];
 }
 
-/** Derive the headline counts shown above the directory. */
-export function summarizeDirectory(users: DirectoryUser[]): DirectorySummary {
-  return {
+export interface DirectoryResult {
+  users: DirectoryUser[];
+  summary: DirectorySummary;
+}
+
+export type DirectoryUserResult =
+  | { status: "ok"; user: DirectoryUserDetail }
+  | { status: "not_found" }
+  | { status: "offline" };
+
+const ADMIN_ROLE_NAMES = ["org_admin", "super_admin"];
+const NO_UNIT = "—";
+
+function uniq(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+/**
+ * Resolve the admin directory for a tenant. Returns `null` when the service is
+ * unreachable so the page can render an offline state instead of demo data.
+ */
+export async function getDirectory(
+  tenantId: string = TENANT_ID,
+): Promise<DirectoryResult | null> {
+  const list = await listUsers(tenantId);
+  if (!list.ok) return null;
+
+  const unitsRes = await listOrgUnits(tenantId);
+  const unitName = new Map(
+    unitsRes.ok ? unitsRes.orgUnits.map((u) => [u.id, u.name] as const) : [],
+  );
+
+  const users = await Promise.all(
+    list.users.map(async (record): Promise<DirectoryUser> => {
+      const detail = await getUser(record.id, tenantId);
+      const memberships = detail.ok ? detail.user.memberships : [];
+      const roles = uniq(memberships.map((m) => m.roleName));
+      const orgUnit =
+        memberships.length > 0
+          ? unitName.get(memberships[0]!.orgUnitId) ?? NO_UNIT
+          : NO_UNIT;
+      return {
+        id: record.id,
+        name: record.displayName,
+        email: record.email,
+        roles,
+        status: record.status,
+        orgUnit,
+      };
+    }),
+  );
+
+  const summary: DirectorySummary = {
     total: users.length,
-    admins: users.filter((u) => u.roles.some((r) => ADMIN_ROLES.includes(r)))
-      .length,
+    admins: users.filter((u) =>
+      u.roles.some((r) => ADMIN_ROLE_NAMES.includes(r)),
+    ).length,
     pendingInvites: users.filter((u) => u.status === "invited").length,
   };
+
+  return { users, summary };
 }
 
 /**
- * Resolve a single user for the given tenant. Returns null for unknown tenants
- * or user ids, driving the not-found path.
+ * Resolve a single user's profile, distinguishing a genuine 404 from an offline
+ * service so the detail page can render the right state.
  */
-export function getDirectoryUser(
+export async function getDirectoryUserDetail(
   userId: string,
   tenantId: string = TENANT_ID,
-): DirectoryUser | null {
-  if (tenantId !== DEMO_TENANT_ID) return null;
-  return DEMO_USERS.find((u) => u.id === userId) ?? null;
+): Promise<DirectoryUserResult> {
+  const detail = await getUser(userId, tenantId);
+  if (!detail.ok) {
+    return detail.notFound ? { status: "not_found" } : { status: "offline" };
+  }
+
+  const unitsRes = await listOrgUnits(tenantId);
+  const unitName = new Map(
+    unitsRes.ok ? unitsRes.orgUnits.map((u) => [u.id, u.name] as const) : [],
+  );
+
+  const { user } = detail;
+  return {
+    status: "ok",
+    user: {
+      id: user.id,
+      name: user.displayName,
+      email: user.email,
+      status: user.status,
+      locale: user.locale ?? null,
+      roles: uniq(user.memberships.map((m) => m.roleName)),
+      orgUnits: uniq(
+        user.memberships.map((m) => unitName.get(m.orgUnitId) ?? NO_UNIT),
+      ),
+    },
+  };
 }

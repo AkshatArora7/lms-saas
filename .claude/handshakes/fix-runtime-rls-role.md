@@ -18,7 +18,7 @@
 - [ ] The runtime connection role used by every service's `DATABASE_URL` (local compose AND real/Supabase deploys) is `NOSUPERUSER NOBYPASSRLS` (a dedicated least-privilege app role), distinct from the migration/owner role.
 - [ ] `docker-compose.yml` (and any deploy/env config) provisions/uses that app role for service runtime, while migrations/seed may use a privileged role separately.
 - [ ] An automated test proves enforcement against the RUNTIME role: tenant A seeds data, a request with tenant B's context returns ZERO of tenant A's rows (curl through a service AND/or a DB-level test using the runtime role) — i.e. the demo-stack `2222...` sees `1111...` data finding can no longer reproduce.
-- [ ] Document the role model (owner/migrator vs app/runtime) in `SETUP.md` / `docs/MULTI_TENANCY.md` and reconcile with the existing notes.
+- [x] Document the role model (owner/migrator vs app/runtime) in `SETUP.md` / `docs/MULTI_TENANCY.md` and reconcile with the existing notes.
 - [ ] Verify real (non-demo) deploy role privileges and record the finding.
 
 ## 3. Stage status  (tick only with evidence in the matching section)
@@ -30,9 +30,9 @@
 | Data & RLS | schema-agent | ☑ done | §4 Data shapes below — `database/roles.sql` authored, pglast OK, FORCE RLS confirmed |
 | Backend | service-builder | ☑ done | §4 Implementation below — compose split wired; fresh-volume e2e proven (seed exit 0 as lms; app_user super=f/bypassrls=f; cross-tenant read empty) |
 | Frontend | frontend-dev | ☐ n/a | |
-| QA / tests | qa-agent | ☐ todo | |
-| Security & DoD | security-agent | ☐ todo | |
-| Docs | docs-agent | ☐ todo | |
+| QA / tests | qa-agent | ☑ done | §5 QA below — local pipeline GREEN (lint 53/53, typecheck 53/53, test 452 passed, pglast OK ×3); fresh-volume compose enforcement proof PASSED (app_user super=f/bypassrls=f; service 2222 sees ∅ of 1111; DB-level RLS under app_user c_1111=1/c_2222=0/c_noguc=0; no permission-denied) |
+| Security & DoD | security-agent | ☑ done | §5 Security & DoD below — **APPROVE**. Isolation fix correct+sufficient for local/compose; DoD met (Refs #286, Conv-Commits, no Co-authored-by, rls.sql untouched/strengthened, qa GREEN). 1 LOW least-priv note (control-plane CRUD), AC5 Supabase = tracked ops follow-up, ADR-0026 untracked → docs-agent must commit |
+| Docs | docs-agent | ☑ done | §7 log — ADR-0026 committed (was untracked, Status=Accepted, verified matches as-built; no drift); SETUP.md §5 manual `psql` adds `roles.sql` + two-role table + PROD/Supabase provisioning step & `pg_roles` verification query; `docs/MULTI_TENANCY.md` pool-isolation item 3 = two-role model + NULL-GUC denies-all + ADR cross-link. Generated specs unchanged (no DB-role drift). |
 
 ## 4. Decisions & contracts  (append; never rewrite history)
 
@@ -148,8 +148,80 @@ PASS = `rolsuper=f AND rolbypassrls=f`. Real creds are (correctly) not in the re
 - No missing-GRANT 500s encountered.
 
 ## 5. Verification  (real output only — paste, don't summarize away errors)
-- **QA (qa-agent):** typecheck / lint / test / build counts; per-AC test mapping; root-cause notes for any failure.
+
+### QA (qa-agent) — 2026-06-21 · VERDICT: ✅ GREEN
+
+**Static local pipeline (replicated `.github/workflows/ci.yml`, from C:\src\LMS):**
+- **pglast** — `OK schema.sql`, `OK rls.sql`, `OK roles.sql` (CI validates 2; added roles.sql) — **3/3 OK**
+- `pnpm install --frozen-lockfile` — Done; `pnpm db:generate` — Prisma Client v5.22.0 generated ✓
+- **lint** — Tasks: **53 successful, 53 total** (53/53)
+- **typecheck** — Tasks: **53 successful, 53 total** (53/53)
+- **test** — **452 passed, 0 failed.** Integration `tests/integration/src/rls-isolation.test.ts` (NOSUPERUSER appPool) = **7 tests SKIPPED** (env-gated; needs a live DB — same behaviour as CI without Postgres). Nothing broke; its enforcement claim is covered live by Proof C below.
+- *Note:* baseline counts have grown since the §-template baseline (41/41 · 32) — current repo is 53 packages / 452 tests; no regression. `pnpm build` not run standalone — build is exercised from source by the `docker compose build --no-cache` step (Proof B/C ran against freshly-built images), all services came up healthy.
+
+**Docker fresh-volume enforcement proof (FROM SOURCE; `.env` moved aside so compose defaults apply; `down -v` → `build --no-cache` → `up -d`):**
+- Docker 29.5.3 client/server. All 30 services + postgres/redis **healthy**; **seed exited 0** (connected as owner `lms`, seeded demo tenant 1111…).
+
+- **Proof A — role privileges** (`psql -U lms`):
+  ```
+   rolname  | rolsuper | rolbypassrls
+  ----------+----------+--------------
+   lms      | t        | t
+   app_user | f        | f
+  ```
+  app_user = NOSUPERUSER/NOBYPASSRLS ✓
+
+- **Proof B — service-level isolation (runtime = app_user)** — original cross-tenant leak is DEAD:
+  - course-svc :4005 `GET /courses` — tenant `1111…` → **200, non-empty** (`{"courses":[{"id":"d0000000-0003-…","tenantId":"1111…","title":"Introduction to the Demo Platform"…}]}`); tenant `2222…` → **200, `{"courses":[]}` (EMPTY)** ✓
+  - user-org-svc :4003 `GET /users` — `1111…` → **200, non-empty** (student@demo.school …); `2222…` → **200, `{"users":[]}`** ✓
+  - identity :4001 `POST /auth/login` (admin@demo.school/password123) → **200, Bearer token** ✓
+  - web :3000 → 307→login, admin :3001 → 307→login (render) ✓
+
+- **Proof C — DB-level RLS under runtime role app_user** (`psql -U app_user`):
+  ```
+  c_1111  = 1   (GUC = 1111…  → sees seeded course)
+  c_2222  = 0   (GUC = 2222…  → empty)
+  c_noguc = 0   (no GUC set   → policy denies; current_tenant_id() NULL ⇒ no rows)
+  ```
+  RLS enforced at the DB layer for the runtime role, incl. correct null-GUC denial ✓
+
+- **Proof D — permission breadth:** **NO `permission denied for table/sequence`** anywhere in B/C or service logs — roles.sql grants are sufficient, not too narrow ✓
+
+- **`.env` restored** byte-identical (Test-Path True; 17 lines; no `.env.qabak` leftover) — qa re-verified independently. Note its `DATABASE_URL` still points runtime at the **privileged** Supabase pooler role `postgres.keyujwtjhvbkigntyoee` → confirms the AC5 ops follow-up (§6).
+
+**AC → evidence mapping (§2):**
+| # | Acceptance criterion | Verdict | Evidence |
+|---|----------------------|---------|----------|
+| 1 | Runtime role NOSUPERUSER/NOBYPASSRLS, distinct from migrator | ✅ **local compose**; ⚠ **Supabase pending-ops** | Proof A (app_user f/f vs lms t/t); compose default = app_user. Live Supabase `.env` still uses privileged role → ops follow-up (§6) |
+| 2 | compose provisions/uses app role for runtime; migrations/seed use privileged role | ✅ | roles.sql initdb `03-roles.sql`; `x-common-env DATABASE_URL=app_user` (compose:51); `seed` overrides → `MIGRATION_DATABASE_URL`/lms (compose:124); seed exit 0 as lms |
+| 3 | Automated test proves enforcement against RUNTIME role (B sees ∅ of A) | ✅ | Proof B (service 2222→∅ vs 1111→data) + Proof C (DB-level c_2222=0, c_noguc=0) under app_user. Integration appPool suite present (skipped w/o DB) |
+| 4 | Document owner/migrator vs app/runtime in SETUP.md/MULTI_TENANCY.md | ✅ **done** | docs-agent: SETUP.md §5 (roles.sql in manual apply + two-role table + PROD/Supabase step + `pg_roles` verify query) + MULTI_TENANCY.md item 3 (two-role model, NULL-GUC denies all) + ADR-0026 committed |
+| 5 | Verify real (non-demo) deploy role privileges + record finding | ⚠ **pending-ops** | Finding recorded: live Supabase `.env DATABASE_URL` = privileged `postgres.<ref>` role → must provision a NOSUPERUSER/NOBYPASSRLS Supabase app role + run roles.sql there + set `.env` (§6). §4.5 `pg_roles` query to run against live DB |
+
+**Verdict:** GREEN for the in-scope deliverable (two-role model + compose wiring + enforcement proof). AC4 = pending-docs (docs-agent), AC5 = pending-ops (live Supabase role provisioning); both are tracked downstream, not QA failures.
+
 - **Security & DoD (security-agent):** isolation/authz/secrets findings; APPROVE / CHANGES REQUESTED.
+
+### Security & DoD (security-agent) — 2026-06-21 · VERDICT: ✅ APPROVE (safe → docs-agent → PR + admin-merge)
+
+Read-only audit of the real diff (`git diff main...HEAD` = `.env.example`, `database/roles.sql`, `docker-compose.yml`, handshake) + touched files. qa-agent GREEN folded in.
+
+**1. Isolation fix — CORRECT & SUFFICIENT (local/compose).** The logic is sound, not coincidental:
+- `database/roles.sql:32-33` — `app_user` created `LOGIN ... NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`; non-owner (owner = `lms`, compose `POSTGRES_USER`). No `GRANT lms TO app_user` anywhere → no privileged-role membership/inheritance. Postgres therefore subjects it to RLS.
+- `policies/rls.sql:42-53` — every tenant table is `ENABLE` + `FORCE ROW LEVEL SECURITY` with a single `tenant_isolation` policy `USING (tenant_id = current_tenant_id()) WITH CHECK (...)`. No `USING (true)`, no permissive fallback, no role exemption. `role_permission` isolated via join to parent `role` (rls.sql:67-77).
+- `schema.sql:21-24` — `current_tenant_id()` = `NULLIF(current_setting('app.tenant_id', true),'')::uuid`; missing/empty GUC → NULL → `tenant_id = NULL` evaluates NOT TRUE → **all rows denied** (matches qa Proof C: c_noguc=0). Function is `STABLE` SQL, **not** `SECURITY DEFINER` → runs as caller, no escalation. The `app.tenant_id` GUC set by `withTenant` needs no special privilege. qa proved 2222≠1111 at service+DB level — the mechanism, not luck.
+
+**2. Grant breadth — least-privilege, acceptable.** `roles.sql:38-54`: `USAGE` on schema, `SELECT/INSERT/UPDATE/DELETE ON ALL TABLES`, `USAGE,SELECT ON ALL SEQUENCES`, `ALTER DEFAULT PRIVILEGES FOR ROLE lms`. No DDL/owner grants, no `GRANT ... TO PUBLIC`, no superuser/bypassrls. Control-plane `tenant` + `tenant_admin_delegation` (deliberately NOT in the RLS loop) DO get CRUD via `ALL TABLES`. Exposure assessed and **not** a cross-tenant data leak: `tenant.database_ref` is an **opaque** secret-store ref ("never the raw DSN", schema.sql:48-50) so SELECT cannot leak silo credentials; tenant-metadata enumeration is required by `controlPlane()`/outbox relay (documented roles.sql:56-61). → **LOW, non-blocking** least-privilege note: runtime `app_user` also holds INSERT/UPDATE/DELETE on the control-plane `tenant`/`tenant_admin_delegation` tables — broader than runtime needs (a buggy/compromised domain service could mutate governance rows). Recommend a follow-up to consider SELECT-only (or a dedicated control-plane role) for those two tables. Does NOT block this merge.
+
+**3. Seed / migration path — safe.** `docker-compose.yml:51` runtime default `DATABASE_URL` = `app_user`; only the `seed` one-shot overrides to `${MIGRATION_DATABASE_URL:-postgresql://lms@postgres}` (line 124, privileged owner — intentional, bypasses RLS to write demo data across tenants; seed.demo.ts sets `app.tenant_id` as defence). No runtime service path resolves to the privileged role; the `:-…lms…` default is scoped to the seed service only. `POSTGRES_USER=lms` unchanged; web/admin untouched.
+
+**4. Prod/Supabase gap (AC5) — does NOT block merge.** This branch fixes the compose/local path, ships the role mechanism (`roles.sql`) + the two-role docs (`.env.example:25-29`). Remediating the live Supabase deploy (provision a NOSUPERUSER/NOBYPASSRLS app role there, apply roles.sql, split `.env DATABASE_URL`/`MIGRATION_DATABASE_URL`) is an **OPS action not performable from the repo**. The branch is a strict improvement + provides the mechanism, so it should merge. **#286 must NOT be auto-closed on merge** — AC5 ("verify real/non-demo deploy role") is not yet satisfied. Commits correctly use `Refs #286` (not `Closes`), so merge won't auto-close. → **Action (backlog-agent): keep #286 open pending the Supabase ops step, OR open a tracked HIGH ops follow-up issue and explicitly descope AC5 from #286.** Either way the Supabase remediation must be a tracked HIGH item.
+
+**5. Secrets — clean.** Dev password `'app_user'` (roles.sql:32 / compose:51) is a documented LOCAL/COMPOSE dev default (roles.sql:23-27; mirrors existing `lms/lms`), with docs requiring a strong unique prod password. No real credential in this diff; `.env.example` uses `<region>/<ref>/password` placeholders. Live Supabase `.env` credential is separately tracked by #287 — cross-referenced, not duplicated.
+
+**6. Definition of Done.** Both commits `Refs #286` ✓, Conventional Commit prefixes (`feat(db)`, `feat(infra)`) ✓, **NO `Co-authored-by` trailer** ✓. `policies/rls.sql`/`schema.sql` NOT in the diff → no RLS policy weakened (model strengthened) ✓. qa pglast 3/3 + lint/typecheck/test GREEN folded ✓. AC4 (docs) pending docs-agent. ⚠ **`docs/ADR-0026-runtime-app-role-rls-enforcement.md` is UNTRACKED** (`git status` `??`) — **docs-agent MUST commit it** before PR.
+
+**Delegations:** (a) backlog-agent — keep #286 open / open tracked HIGH ops follow-up for the Supabase remediation (AC5). (b) docs-agent — commit ADR-0026 + AC4 docs. (c) schema-agent/service-builder — OPTIONAL non-blocking follow-up: scope control-plane `tenant`/`tenant_admin_delegation` to SELECT-only for `app_user`. (d) qa-agent — re-verify only if any of the above change `roles.sql`/compose.
 
 ## 6. Open questions / blockers
 - Real/Supabase runtime role privileges are NOT determinable from the repo (creds not committed — correct). Resolved as: ship the verification query (§4.5) + docs; qa/security run it against the live DB and record the finding (AC 5).
@@ -160,3 +232,6 @@ PASS = `rolsuper=f AND rolbypassrls=f`. Real creds are (correctly) not in the re
 - 2026-06-21 12:20 · architect · recorded two-role design + build sequence (§4), authored ADR-0026 · **next owner → schema-agent** (author `database/roles.sql` + pglast validate)
 - 2026-06-21 12:21 · schema-agent · authored `database/roles.sql` (idempotent app_user, NOSUPERUSER/NOBYPASSRLS, CRUD + future ALTER DEFAULT PRIVILEGES); added `03-roles.sql` initdb mount to docker-compose.yml; FORCE RLS confirmed on all tenant tables + role_permission; pglast OK on roles/schema/rls · **next owner → service-builder** (split `DATABASE_URL` → app_user for runtime services, seed → MIGRATION_DATABASE_URL=lms per §4.3)
 - 2026-06-21 12:25 · service-builder · wired compose two-role split: `x-common-env` DATABASE_URL → `app_user:app_user@postgres` (all 26 runtime services); `seed` overrides → `${MIGRATION_DATABASE_URL:-lms@postgres}`; postgres + web/admin untouched; documented `MIGRATION_DATABASE_URL` in `.env.example`. Live fresh-volume e2e (with `.env` moved aside): seed exit 0 as lms, app_user super=f/bypassrls=f, demo-tenant read 200+data, cross-tenant read 200 EMPTY (leak dead), no missing-GRANT 500s. NOTE: live Supabase `.env` still points runtime at privileged role → AC 1/5 ops follow-up (§6). · **next owner → qa-agent** (full enforcement suite: DB-level appPool + curl 2222 vs 1111; §4.5 pg_roles on live Supabase; full stack green — qa MUST `docker compose down -v` first)
+- 2026-06-21 12:42 · qa-agent · **VERDICT GREEN.** Local pipeline: pglast 3/3 OK (incl roles.sql), lint 53/53, typecheck 53/53, test 452 passed/0 failed (integration RLS appPool suite skipped — env-gated, no live DB). Fresh-volume compose FROM SOURCE (`.env` moved aside + restored byte-identical): seed exit 0; Proof A app_user super=f/bypassrls=f vs lms t/t; Proof B course-svc & user-org-svc tenant 2222 → 200 EMPTY vs 1111 → 200 data (leak DEAD), login 200+token; Proof C app_user c_1111=1/c_2222=0/c_noguc=0 (DB-level RLS + null-GUC denial); Proof D no permission-denied. AC1 local✅/Supabase pending-ops, AC2✅, AC3✅, AC4 pending-docs, AC5 pending-ops (live `.env` still privileged Supabase role). No regression, no guardrail weakened. · **next owner → security-agent** (isolation/DoD gate), then docs-agent (AC4), then PR + admin-merge
+- 2026-06-21 13:05 · security-agent · **VERDICT ✅ APPROVE** (isolation/DoD gate). Audited real diff: app_user NOSUPERUSER/NOBYPASSRLS/non-owner, no lms membership; FORCE RLS + single `tenant_isolation USING(tenant_id=current_tenant_id())`, null-GUC denies all, `current_tenant_id()` STABLE not SECURITY DEFINER → fix CORRECT+SUFFICIENT for local/compose. Grants least-priv (no DDL/owner/PUBLIC/bypassrls); `tenant.database_ref` opaque so control-plane SELECT leaks no DSN → 1 LOW non-blocking note (runtime CRUD on control-plane `tenant`/`tenant_admin_delegation`). Seed→privileged lms intentional+scoped; no runtime path on privileged role. DoD: Refs #286 ✓, Conv-Commits ✓, NO Co-authored-by ✓, rls.sql untouched (strengthened) ✓, qa GREEN folded ✓. Secrets clean (dev pwd documented; #287 tracks live cred). **#286 must stay OPEN** (AC5 Supabase = OPS, not repo-doable; commits use Refs not Closes). ⚠ ADR-0026 UNTRACKED — docs-agent must commit. · **next owner → docs-agent** (commit ADR-0026 + AC4 docs); **backlog-agent** keep #286 open / open tracked HIGH Supabase-ops follow-up; then PR + admin-merge
+- 2026-06-21 13:10 · docs-agent · **AC4 DONE.** Committed ADR-0026 (was untracked `??`; reviewed against as-built commits 7dd81d0+42506af — two roles, `database/roles.sql`, compose DATABASE_URL→app_user / seed→MIGRATION_DATABASE_URL, FORCE RLS, Supabase caveat all match; Status already `Accepted`; **no drift correction needed**). `SETUP.md` §5: added `psql "$DIRECT_URL" -f database/roles.sql` to the manual apply sequence (after schema+rls), replaced the vague "non-superuser" note with a concrete two-role table (owner/migrator `lms` vs runtime `app_user` NOSUPERUSER/NOBYPASSRLS non-owner), and added a **PROD/Supabase** subsection (provision app role + run roles.sql + split `DATABASE_URL`/`MIGRATION_DATABASE_URL` + `SELECT rolname,rolsuper,rolbypassrls FROM pg_roles WHERE rolname='<app role>'` must be f/f). `docs/MULTI_TENANCY.md`: pool-isolation item 3 now documents the two-role model + non-bypass requirement + cross-links ADR-0026; GUC section notes NULL-when-unset → all rows denied. Generated `docs/services/*` **NOT** regenerated — the `app_user`/`NOBYPASSRLS` hits there are the domain `app_user` TABLE + relay's already-correct NOBYPASSRLS note, no DB-role drift. No security doc weakened. Files: hand-authored = ADR-0026, SETUP.md, MULTI_TENANCY.md, handshake; regenerated = none. · **next owner → orchestrator** (open the single branch PR; keep #286 OPEN — AC5 Supabase ops pending)

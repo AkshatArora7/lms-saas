@@ -11,9 +11,11 @@ import {
  *
  * Resolves people from the user-org microservice (tenant-scoped, via the BFF
  * client in `user-org-api.ts`) and shapes them for the directory screens. The
- * list payload omits roles/org-unit, so we enrich each user from its profile and
- * an org-unit name map. Returns `null`/`offline` on a service failure so the
- * pages render a graceful offline state — there is no demo fallback.
+ * list payload now arrives already enriched with each user's org-unit role
+ * `memberships`, so we read those directly and only resolve org-unit display
+ * names via a single `listOrgUnits` lookup. Returns `null`/`offline` on a
+ * service failure so the pages render a graceful offline state — there is no
+ * demo fallback.
  */
 
 export type { UserStatus };
@@ -76,25 +78,22 @@ export async function getDirectory(
     unitsRes.ok ? unitsRes.orgUnits.map((u) => [u.id, u.name] as const) : [],
   );
 
-  const users = await Promise.all(
-    list.users.map(async (record): Promise<DirectoryUser> => {
-      const detail = await getUser(record.id, tenantId);
-      const memberships = detail.ok ? detail.user.memberships : [];
-      const roles = uniq(memberships.map((m) => m.roleName));
-      const orgUnit =
-        memberships.length > 0
-          ? unitName.get(memberships[0]!.orgUnitId) ?? NO_UNIT
-          : NO_UNIT;
-      return {
-        id: record.id,
-        name: record.displayName,
-        email: record.email,
-        roles,
-        status: record.status,
-        orgUnit,
-      };
-    }),
-  );
+  const users: DirectoryUser[] = list.users.map((record) => {
+    const memberships = record.memberships;
+    const roles = uniq(memberships.map((m) => m.roleName));
+    const orgUnit =
+      memberships.length > 0
+        ? unitName.get(memberships[0]!.orgUnitId) ?? NO_UNIT
+        : NO_UNIT;
+    return {
+      id: record.id,
+      name: record.displayName,
+      email: record.email,
+      roles,
+      status: record.status,
+      orgUnit,
+    };
+  });
 
   const summary: DirectorySummary = {
     total: users.length,

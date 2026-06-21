@@ -158,11 +158,15 @@ export default async function AdminUsers() {
                                 <p className="admin-user-email">{user.email}</p>
                               </Stack>
                               <Inline gap={2}>
-                                {user.roles.map((role) => (
-                                  <Badge key={role} tone="accent">
-                                    {role}
-                                  </Badge>
-                                ))}
+                                {user.roles.length ? (
+                                  user.roles.map((role) => (
+                                    <Badge key={role} tone="accent">
+                                      {role}
+                                    </Badge>
+                                  ))
+                                ) : (
+                                  <Badge tone="neutral">No roles</Badge>
+                                )}
                               </Inline>
                               <Badge tone="neutral">{user.orgUnit}</Badge>
                               <Chip tone={status.tone}>{status.label}</Chip>

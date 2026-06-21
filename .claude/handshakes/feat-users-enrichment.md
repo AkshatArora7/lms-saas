@@ -28,7 +28,7 @@
 | UX design | ux-designer | ☐ (n/a — no new UI) | |
 | Data & RLS | schema-agent | ☑ done | NO schema change — §4.4 |
 | Backend | service-builder | ☑ done | §4 Implementation below; user-org typecheck/lint/test green (43 tests) |
-| Frontend | frontend-dev | ☐ | |
+| Frontend | frontend-dev | ☑ done | §4.10 below; admin typecheck/lint green |
 | QA / tests | qa-agent | ☐ | |
 | Security & DoD | security-agent | ☐ | |
 | Docs | docs-agent | ☐ | |
@@ -186,6 +186,40 @@ not required.
 - **Out of scope / next:** admin BFF widening + N+1 deletion (`directory.ts`) is
   frontend-dev's step §4.5; full-repo build + live-DB pglast is qa-agent.
 
+**4.10 Implementation (frontend-dev).** Done per §4.5; scoped to `apps/admin`, service untouched.
+- **Files changed:**
+  - `apps/admin/app/lib/user-org-api.ts` — widened `listUsers` BFF return type:
+    `UsersResult.users` is now `UserProfile[]` (memberships included) and the JSON
+    cast is `{ users: UserProfile[] }`. Still ONE server-side `GET /users` fetch
+    forwarding `x-tenant-id`; just stops discarding the new `memberships` field.
+    `UserProfile`/`Membership` types already existed (`:20-42`) and mirror the
+    service field names exactly (assignmentId, roleId, roleName, orgUnitId,
+    cascade).
+  - `apps/admin/app/lib/directory.ts` — **DELETED the N+1**: the old
+    `await Promise.all(list.users.map(async (record) => { const detail = await
+    getUser(record.id, tenantId); ... }))` block (previously `directory.ts:79-97`,
+    one HTTP + detail query per user) is replaced by a plain synchronous
+    `list.users.map(record => …)` reading `record.memberships` directly. Org-unit
+    names still resolved by the **single** `listOrgUnits` call → one `unitName`
+    id→name `Map` (`:74-77`), used to map `memberships[0].orgUnitId` to a display
+    name (falls back to `NO_UNIT` "—"). Output `DirectoryUser`/`DirectorySummary`
+    shape unchanged, so the page needed no data-shape change. `getUser` import
+    retained (still used by `getDirectoryUserDetail`, left unchanged).
+  - `apps/admin/app/users/page.tsx` — UI/columns preserved; added a graceful
+    empty state so a user with `memberships: []` (→ `roles: []`) renders a neutral
+    "No roles" badge instead of an empty cell. Org-unit empty already shows "—".
+- **N+1 eliminated:** GET /users requests went from `1 + N` (list + one detail
+  per user) to **1** (single enriched list) + the pre-existing single
+  `listOrgUnits` call. Per-user round-trips: 0.
+- **Verification (host gate):** `pnpm --filter @lms/admin typecheck` ✓ (tsc
+  --noEmit, exit 0), `pnpm --filter @lms/admin lint` ✓ (eslint app, exit 0). Admin
+  `pnpm build` not run on host (known output:"standalone" symlink EPERM on
+  Windows; Docker image build is qa-agent's gate). Page still renders roles +
+  org-unit columns + status from the single enriched source at all breakpoints
+  (the responsive `.admin-user-row` grid is unchanged).
+- **Out of scope (untouched):** the service, `getDirectoryUserDetail` /
+  `/users/:id`, and sibling issues #279 (roster names) / #277 (displayName).
+
 ## 5. Verification  (real output only — paste, don't summarize away errors)
 - **QA (qa-agent):** typecheck / lint / test / build counts; per-AC test mapping; root-cause notes for any failure.
 - **Security & DoD (security-agent):** isolation/authz/secrets findings; APPROVE / CHANGES REQUESTED.
@@ -197,3 +231,4 @@ not required.
 - 2026-06-21 11:20 · orchestrator · Created handshake; claimed #278 (assigned AkshatArora7, board → In Progress); branch feat/users-enrichment off main @ b1274f3 · **next owner → architect**
 - 2026-06-21 11:25 · architect · Recorded technical design (§4): enrich GET /users to `{ users: UserProfile[] }` via a fixed 2-query batched read (users page → `role_assignment` JOIN `role` WHERE user_id = ANY($1::uuid[])); reuse existing MembershipRecord/UserProfile shapes; NO schema change; delete the BFF N+1 in directory.ts:79-97. · **next owner → service-builder**
 - 2026-06-21 11:28 · service-builder · Implemented backend (§4.9): widened `listUsers` → `UserProfile[]` across store.ts/prisma/memory; prisma now 2 round-trips (users + one `ANY($1::uuid[])` membership batch, no per-user loop); added pure helper `groupMembershipsByUser` + tests; user-org typecheck/lint/test green (43 tests). NO schema change. · **next owner → frontend-dev** (widen admin BFF `listUsers` type + delete directory.ts:79-97 N+1)
+- 2026-06-21 11:31 · frontend-dev · Implemented admin step (§4.10): widened BFF `listUsers` return → `UserProfile[]` (user-org-api.ts); DELETED the per-user N+1 `Promise.all(... getUser ...)` in directory.ts (was :79-97) → plain `.map` reading `record.memberships`, org-unit names via the single `listOrgUnits` id→name map; added "No roles" empty state in users/page.tsx (memberships:[]); UI/columns + responsive grid unchanged. admin typecheck ✓ + lint ✓ (host build EPERM = known Windows non-issue). Scoped to apps/admin; service untouched. · **next owner → qa-agent** (run suite + live-DB pglast; map tests to 4 ACs)

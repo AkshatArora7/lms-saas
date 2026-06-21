@@ -64,7 +64,7 @@ export interface OrgUnitRecord {
 }
 
 export type UsersResult =
-  | { ok: true; users: UserRecord[] }
+  | { ok: true; users: UserProfile[] }
   | { ok: false; error: string };
 
 export type UserResult =
@@ -81,7 +81,11 @@ function tenantHeader(tenantId: string): HeadersInit {
   return { "x-tenant-id": tenantId };
 }
 
-/** List every user for the tenant (backend ordering preserved). */
+/**
+ * List every user for the tenant (backend ordering preserved). The list payload
+ * is enriched per user with org-unit role `memberships` (same `UserProfile`
+ * shape as the detail endpoint), so callers no longer fan out a per-user fetch.
+ */
 export async function listUsers(
   tenantId: string = TENANT_ID,
 ): Promise<UsersResult> {
@@ -91,7 +95,7 @@ export async function listUsers(
       cache: "no-store",
     });
     if (!res.ok) return { ok: false, error: "Failed to load users." };
-    const data = (await res.json()) as { users: UserRecord[] };
+    const data = (await res.json()) as { users: UserProfile[] };
     return { ok: true, users: data.users };
   } catch {
     return { ok: false, error: OFFLINE };

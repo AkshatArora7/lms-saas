@@ -23,8 +23,17 @@ is a single codebase and a no-code migration path.
    `ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY` with a `tenant_isolation`
    policy on every tenant table. The policy compares `tenant_id` to the
    request-scoped GUC `app.tenant_id`.
-3. The app connects as a **non-superuser** role (no `BYPASSRLS`) so RLS is the
-   safety net that "catches the cases your code misses".
+3. **Least-privilege connection role.** Runtime tenant isolation only holds if
+   the connecting role **cannot bypass RLS** — Postgres exempts SUPERUSER, table
+   **owners**, and `BYPASSRLS` roles from policies *even under* `FORCE ROW LEVEL
+   SECURITY`. So this repo uses a **two-role model** (see
+   [`database/roles.sql`](../database/roles.sql) and
+   [ADR-0026](ADR-0026-runtime-app-role-rls-enforcement.md)): a privileged
+   **owner/migrator** role (`lms` in compose) runs `schema.sql`, `rls.sql`,
+   `roles.sql` and the seed, while every backend service connects at runtime as
+   `app_user` — `NOSUPERUSER NOBYPASSRLS`, non-owner, CRUD-only — which **is**
+   subject to `tenant_isolation`. This non-bypassing role is the safety net that
+   "catches the cases your code misses".
 
 ### How the GUC is set
 
@@ -39,7 +48,12 @@ await tx.$executeRawUnsafe(
 );
 ```
 
-`current_tenant_id()` (in `schema.sql`) reads the GUC for the RLS predicate.
+`current_tenant_id()` (in `schema.sql`) reads the `app.tenant_id` GUC for the RLS
+predicate (`tenant_id = current_tenant_id()`). When the GUC is **unset** it returns
+`NULL`, so the predicate matches nothing and **all rows are denied** — a connection
+that forgets `withTenant` sees zero rows rather than leaking across tenants
+(provided it connects as the non-bypassing `app_user`; see
+[ADR-0026](ADR-0026-runtime-app-role-rls-enforcement.md)).
 
 ### Background work stays tenant-scoped (the relay)
 

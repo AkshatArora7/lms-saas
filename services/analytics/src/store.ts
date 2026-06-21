@@ -493,4 +493,48 @@ export interface AnalyticsStore {
     ctx: TenantContext,
     courseId: string,
   ): Promise<CourseEngagementResult>;
+
+  /**
+   * Defence-in-depth authorization signal for `GET /reports/engagement` (#284):
+   * does `userId` hold a teaching enrollment (instructor/teacher/TA, status
+   * active/completed) on `courseId`'s offering? RLS-scoped via withTenant — a
+   * trusted, server-derived fact, never a client claim. Layered ON TOP of RLS.
+   */
+  teachesCourse(
+    ctx: TenantContext,
+    userId: string,
+    courseId: string,
+  ): Promise<boolean>;
+}
+
+// ---------------------------------------------------------------------------
+// Course-read authorization (#284) — defence-in-depth on top of RLS for
+// `GET /reports/engagement`. Pure + unit-testable (mirrors @lms/auth checkAccess
+// purity): the caller is allowed when they hold an admin role OR they teach the
+// course. The "teaches" fact is derived from a trusted source (an enrollment row
+// resolved under RLS), not from a client-supplied claim.
+// ---------------------------------------------------------------------------
+
+/** Tenant-wide admin personas that may read any course's engagement. */
+export const ADMIN_ROLES = ["super_admin", "org_admin"] as const;
+
+/** Enrollment roles that count as "teaches the course" for authorization. */
+export const TEACHING_ENROLLMENT_ROLES = [
+  "instructor",
+  "teacher",
+  "teaching_assistant",
+] as const;
+
+/**
+ * Pure authorization decision for a course-engagement read: allowed when the
+ * caller has an admin role, or the (trusted) `teaches` signal is true.
+ */
+export function isCourseReadAuthorized(input: {
+  roles: string[];
+  teaches: boolean;
+}): boolean {
+  return (
+    input.roles.some((r) => (ADMIN_ROLES as readonly string[]).includes(r)) ||
+    input.teaches
+  );
 }

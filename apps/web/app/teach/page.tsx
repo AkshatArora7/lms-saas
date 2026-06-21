@@ -417,7 +417,12 @@ export default async function Teach() {
   const withEngagement: CourseWithEngagement[] = await Promise.all(
     courses.map(async (course) => ({
       course,
-      engagement: await getCourseEngagement(course.courseId, session.tenantId),
+      engagement: await getCourseEngagement(
+        course.courseId,
+        session.tenantId,
+        session.userId,
+        session.roles,
+      ),
     })),
   );
   const atRiskTotal = countAtRisk(withEngagement);

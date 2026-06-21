@@ -729,6 +729,9 @@ CREATE TABLE IF NOT EXISTS sis_sync (
   last_run_at timestamptz,
   stats       jsonb NOT NULL DEFAULT '{}'::jsonb
 );
+-- Speeds up the per-tenant/source run listing and the "last successful sync"
+-- watermark lookup used for delta (incremental) OneRoster sync.
+CREATE INDEX IF NOT EXISTS ix_sis_sync_tenant_run ON sis_sync(tenant_id, source, last_run_at DESC);
 
 CREATE TABLE IF NOT EXISTS scorm_package (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),

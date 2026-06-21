@@ -6,7 +6,7 @@
 
 ## Responsibility
 
-OneRoster 1.2 consumer/provider, sourcedId mapping, delta/rostering sync with school SIS.
+OneRoster 1.2 REST roster sync from a school SIS: idempotent ingestion of orgs/users/classes/enrollments, sourcedId <-> internal-id mapping, and full/incremental-delta sync runs with a conflict/error report.
 
 ## Owned tables
 
@@ -16,9 +16,10 @@ OneRoster 1.2 consumer/provider, sourcedId mapping, delta/rostering sync with sc
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/sync/runs` | Trigger a rostering sync (full/delta). |
-| `GET` | `/oneroster/{resource}` | OneRoster provider endpoints (orgs/users/classes/enrollments). |
-| `GET` | `/id-map` | Resolve external sourcedId <-> internal id. |
+| `POST` | `/sis/sync` | Trigger a OneRoster sync run (full or incremental delta); cron-callable. |
+| `GET` | `/sis/sync/{runId}` | Sync run status + conflict/error report. |
+| `GET` | `/sis/sync` | List sync runs for the tenant. |
+| `GET` | `/sis/id-map` | Resolve external sourcedId <-> internal id (per entity type). |
 
 ## Events published
 
@@ -29,18 +30,18 @@ OneRoster 1.2 consumer/provider, sourcedId mapping, delta/rostering sync with sc
 
 ## Events consumed
 
-- `user.updated (provider mode export)`
+_None_
 
 ## Dependencies
 
-- user-org
-- course
-- enrollment
-- external SIS (OneRoster REST/CSV)
+- user-org (app_user/org_unit upserts)
+- course (class upserts)
+- enrollment (enrollment upserts)
+- external SIS (OneRoster 1.2 REST)
 
 ## Notes
 
-Bidirectional. Idempotent upserts keyed on sourcedId via sis_id_map; delta sync tracked in sis_sync.
+OneRoster 1.2 REST ingestion of orgs/users/classes/enrollments in dependency order. Upserts are idempotent, keyed on `sourcedId` via `sis_id_map`; the run writes domain rows (`org_unit`/`app_user`/`course`/`enrollment`) under tenant RLS. Incremental delta uses the last-successful-sync watermark on `sis_sync` (delta with no prior success falls back to full); QStash cron triggers `POST /sis/sync` on a schedule. Per-record conflicts/errors are captured in the report on `sis_sync.stats` and never fail the run — only a transport/auth failure marks a run `failed`. The OneRoster client is an injectable port (HTTP adapter in prod), so the sync engine is fully unit-testable.
 
 ## Cross-cutting
 

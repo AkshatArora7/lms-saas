@@ -14,21 +14,10 @@ jobs:
   build-test:
     name: Lint · Typecheck · Build · Test
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        # Pinned to an immutable version tag. The floating `pg15` tag was
-        # republished in a state the runner could not start as a service
-        # container (jobs failed at startup with zero steps), turning CI red
-        # repo-wide. A versioned tag is reproducible and avoids that drift.
-        image: pgvector/pgvector:0.8.3-pg15
-        env:
-          POSTGRES_USER: lms
-          POSTGRES_PASSWORD: lms
-          POSTGRES_DB: lms_test
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U lms"
-          --health-interval 10s --health-timeout 5s --health-retries 5
+    # DIAGNOSTIC (temporary): postgres service container removed to isolate
+    # whether the repo-wide 3s/zero-step job-startup failures come from the
+    # service container (Docker Hub) or the account (Actions spending limit).
+    # Unit tests are DB-free; integration tests skip without Postgres.
     env:
       DATABASE_URL: postgresql://lms:lms@localhost:5432/lms_test
       DIRECT_URL: postgresql://lms:lms@localhost:5432/lms_test

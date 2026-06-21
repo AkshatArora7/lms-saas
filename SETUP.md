@@ -120,13 +120,22 @@ GitHub Actions secrets.
 ## 5. Database setup
 
 The **canonical schema is raw SQL** in [`database/schema.sql`](database/schema.sql),
-with tenant isolation in [`database/policies/rls.sql`](database/policies/rls.sql).
-Apply them with `psql` against your `DIRECT_URL`:
+with tenant isolation in [`database/policies/rls.sql`](database/policies/rls.sql) and
+the least-privilege runtime role in [`database/roles.sql`](database/roles.sql).
+Apply them with `psql`, **in this order**, against your `DIRECT_URL` (which must
+point at a privileged migration/owner role — see the two-role model below):
 
 ```bash
-psql "$DIRECT_URL" -f database/schema.sql
-psql "$DIRECT_URL" -f database/policies/rls.sql
+psql "$DIRECT_URL" -f database/schema.sql        # tables + current_tenant_id()
+psql "$DIRECT_URL" -f database/policies/rls.sql  # FORCE ROW LEVEL SECURITY + tenant_isolation
+psql "$DIRECT_URL" -f database/roles.sql         # create app_user (NOSUPERUSER NOBYPASSRLS) + grants
 ```
+
+`roles.sql` is idempotent and must run **as the owner/migrator role** (the one
+that owns the tables), because it grants CRUD to `app_user` and sets
+`ALTER DEFAULT PRIVILEGES` for future objects. Under docker-compose this file is
+auto-applied as `/docker-entrypoint-initdb.d/03-roles.sql` on a fresh volume, so
+you only run the commands above for a non-compose / manual / remote setup.
 
 Then seed development data via the `db` package:
 
@@ -143,13 +152,48 @@ pnpm db:migrate:dev   # create/apply a dev migration
 pnpm db:migrate       # apply migrations (deploy/CI)
 ```
 
-> **Isolation matters.** The app connects as a **non-superuser** role (no
-> `BYPASSRLS`) so RLS actually enforces tenant separation. When you add a new
+> **Isolation matters — the two-role model.** RLS only enforces if the
+> connecting role **cannot bypass it**. Postgres exempts SUPERUSER, table
+> **owners**, and `BYPASSRLS` roles from RLS *even under* `FORCE ROW LEVEL
+> SECURITY`. So this repo uses **two** Postgres roles (see
+> [`database/roles.sql`](database/roles.sql) and
+> [ADR-0026](docs/ADR-0026-runtime-app-role-rls-enforcement.md)):
+>
+> | Role | Privilege | Used by |
+> | ---- | --------- | ------- |
+> | **migration / owner** (`lms` in compose) | SUPERUSER + table owner — bypasses RLS by design | `schema.sql` + `rls.sql` + `roles.sql` and the one-shot **seed** only |
+> | **runtime app role** (`app_user`) | `NOSUPERUSER NOBYPASSRLS`, non-owner, CRUD-only | **every backend service at runtime** |
+>
+> Every service's runtime `DATABASE_URL` MUST connect as the **app role**, never
+> the owner — that is what makes `FORCE ROW LEVEL SECURITY` + the `app.tenant_id`
+> GUC set by `withTenant` actually enforce `tenant_isolation`. When you add a new
 > tenant-scoped table, add it to the `tenant_tables` list in `rls.sql` in the same
 > change, and validate the SQL parses:
 > ```bash
 > python -c "import pglast; pglast.parse_sql(open('database/schema.sql',encoding='utf-8').read()); print('ok')"
 > ```
+
+#### Production / Supabase: provision the runtime app role
+
+> ⚠️ **Required prod step (tracked follow-up — not yet automated for remote
+> deploys).** A real or **Supabase** deployment does **not** get `app_user`
+> automatically (initdb scripts only run on a fresh local volume). The operator
+> MUST:
+>
+> 1. **Provision a least-privilege app role** on the target DB and apply the
+>    grants — run [`database/roles.sql`](database/roles.sql) (or the equivalent
+>    `CREATE ROLE … NOSUPERUSER NOBYPASSRLS` + CRUD grants) as the owner/migrator.
+> 2. **Split the connection URLs** in `.env`:
+>    - `DATABASE_URL` → the **least-privilege app role** (runtime services).
+>    - `MIGRATION_DATABASE_URL` → the **privileged owner/migrator role** (schema,
+>      `rls.sql`, `roles.sql`, and seed).
+> 3. **Verify the runtime role cannot bypass RLS** — both columns must be `f`:
+>    ```sql
+>    SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = '<app role>';
+>    -- expected:  <app role> | f | f
+>    ```
+>    If `rolsuper` or `rolbypassrls` is `t`, RLS is **not** enforced for that role
+>    and tenants can read each other's rows — fix before exposing the deploy.
 
 ### Option B — local stack with docker-compose (recommended)
 

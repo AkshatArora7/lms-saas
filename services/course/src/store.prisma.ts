@@ -60,7 +60,7 @@ export function createPrismaStore(
     async getCourse(ctx, id) {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<CourseRow[]>(
-          `SELECT ${SELECT_COLUMNS} FROM course WHERE id = $1 LIMIT 1`,
+          `SELECT ${SELECT_COLUMNS} FROM course WHERE id = $1::uuid LIMIT 1`,
           id,
         );
         const row = rows[0];
@@ -75,7 +75,7 @@ export function createPrismaStore(
         const orgUnitId = generateId();
         await db.$executeRawUnsafe(
           `INSERT INTO org_unit (id, tenant_id, type, name)
-           VALUES ($1, $2, 'course_offering', $3)`,
+           VALUES ($1::uuid, $2::uuid, 'course_offering', $3)`,
           orgUnitId,
           ctx.tenantId,
           input.title,
@@ -83,7 +83,7 @@ export function createPrismaStore(
         const rows = await db.$queryRawUnsafe<CourseRow[]>(
           `INSERT INTO course
              (tenant_id, org_unit_id, title, description, start_date, end_date)
-           VALUES ($1, $2, $3, $4, $5, $6)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6)
            RETURNING ${SELECT_COLUMNS}`,
           ctx.tenantId,
           orgUnitId,
@@ -100,7 +100,7 @@ export function createPrismaStore(
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<CourseRow[]>(
           `UPDATE course SET is_published = true
-            WHERE id = $1
+            WHERE id = $1::uuid
           RETURNING ${SELECT_COLUMNS}`,
           id,
         );
@@ -127,7 +127,7 @@ export function createPrismaStore(
 
         if (sets.length === 0) {
           const rows = await db.$queryRawUnsafe<CourseRow[]>(
-            `SELECT ${SELECT_COLUMNS} FROM course WHERE id = $1 LIMIT 1`,
+            `SELECT ${SELECT_COLUMNS} FROM course WHERE id = $1::uuid LIMIT 1`,
             id,
           );
           const row = rows[0];
@@ -137,7 +137,7 @@ export function createPrismaStore(
         params.push(id);
         const rows = await db.$queryRawUnsafe<CourseRow[]>(
           `UPDATE course SET ${sets.join(", ")}
-            WHERE id = $${params.length}
+            WHERE id = $${params.length}::uuid
           RETURNING ${SELECT_COLUMNS}`,
           ...params,
         );
@@ -149,7 +149,7 @@ export function createPrismaStore(
     async deleteCourse(ctx, id) {
       return withTenant(ctx, async (db) => {
         const affected = await db.$executeRawUnsafe(
-          `DELETE FROM course WHERE id = $1`,
+          `DELETE FROM course WHERE id = $1::uuid`,
           id,
         );
         return affected > 0;
@@ -159,7 +159,7 @@ export function createPrismaStore(
     async copyCourse(ctx, sourceId, input: CopyCourseInput = {}) {
       return withTenant(ctx, async (db) => {
         const sourceRows = await db.$queryRawUnsafe<CourseRow[]>(
-          `SELECT ${SELECT_COLUMNS} FROM course WHERE id = $1 LIMIT 1`,
+          `SELECT ${SELECT_COLUMNS} FROM course WHERE id = $1::uuid LIMIT 1`,
           sourceId,
         );
         const source = sourceRows[0];
@@ -171,7 +171,7 @@ export function createPrismaStore(
         const orgUnitId = generateId();
         await db.$executeRawUnsafe(
           `INSERT INTO org_unit (id, tenant_id, type, name)
-           VALUES ($1, $2, 'course_offering', $3)`,
+           VALUES ($1::uuid, $2::uuid, 'course_offering', $3)`,
           orgUnitId,
           ctx.tenantId,
           title,
@@ -180,7 +180,7 @@ export function createPrismaStore(
           `INSERT INTO course
              (tenant_id, org_unit_id, template_id, title, description,
               start_date, end_date, is_published)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, false)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, false)
            RETURNING ${SELECT_COLUMNS}`,
           ctx.tenantId,
           orgUnitId,

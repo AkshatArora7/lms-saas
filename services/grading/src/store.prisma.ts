@@ -141,7 +141,7 @@ export function createPrismaStore(): GradingStore {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<SchemeRow[]>(
           `INSERT INTO grade_scheme (tenant_id, name, ranges)
-           VALUES ($1, $2, $3::jsonb)
+           VALUES ($1::uuid, $2, $3::jsonb)
            RETURNING id, tenant_id, name, ranges`,
           ctx.tenantId,
           input.name,
@@ -165,9 +165,9 @@ export function createPrismaStore(): GradingStore {
         const rows = await db.$queryRawUnsafe<CategoryRow[]>(
           `INSERT INTO grade_category (tenant_id, course_id, name, weight, position)
            VALUES (
-             $1, $2, $3, $4,
+             $1::uuid, $2::uuid, $3, $4,
              COALESCE($5, (SELECT COUNT(*)::int FROM grade_category
-                            WHERE course_id = $2))
+                            WHERE course_id = $2::uuid))
            )
            RETURNING id, tenant_id, course_id, name, weight, position`,
           ctx.tenantId,
@@ -184,7 +184,7 @@ export function createPrismaStore(): GradingStore {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<CategoryRow[]>(
           `SELECT id, tenant_id, course_id, name, weight, position
-             FROM grade_category WHERE course_id = $1 ORDER BY position`,
+             FROM grade_category WHERE course_id = $1::uuid ORDER BY position`,
           courseId,
         );
         return rows.map(toCategory);
@@ -198,9 +198,9 @@ export function createPrismaStore(): GradingStore {
              (tenant_id, course_id, category_id, scheme_id, name,
               max_points, weight, source_type, source_id, position)
            VALUES (
-             $1, $2, $3, $4, $5, $6, $7, $8, $9,
+             $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9::uuid,
              COALESCE($10, (SELECT COUNT(*)::int FROM grade_item
-                             WHERE course_id = $2))
+                             WHERE course_id = $2::uuid))
            )
            RETURNING id, tenant_id, course_id, category_id, scheme_id, name,
                      max_points, weight, source_type, source_id, position`,
@@ -222,7 +222,7 @@ export function createPrismaStore(): GradingStore {
     async getItem(ctx, id) {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<ItemRow[]>(
-          `${SELECT_ITEM} WHERE id = $1 LIMIT 1`,
+          `${SELECT_ITEM} WHERE id = $1::uuid LIMIT 1`,
           id,
         );
         return rows[0] ? toItem(rows[0]) : null;
@@ -232,7 +232,7 @@ export function createPrismaStore(): GradingStore {
     async listItems(ctx, courseId) {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<ItemRow[]>(
-          `${SELECT_ITEM} WHERE course_id = $1 ORDER BY position`,
+          `${SELECT_ITEM} WHERE course_id = $1::uuid ORDER BY position`,
           courseId,
         );
         return rows.map(toItem);
@@ -242,7 +242,7 @@ export function createPrismaStore(): GradingStore {
     async upsertGrade(ctx, itemId, userId, input: GradeInput) {
       return withTenant<UpsertGradeResult>(ctx, async (db) => {
         const itemRows = await db.$queryRawUnsafe<{ id: string }[]>(
-          `SELECT id FROM grade_item WHERE id = $1 LIMIT 1`,
+          `SELECT id FROM grade_item WHERE id = $1::uuid LIMIT 1`,
           itemId,
         );
         if (itemRows.length === 0) {
@@ -252,7 +252,7 @@ export function createPrismaStore(): GradingStore {
           `INSERT INTO grade
              (tenant_id, grade_item_id, user_id, points, feedback,
               is_released, graded_by, graded_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7::uuid, now())
            ON CONFLICT (grade_item_id, user_id) DO UPDATE SET
              points = EXCLUDED.points,
              feedback = EXCLUDED.feedback,
@@ -282,7 +282,7 @@ export function createPrismaStore(): GradingStore {
           `UPDATE grade SET is_released = true, updated_at = now()
             WHERE is_released = false
               AND grade_item_id IN (
-                SELECT id FROM grade_item WHERE course_id = $1)`,
+                SELECT id FROM grade_item WHERE course_id = $1::uuid)`,
           courseId,
         );
         return updated;
@@ -293,17 +293,17 @@ export function createPrismaStore(): GradingStore {
       return withTenant(ctx, async (db) => {
         const categoryRows = await db.$queryRawUnsafe<CategoryRow[]>(
           `SELECT id, tenant_id, course_id, name, weight, position
-             FROM grade_category WHERE course_id = $1 ORDER BY position`,
+             FROM grade_category WHERE course_id = $1::uuid ORDER BY position`,
           courseId,
         );
         const itemRows = await db.$queryRawUnsafe<ItemRow[]>(
-          `${SELECT_ITEM} WHERE course_id = $1 ORDER BY position`,
+          `${SELECT_ITEM} WHERE course_id = $1::uuid ORDER BY position`,
           courseId,
         );
         const gradeRows = await db.$queryRawUnsafe<GradeRow[]>(
           `${SELECT_GRADE}
             WHERE grade_item_id IN (
-              SELECT id FROM grade_item WHERE course_id = $1)`,
+              SELECT id FROM grade_item WHERE course_id = $1::uuid)`,
           courseId,
         );
         return {
@@ -319,9 +319,9 @@ export function createPrismaStore(): GradingStore {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<GradeRow[]>(
           `${SELECT_GRADE}
-            WHERE user_id = $1
+            WHERE user_id = $1::uuid
               AND grade_item_id IN (
-                SELECT id FROM grade_item WHERE course_id = $2)`,
+                SELECT id FROM grade_item WHERE course_id = $2::uuid)`,
           userId,
           courseId,
         );
@@ -337,7 +337,7 @@ export function createPrismaStore(): GradingStore {
                 `${SELECT_ITEM} ORDER BY course_id, position`,
               )
             : await db.$queryRawUnsafe<ItemRow[]>(
-                `${SELECT_ITEM} WHERE course_id = $1 ORDER BY position`,
+                `${SELECT_ITEM} WHERE course_id = $1::uuid ORDER BY position`,
                 courseId,
               );
         return rows.map(toItem);

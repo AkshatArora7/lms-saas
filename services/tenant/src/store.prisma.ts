@@ -113,7 +113,7 @@ export function createPrismaStore(): TenantStore {
         // the schema for silo tenants that must wait on infra to be built.
         const inserted = await tx.$queryRawUnsafe<TenantRow[]>(
           `INSERT INTO tenant (slug, name, kind, parent_id, tier, status, region, plan_id)
-           VALUES ($1, $2, $3, $4::uuid, 'pool', 'active', $5, $6)
+           VALUES ($1, $2, $3, $4::uuid, 'pool', 'active', $5, $6::uuid)
            RETURNING ${SELECT_COLUMNS}`,
           input.slug,
           input.name,
@@ -171,7 +171,7 @@ export function createPrismaStore(): TenantStore {
 
     async getTenant(id) {
       const rows = await db.$queryRawUnsafe<TenantRow[]>(
-        `SELECT ${SELECT_COLUMNS} FROM tenant WHERE id = $1 LIMIT 1`,
+        `SELECT ${SELECT_COLUMNS} FROM tenant WHERE id = $1::uuid LIMIT 1`,
         id,
       );
       return rows[0] ? toRecord(rows[0]) : null;

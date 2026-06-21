@@ -220,7 +220,7 @@ export function createPrismaStore(): AssessmentStore {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<LibraryRow[]>(
           `INSERT INTO question_library (tenant_id, course_id, name)
-           VALUES ($1, $2, $3)
+           VALUES ($1::uuid, $2::uuid, $3)
            RETURNING id, tenant_id, course_id, name`,
           ctx.tenantId,
           input.courseId ?? null,
@@ -244,7 +244,7 @@ export function createPrismaStore(): AssessmentStore {
         const rows = await db.$queryRawUnsafe<QuestionRow[]>(
           `INSERT INTO question
              (tenant_id, library_id, kind, stem, points, body, difficulty)
-           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::jsonb, $7)
            RETURNING id, tenant_id, library_id, kind, stem, points, body,
                      difficulty, created_at`,
           ctx.tenantId,
@@ -264,7 +264,7 @@ export function createPrismaStore(): AssessmentStore {
         const rows = await db.$queryRawUnsafe<QuestionRow[]>(
           `SELECT id, tenant_id, library_id, kind, stem, points, body,
                   difficulty, created_at
-             FROM question WHERE library_id = $1 ORDER BY created_at`,
+             FROM question WHERE library_id = $1::uuid ORDER BY created_at`,
           libraryId,
         );
         return rows.map(toQuestion);
@@ -278,7 +278,7 @@ export function createPrismaStore(): AssessmentStore {
              (tenant_id, course_id, title, description, attempts_allowed,
               time_limit_minutes, shuffle, available_from, available_until,
               grading_method)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+           VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10)
            RETURNING id, tenant_id, course_id, title, description,
                      attempts_allowed, time_limit_minutes, shuffle,
                      available_from, available_until, grading_method,
@@ -305,13 +305,13 @@ export function createPrismaStore(): AssessmentStore {
                   attempts_allowed, time_limit_minutes, shuffle,
                   available_from, available_until, grading_method,
                   is_published, created_at
-             FROM quiz WHERE id = $1 LIMIT 1`,
+             FROM quiz WHERE id = $1::uuid LIMIT 1`,
           id,
         );
         if (quizRows.length === 0) return null;
         const sectionRows = await db.$queryRawUnsafe<SectionRow[]>(
           `SELECT id, tenant_id, quiz_id, title, position, draw_count
-             FROM quiz_section WHERE quiz_id = $1 ORDER BY position`,
+             FROM quiz_section WHERE quiz_id = $1::uuid ORDER BY position`,
           id,
         );
         const sections = [];
@@ -325,7 +325,7 @@ export function createPrismaStore(): AssessmentStore {
                     q.body, q.difficulty, q.library_id, q.created_at
                FROM quiz_question qq
                JOIN question q ON q.id = qq.question_id
-              WHERE qq.section_id = $1 ORDER BY qq.position`,
+              WHERE qq.section_id = $1::uuid ORDER BY qq.position`,
             sRow.id,
           );
           const questions = qqRows.map((r) => ({
@@ -351,7 +351,7 @@ export function createPrismaStore(): AssessmentStore {
     async publishQuiz(ctx, id) {
       return withTenant(ctx, async (db) => {
         const updated = await db.$executeRawUnsafe(
-          `UPDATE quiz SET is_published = true WHERE id = $1`,
+          `UPDATE quiz SET is_published = true WHERE id = $1::uuid`,
           id,
         );
         if (updated === 0) return null;
@@ -360,7 +360,7 @@ export function createPrismaStore(): AssessmentStore {
                   attempts_allowed, time_limit_minutes, shuffle,
                   available_from, available_until, grading_method,
                   is_published, created_at
-             FROM quiz WHERE id = $1 LIMIT 1`,
+             FROM quiz WHERE id = $1::uuid LIMIT 1`,
           id,
         );
         return rows[0] ? toQuiz(rows[0]) : null;
@@ -370,15 +370,15 @@ export function createPrismaStore(): AssessmentStore {
     async addSection(ctx, quizId, input: NewSectionInput) {
       return withTenant(ctx, async (db) => {
         const quizRows = await db.$queryRawUnsafe<{ id: string }[]>(
-          `SELECT id FROM quiz WHERE id = $1 LIMIT 1`,
+          `SELECT id FROM quiz WHERE id = $1::uuid LIMIT 1`,
           quizId,
         );
         if (quizRows.length === 0) return null;
         const rows = await db.$queryRawUnsafe<SectionRow[]>(
           `INSERT INTO quiz_section (tenant_id, quiz_id, title, position, draw_count)
            VALUES (
-             $1, $2, $3,
-             COALESCE($4, (SELECT COUNT(*)::int FROM quiz_section WHERE quiz_id = $2)),
+             $1::uuid, $2::uuid, $3,
+             COALESCE($4, (SELECT COUNT(*)::int FROM quiz_section WHERE quiz_id = $2::uuid)),
              $5
            )
            RETURNING id, tenant_id, quiz_id, title, position, draw_count`,
@@ -395,15 +395,15 @@ export function createPrismaStore(): AssessmentStore {
     async addQuizQuestion(ctx, sectionId, input: AddQuizQuestionInput) {
       return withTenant(ctx, async (db) => {
         const sectionRows = await db.$queryRawUnsafe<{ id: string }[]>(
-          `SELECT id FROM quiz_section WHERE id = $1 LIMIT 1`,
+          `SELECT id FROM quiz_section WHERE id = $1::uuid LIMIT 1`,
           sectionId,
         );
         if (sectionRows.length === 0) return null;
         const rows = await db.$queryRawUnsafe<QuizQuestionRow[]>(
           `INSERT INTO quiz_question (tenant_id, section_id, question_id, points, position)
            VALUES (
-             $1, $2, $3, $4,
-             COALESCE($5, (SELECT COUNT(*)::int FROM quiz_question WHERE section_id = $2))
+             $1::uuid, $2::uuid, $3::uuid, $4,
+             COALESCE($5, (SELECT COUNT(*)::int FROM quiz_question WHERE section_id = $2::uuid))
            )
            RETURNING id, tenant_id, section_id, question_id, points, position`,
           ctx.tenantId,
@@ -423,7 +423,7 @@ export function createPrismaStore(): AssessmentStore {
                   attempts_allowed, time_limit_minutes, shuffle,
                   available_from, available_until, grading_method,
                   is_published, created_at
-             FROM quiz WHERE id = $1 LIMIT 1`,
+             FROM quiz WHERE id = $1::uuid LIMIT 1`,
           quizId,
         );
         const quiz = quizRows[0] ? toQuiz(quizRows[0]) : null;
@@ -437,7 +437,7 @@ export function createPrismaStore(): AssessmentStore {
         }
         const priorRows = await db.$queryRawUnsafe<{ count: number | string }[]>(
           `SELECT COUNT(*)::int AS count FROM quiz_attempt
-            WHERE quiz_id = $1 AND user_id = $2`,
+            WHERE quiz_id = $1::uuid AND user_id = $2::uuid`,
           quizId,
           userId,
         );
@@ -470,7 +470,7 @@ export function createPrismaStore(): AssessmentStore {
         const attemptRows = await db.$queryRawUnsafe<AttemptRow[]>(
           `INSERT INTO quiz_attempt
              (tenant_id, quiz_id, user_id, attempt_no, status, started_at)
-           VALUES ($1, $2, $3, $4, 'in_progress', $5)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4, 'in_progress', $5)
            RETURNING id, tenant_id, quiz_id, user_id, attempt_no, status,
                      score, max_score, started_at, submitted_at, graded_at`,
           ctx.tenantId,
@@ -492,7 +492,7 @@ export function createPrismaStore(): AssessmentStore {
         const attemptRows = await db.$queryRawUnsafe<AttemptRow[]>(
           `SELECT id, tenant_id, quiz_id, user_id, attempt_no, status,
                   score, max_score, started_at, submitted_at, graded_at
-             FROM quiz_attempt WHERE id = $1 LIMIT 1`,
+             FROM quiz_attempt WHERE id = $1::uuid LIMIT 1`,
           attemptId,
         );
         const attempt = attemptRows[0] ? toAttempt(attemptRows[0]) : null;
@@ -510,7 +510,7 @@ export function createPrismaStore(): AssessmentStore {
           const qRows = await db.$queryRawUnsafe<QuestionRow[]>(
             `SELECT id, tenant_id, library_id, kind, stem, points, body,
                     difficulty, created_at
-               FROM question WHERE id = $1 LIMIT 1`,
+               FROM question WHERE id = $1::uuid LIMIT 1`,
             input.questionId,
           );
           if (qRows.length === 0) continue;
@@ -518,7 +518,7 @@ export function createPrismaStore(): AssessmentStore {
           const ppRows = await db.$queryRawUnsafe<{ points: number | string | null }[]>(
             `SELECT qq.points FROM quiz_question qq
                JOIN quiz_section s ON s.id = qq.section_id
-              WHERE qq.question_id = $1 AND s.quiz_id = $2 LIMIT 1`,
+              WHERE qq.question_id = $1::uuid AND s.quiz_id = $2::uuid LIMIT 1`,
             input.questionId,
             attempt.quizId,
           );
@@ -531,7 +531,7 @@ export function createPrismaStore(): AssessmentStore {
           const rRows = await db.$queryRawUnsafe<ResponseRow[]>(
             `INSERT INTO quiz_response
                (tenant_id, attempt_id, question_id, response, awarded, is_correct)
-             VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+             VALUES ($1::uuid, $2::uuid, $3::uuid, $4::jsonb, $5, $6)
              RETURNING id, tenant_id, attempt_id, question_id, response,
                        awarded, is_correct`,
             ctx.tenantId,
@@ -550,7 +550,7 @@ export function createPrismaStore(): AssessmentStore {
               SET score = $2, max_score = $3, status = $4,
                   submitted_at = now(),
                   graded_at = CASE WHEN $4 = 'graded' THEN now() ELSE NULL END
-            WHERE id = $1
+            WHERE id = $1::uuid
            RETURNING id, tenant_id, quiz_id, user_id, attempt_no, status,
                      score, max_score, started_at, submitted_at, graded_at`,
           attemptId,
@@ -567,7 +567,7 @@ export function createPrismaStore(): AssessmentStore {
         const rows = await db.$queryRawUnsafe<AttemptRow[]>(
           `SELECT id, tenant_id, quiz_id, user_id, attempt_no, status,
                   score, max_score, started_at, submitted_at, graded_at
-             FROM quiz_attempt WHERE id = $1 LIMIT 1`,
+             FROM quiz_attempt WHERE id = $1::uuid LIMIT 1`,
           id,
         );
         return rows[0] ? toAttempt(rows[0]) : null;

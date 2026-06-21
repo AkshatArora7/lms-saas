@@ -15,10 +15,15 @@
   },
   "devDependencies": {
     "@lms/eslint-config": "workspace:*",
+    "@lms/service-announcement": "workspace:*",
+    "@lms/service-assignment": "workspace:*",
+    "@lms/service-discussion": "workspace:*",
+    "@lms/service-enrollment": "workspace:*",
     "@lms/service-notification": "workspace:*",
     "@lms/service-relay": "workspace:*",
     "@lms/service-tenant": "workspace:*",
     "@lms/tsconfig": "workspace:*",
+    "@lms/types": "workspace:*",
     "@types/node": "^20.14.0",
     "@types/pg": "^8.11.0",
     "vitest": "^2.0.5"

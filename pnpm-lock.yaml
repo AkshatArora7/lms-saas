@@ -1234,6 +1234,18 @@ importers:
       '@lms/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
+      '@lms/service-announcement':
+        specifier: workspace:*
+        version: link:../../services/announcement
+      '@lms/service-assignment':
+        specifier: workspace:*
+        version: link:../../services/assignment
+      '@lms/service-discussion':
+        specifier: workspace:*
+        version: link:../../services/discussion
+      '@lms/service-enrollment':
+        specifier: workspace:*
+        version: link:../../services/enrollment
       '@lms/service-notification':
         specifier: workspace:*
         version: link:../../services/notification
@@ -1246,6 +1258,9 @@ importers:
       '@lms/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
+      '@lms/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@types/node':
         specifier: ^20.14.0
         version: 20.19.43

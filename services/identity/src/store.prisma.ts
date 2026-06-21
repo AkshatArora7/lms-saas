@@ -58,7 +58,7 @@ export function createPrismaStore(): IdentityStore {
              FROM role_assignment ra
              JOIN role r ON r.id = ra.role_id
              LEFT JOIN role_permission rp ON rp.role_id = r.id
-            WHERE ra.user_id = $1`,
+            WHERE ra.user_id = $1::uuid`,
           userId,
         );
         const roles = new Set<string>();
@@ -82,7 +82,7 @@ export function createPrismaStore(): IdentityStore {
         const rows = await db.$queryRawUnsafe<
           Array<{ parent_id: string | null }>
         >(
-          `SELECT parent_id FROM tenant WHERE id = $1 LIMIT 1`,
+          `SELECT parent_id FROM tenant WHERE id = $1::uuid LIMIT 1`,
           ctx.tenantId,
         );
         return rows[0]?.parent_id ?? null;
@@ -94,7 +94,7 @@ export function createPrismaStore(): IdentityStore {
         await db.$executeRawUnsafe(
           `INSERT INTO refresh_token
              (id, tenant_id, user_id, family_id, token_hash, expires_at)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6)`,
           rec.id,
           rec.tenantId,
           rec.userId,
@@ -145,8 +145,8 @@ export function createPrismaStore(): IdentityStore {
       await withTenant(ctx, async (db) => {
         await db.$executeRawUnsafe(
           `UPDATE refresh_token
-              SET revoked_at = now(), replaced_by = $2
-            WHERE id = $1 AND revoked_at IS NULL`,
+              SET revoked_at = now(), replaced_by = $2::uuid
+            WHERE id = $1::uuid AND revoked_at IS NULL`,
           id,
           replacedBy,
         );
@@ -158,7 +158,7 @@ export function createPrismaStore(): IdentityStore {
         await db.$executeRawUnsafe(
           `UPDATE refresh_token
               SET revoked_at = now()
-            WHERE family_id = $1 AND revoked_at IS NULL`,
+            WHERE family_id = $1::uuid AND revoked_at IS NULL`,
           familyId,
         );
       });
@@ -181,7 +181,7 @@ export function createPrismaStore(): IdentityStore {
         >(
           `SELECT id, tenant_id, kind, display_name, config, is_enabled
              FROM identity_provider
-            WHERE id = $1
+            WHERE id = $1::uuid
             LIMIT 1`,
           providerId,
         );
@@ -215,7 +215,7 @@ export function createPrismaStore(): IdentityStore {
           `SELECT u.id, u.tenant_id, u.display_name, u.status
              FROM user_identity ui
              JOIN app_user u ON u.id = ui.user_id
-            WHERE ui.provider_id = $1 AND ui.subject = $2
+            WHERE ui.provider_id = $1::uuid AND ui.subject = $2
             LIMIT 1`,
           input.providerId,
           input.subject,
@@ -262,7 +262,7 @@ export function createPrismaStore(): IdentityStore {
           // 3. Brand-new JIT user (active, external_id = subject, no password).
           const inserted = await db.$queryRawUnsafe<Array<{ id: string }>>(
             `INSERT INTO app_user (tenant_id, email, display_name, status, external_id)
-             VALUES ($1, $2, $3, 'active', $4)
+             VALUES ($1::uuid, $2, $3, 'active', $4)
              RETURNING id`,
             ctx.tenantId,
             input.email,
@@ -287,11 +287,11 @@ export function createPrismaStore(): IdentityStore {
           for (const roleName of input.defaultRoles ?? []) {
             await db.$executeRawUnsafe(
               `INSERT INTO role_assignment (tenant_id, user_id, role_id, org_unit_id)
-               SELECT $1, $2, r.id, ou.id
+               SELECT $1::uuid, $2::uuid, r.id, ou.id
                  FROM role r
                  JOIN org_unit ou
-                   ON ou.tenant_id = $1 AND ou.parent_id IS NULL
-                WHERE r.tenant_id = $1 AND r.name = $3
+                  ON ou.tenant_id = $1::uuid AND ou.parent_id IS NULL
+                WHERE r.tenant_id = $1::uuid AND r.name = $3
                 LIMIT 1
                ON CONFLICT DO NOTHING`,
               ctx.tenantId,
@@ -303,7 +303,7 @@ export function createPrismaStore(): IdentityStore {
 
         await db.$executeRawUnsafe(
           `INSERT INTO user_identity (tenant_id, user_id, provider_id, subject)
-           VALUES ($1, $2, $3, $4)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4)
            ON CONFLICT (provider_id, subject) DO NOTHING`,
           ctx.tenantId,
           userId,

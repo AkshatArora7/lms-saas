@@ -59,7 +59,7 @@ export function createPrismaStore(): EnrollmentStore {
 
         const inserted = await db.$queryRawUnsafe<{ id: string }[]>(
           `INSERT INTO enrollment (tenant_id, user_id, org_unit_id, role_id)
-           VALUES ($1, $2, $3, $4)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid)
            ON CONFLICT (user_id, org_unit_id) DO NOTHING
            RETURNING id`,
           ctx.tenantId,
@@ -71,7 +71,7 @@ export function createPrismaStore(): EnrollmentStore {
           return { ok: false, reason: "already_enrolled" };
         }
         const rows = await db.$queryRawUnsafe<EnrollmentRow[]>(
-          `${SELECT_JOINED} WHERE e.id = $1`,
+          `${SELECT_JOINED} WHERE e.id = $1::uuid`,
           inserted[0]!.id,
         );
         return { ok: true, enrollment: toRecord(rows[0]!) };
@@ -81,7 +81,7 @@ export function createPrismaStore(): EnrollmentStore {
     async getEnrollment(ctx, id) {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<EnrollmentRow[]>(
-          `${SELECT_JOINED} WHERE e.id = $1 LIMIT 1`,
+          `${SELECT_JOINED} WHERE e.id = $1::uuid LIMIT 1`,
           id,
         );
         const row = rows[0];
@@ -92,12 +92,12 @@ export function createPrismaStore(): EnrollmentStore {
     async dropEnrollment(ctx, id) {
       return withTenant(ctx, async (db) => {
         const updated = await db.$executeRawUnsafe(
-          `UPDATE enrollment SET status = 'withdrawn' WHERE id = $1`,
+          `UPDATE enrollment SET status = 'withdrawn' WHERE id = $1::uuid`,
           id,
         );
         if (updated === 0) return null;
         const rows = await db.$queryRawUnsafe<EnrollmentRow[]>(
-          `${SELECT_JOINED} WHERE e.id = $1 LIMIT 1`,
+          `${SELECT_JOINED} WHERE e.id = $1::uuid LIMIT 1`,
           id,
         );
         return rows[0] ? toRecord(rows[0]) : null;
@@ -114,13 +114,13 @@ export function createPrismaStore(): EnrollmentStore {
         if (!roleId) return { ok: false, reason: "unknown_role" };
 
         const updated = await db.$executeRawUnsafe(
-          `UPDATE enrollment SET role_id = $1 WHERE id = $2`,
+          `UPDATE enrollment SET role_id = $1::uuid WHERE id = $2::uuid`,
           roleId,
           id,
         );
         if (updated === 0) return { ok: false, reason: "not_found" };
         const rows = await db.$queryRawUnsafe<EnrollmentRow[]>(
-          `${SELECT_JOINED} WHERE e.id = $1 LIMIT 1`,
+          `${SELECT_JOINED} WHERE e.id = $1::uuid LIMIT 1`,
           id,
         );
         return { ok: true, enrollment: toRecord(rows[0]!) };
@@ -130,12 +130,12 @@ export function createPrismaStore(): EnrollmentStore {
     async completeEnrollment(ctx, id) {
       return withTenant(ctx, async (db) => {
         const updated = await db.$executeRawUnsafe(
-          `UPDATE enrollment SET status = 'completed' WHERE id = $1`,
+          `UPDATE enrollment SET status = 'completed' WHERE id = $1::uuid`,
           id,
         );
         if (updated === 0) return null;
         const rows = await db.$queryRawUnsafe<EnrollmentRow[]>(
-          `${SELECT_JOINED} WHERE e.id = $1 LIMIT 1`,
+          `${SELECT_JOINED} WHERE e.id = $1::uuid LIMIT 1`,
           id,
         );
         return rows[0] ? toRecord(rows[0]) : null;
@@ -146,7 +146,7 @@ export function createPrismaStore(): EnrollmentStore {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<EnrollmentRow[]>(
           `${SELECT_JOINED}
-            WHERE e.org_unit_id = $1 AND e.status = 'active'
+            WHERE e.org_unit_id = $1::uuid AND e.status = 'active'
             ORDER BY e.enrolled_at`,
           orgUnitId,
         );
@@ -157,7 +157,7 @@ export function createPrismaStore(): EnrollmentStore {
     async listForUser(ctx, userId) {
       return withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<EnrollmentRow[]>(
-          `${SELECT_JOINED} WHERE e.user_id = $1 ORDER BY e.enrolled_at`,
+          `${SELECT_JOINED} WHERE e.user_id = $1::uuid ORDER BY e.enrolled_at`,
           userId,
         );
         return rows.map(toRecord);

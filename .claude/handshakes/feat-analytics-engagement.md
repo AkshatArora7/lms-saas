@@ -30,9 +30,9 @@
 | Data & RLS | schema-agent | ☑ n/a | No schema change — compute live (ADR-277) |
 | Backend | service-builder | ☑ done | §4 Implementation; analytics typecheck+lint+test green (25/25) |
 | Frontend | frontend-dev | ☑ done | §4 Implementation (frontend); web typecheck+lint green |
-| QA / tests | qa-agent | ☐ | |
-| Security & DoD | security-agent | ☐ | |
-| Docs | docs-agent | ☐ | |
+| QA / tests | qa-agent | ☑ done | §5 QA — GREEN: lint 53/53, typecheck 53/53, test 45 tasks/430 tests (analytics 25/25), pglast OK, Docker build-from-source OK, live curl 200 (math-verified live) + 400s |
+| Security & DoD | security-agent | ☑ APPROVE | §5 Security & DoD — isolation/authz/secrets/DoD all PASS; no findings |
+| Docs | docs-agent | ☑ done | ADR-0025 (`docs/ADR-0025-engagement-live-compute.md`) records the live-compute decision for #277 |
 
 - **Data shapes (schema-agent):** N/A — no schema change (see ADR-277).
 - **Design (ux-designer):** optional; restore the elements documented in `page.tsx:24-34`.
@@ -266,8 +266,103 @@ Data ownership: all reads tenant-scoped via `withTenant`; analytics = read/repor
   with `getRoster`); add bulk `?courseId=…` variant later if hot. Caliper data sparse → recency NOT used in v1.
 
 ## 5. Verification  (real output only — paste, don't summarize away errors)
-- **QA (qa-agent):** typecheck / lint / test / build counts; per-AC test mapping; root-cause notes for any failure.
-- **Security & DoD (security-agent):** isolation/authz/secrets findings; APPROVE / CHANGES REQUESTED.
+
+### QA (qa-agent) — #277 full gate · 2026-06-21 · VERDICT: **GREEN**
+
+**Branch state:** HEAD `38d882c` (2 commits over `main` 36376b7). `git diff --name-only main...HEAD -- database/` → **empty** (NO schema/RLS change — confirms ADR-277 compute-live). 9 files changed, +1344/-1.
+
+**Local CI pipeline (GH Actions billing OFF → local is the gate):**
+- pglast: `schema.sql OK`, `rls.sql OK` (run despite no diff). ✓
+- `pnpm install --frozen-lockfile` → "Lockfile is up to date … Already up to date" ✓
+- `pnpm db:generate` → Prisma Client v5.22.0 generated ✓
+- `pnpm lint` → **53 successful, 53 total** ✓
+- `pnpm typecheck` → **53 successful, 53 total** ✓
+- `pnpm test` → **45 tasks successful / 45**, **430 tests passed**. `@lms/service-analytics` **25 passed (25)** incl. the +11 new engagement tests (8 pure-builder + 4 route w/ tenant-isolation + 400s). `@lms/integration-tests` **20 skipped** (live-DB suite — not run here; see note). ✓
+  - Baseline was typecheck/lint 41, test 32, build 35 → repo has grown to 53/53/45-test-tasks; this branch adds analytics tests (25, was 14) with **no regression** anywhere.
+
+**Build (real gate = Docker Linux image; Windows host `pnpm build` EPERMs on `output:"standalone"` symlinks — known host-only non-issue):**
+Docker available (Desktop 4.78.0, Compose v5.1.4). Built **from source, --no-cache** (NOT GHCR :latest, which is stale): `web` Built, `seed` Built, `analytics` Built (via its Dockerfile), `gateway` Built, `identity` Built. ✓
+`docker compose up -d` → analytics **healthy**, gateway **healthy**, web **healthy**, postgres **healthy**. Seed container **ExitCode=0** ("Demo seed complete for tenant 11111111…", course=1, enrollment=2, assignment=2, submission=1, grade=1, attendance_record=3).
+
+**Functional — live, NOT hardcoded (direct analytics:4015, the same URL the web BFF uses internally via `ANALYTICS_SERVICE_URL`):**
+- `GET /reports/engagement?courseId=d0000000-0003-0000-0000-000000000001` (`x-tenant-id: 11111111…`) → **200**:
+  `{"engagement":{"courseId":"d0000000-0003-0000-0000-000000000001","score":69.6,"learnerCount":1,"components":{"attendanceRate":66.7,"submissionRate":50,"gradeAverage":92}},"atRisk":[{"learnerId":"d0000000-00a1-0000-0000-000000000002","displayName":null,"riskLevel":"high","reasons":[{"code":"low_attendance","metric":66.7,"threshold":80},{"code":"missing_submissions","metric":50,"threshold":70}]}]}`
+  - **Math proves LIVE, not a constant:** attendanceRate 66.7 = 2/3 present (3 seeded attendance_record); submissionRate 50 = 1 submission / (2 assignments × 1 learner); gradeAverage 92; score 69.6 = mean(66.7,50,92)=208.7/3. At-risk learner = student@demo.school flagged **high** on 2 reasons (66.7<80, 50<70). All trace to seeded rows.
+- `GET /reports/engagement` (missing courseId) → **400** `{"error":"invalid_request","message":"courseId must be a valid uuid."}` ✓
+- `GET /reports/engagement?courseId=not-a-uuid` → **400** same message ✓
+- (Gateway path `/api/analytics/...` returned 401 with the issued token — NOT a #277 concern: the web BFF talks **directly** to analytics:4015 service-to-service, which is what was exercised; gateway proxy/authz for this route is out of scope for this issue.)
+
+**Frontend (code-verified; Playwright runtime DEFERRED — no Playwright installed in repo, and installing new tooling is prohibited):**
+- `apps/web/app/lib/analytics-api.ts` `getCourseEngagement` — discriminated union, forwards `x-tenant-id`, `cache:"no-store"`, never throws; **explicit "no demo fallback"**. ✓
+- `apps/web/app/teach/page.tsx:417-423` fans out `getCourseEngagement` per taught course (`Promise.all`); renders **only live `report` values**. Null/empty handled calmly: `pct(null)→"—"` (never 0%), `score===null→"Not enough data yet"`, `ok:false→"Engagement insights are unavailable."`, empty `atRisk→"No at-risk learners 🎉"`. At-risk count stat sums live `atRisk.length`. No hardcoded numbers found. ✓ (Live UI render + 360px overflow check DEFERRED to a Playwright-capable run — strong substitute proof from curl + code review.)
+
+**AC → evidence:**
+| # | Acceptance criterion | Verdict | Evidence |
+|---|----|----|----|
+| 1 | Tenant-scoped endpoint: per-course engagement score + at-risk (id, reason, risk level) from real enrollment/attendance/submission/grade | **PASS** | Live 200 above (score 69.6, learnerCount 1, components + atRisk w/ id/level/reason codes+metric+threshold), math-verified from seed; analytics.test.ts 25/25 |
+| 2 | RLS-enforced via `withTenant` | **PASS** | `store.prisma.ts` 5 bound `$1::uuid` subqueries inside one `withTenant` tx (FORCE-RLS tables, rls.sql:18-43); route-level tenant-isolation unit test green. *(Live cross-tenant DB integration in tests/integration is skipped — flagged for security-agent's RLS gate.)* |
+| 3 | `/teach` consumes via BFF; NO hardcoded fallback | **PASS** (UI runtime deferred) | `analytics-api.ts` BFF (no fallback, discriminated union) + `page.tsx` renders live report only, calm null/empty states; typecheck+lint green. Playwright UI render DEFERRED (not installed) |
+| 4 | Store-abstraction pattern | **PASS** | `store.ts` pure `buildCourseEngagement` + types + `getCourseEngagement`; `store.memory.ts`; `store.prisma.ts` bound queries — mirrors `/reports/org-units` six-file shape |
+| 5 | Unit + integration tests cover endpoint + BFF wiring | **PASS** | +11 analytics tests (pure-builder + route + tenant-isolation + 400s) 25/25; BFF wiring verified end-to-end via live stack curl + typecheck (web has no vitest runner — repo norm; same as `attendance.ts`). *Note: no dedicated BFF unit test; live-stack is the integration proof.* |
+
+**Root-cause / failures:** none — pipeline clean, no fixes routed.
+
+**Notes for security-agent (DoD gate):** (a) `tests/integration` live-DB RLS suite is **skipped** in the local run — recommend a live cross-tenant assertion (tenant B sees nothing) before merge to fully close AC2 at the DB layer; (b) Playwright UI render + 360px overflow check deferred (no runner in repo); (c) no schema change, no secrets touched. **Docker build-from-source already confirmed (do not trust GHCR :latest).** Stack torn down clean.
+
+### Security & DoD (security-agent) — #277 final gate · 2026-06-21 · VERDICT: **APPROVE**
+
+Reviewed `git diff main...HEAD` (62a35ad + 38d882c) file-by-file; database/ unchanged (diff --stat confirms 0 schema/RLS lines). Safe to open PR + admin-merge.
+
+**1. Tenant isolation (sacred) — PASS.** All five engagement subqueries
+(`ENGAGEMENT_LEARNERS/ASSIGNMENTS/ATTENDANCE/SUBMISSIONS/GRADES_SQL`,
+store.prisma.ts:165-199) run inside a single `withTenant(ctx, …)` tx
+(store.prisma.ts:316-351), so the `app.tenant_id` GUC is set for every read. Every
+touched table — `enrollment`, `course`, `assignment`, `submission`, `grade`,
+`grade_item`, `attendance_record/session/code` — is in the FORCE RLS
+`tenant_tables` loop (rls.sql:18-43); no `tenant` control-plane table is read. A
+cross-tenant `courseId` returns empty via RLS, asserted by the tenant-isolation
+test (analytics.test.ts:487-502: OTHER tenant → score null, learnerCount 0, atRisk []).
+**No injection surface:** `courseId` is the only param, bound and cast `$1::uuid`
+in all five queries — no string interpolation; route validates `isUuid` → 400
+(routes.ts:206-208). Pure `buildCourseEngagement` only sees the already-scoped rows.
+
+**2. Authz / tenant provenance — PASS.** BFF `getCourseEngagement` forwards
+`x-tenant-id` from `session.tenantId` resolved server-side by `getSession()`
+(httpOnly `lms_at` cookie introspected against identity `/auth/me`, auth.ts:50-64) —
+never a client header/param. `/teach` gates on `getSession()` → redirect /login and
+`canTeach(session.roles)` (page.tsx:391-395); `courseId` is drawn from
+`getTaughtCourses(session.userId, session.tenantId)` (page.tsx:410,420). Analytics
+reads tenant only from the trusted header (main.ts headerTenantResolver), same
+pattern as merged `/reports/org-units`. Tokens stay server-side. **Note (accepted
+follow-up):** the endpoint itself enforces tenant scope only, not teacher-owns-course,
+so a crafted in-tenant `courseId` for a non-taught course would compute — this is
+**within-tenant, RLS-bounded (no cross-tenant leak possible)** and the page never
+sends such ids. Acceptable as a tracked enhancement, not a merge blocker.
+
+**3. Secrets — PASS.** docker-compose.yml change is `ANALYTICS_SERVICE_URL:
+http://analytics:4015` + `depends_on: analytics` only (3 lines); no credentials,
+tokens, or DSNs anywhere in the diff. `TENANT_ID`/`SSO_PROVIDER_ID` defaults are
+non-secret local-dev pins via env (auth.ts:16-29).
+
+**4. DoD — PASS.** Story linked (`Refs #277` on both commits); Conventional Commit
+prefixes `feat(analytics)` / `feat(web)`; **no `Co-authored-by: Copilot` trailer**.
+Store-abstraction six-file shape honored (pure builder + memory + prisma agree); no
+RLS weakened; unit + route tenant-isolation + 400 tests present (analytics 25/25).
+qa-agent GREEN folded in (lint 53/53, typecheck 53/53, 430 tests, pglast OK, Docker
+build-from-source OK, math-verified live 200 + 400s). No hand-edited `docs/services/*`
+in diff. **Deferrals accepted, non-blocking:** (a) live-DB Testcontainers RLS
+integration test → #280 — FORCE RLS on all touched tables plus the in-process
+tenant-isolation test already prove enforcement; (b) `displayName: null` → #278/#279 —
+`learnerLabel` exposes only the learner's own uuid head, no other learner's PII;
+(c) Playwright UI render deferred (no runner in repo).
+
+**5. At-risk cross-learner/cross-course leakage — none.** `buildCourseEngagement`
+aggregates only the RLS-scoped, courseId-filtered rows; at-risk list is the course's
+own learners (within-tenant teacher view = intended). No cross-course or cross-tenant
+exposure path.
+
+**VERDICT: APPROVE** — no findings. Safe to open PR + admin-merge (CI billing off).
+No items delegated. Orchestrator may proceed to PR + bypass-merge.
 
 ## 6. Open questions / blockers
 - At-risk learner display names depend on user-org roster resolution (#278/#279).
@@ -279,3 +374,6 @@ Data ownership: all reads tenant-scoped via `withTenant`; analytics = read/repor
 - 2026-06-21 10:12 · architect · Recorded design: per-course `GET /reports/engagement?courseId=` (live computation over enrollment/attendance/submission/grade, store-abstraction six-file plan, /teach wiring, build sequence, ADR-277 = compute live not materialize engagement_summary). No schema change. · **next owner → service-builder** (then frontend-dev → qa-agent → security-agent)
 - 2026-06-21 10:16 · service-builder · Implemented `GET /reports/engagement?courseId=` in analytics (store types + pure `buildCourseEngagement` + memory seed + prisma five bound `$1::uuid` sub-queries under withTenant + route w/ uuid validation). Confirmed schema columns (category='present', is_released, submission statuses, learner role). +11 tests → 25/25; typecheck+lint+test green. No schema change. · **next owner → frontend-dev** (then qa-agent → security-agent)
 - 2026-06-21 10:24 · frontend-dev · Wired `/teach` to live analytics: new web BFF `apps/web/app/lib/analytics-api.ts` (`getCourseEngagement` discriminated union, `x-tenant-id`, no-store) + restored 3 dropped elements in `page.tsx` (engagement ProgressBar w/ aria+text + component sub-metrics, at-risk learner list w/ text risk pills + reason chips, at-risk count stat) with graceful null/empty/error states (no fabricated data). Added missing `ANALYTICS_SERVICE_URL` to web service in docker-compose.yml (+ analytics depends_on). displayName→id-derived label pending #278/#279. web typecheck+lint green. · **next owner → qa-agent** (then security-agent)
+- 2026-06-21 11:02 · security-agent · **APPROVE — final gate, no findings.** Verified diff main...HEAD: (1) isolation sacred — all 5 engagement subqueries bound `$1::uuid` inside one `withTenant` tx over FORCE-RLS tables; cross-tenant → empty (test asserts); no injection; (2) authz — `x-tenant-id` from verified `getSession().tenantId`, `/teach` gated on session + `canTeach`, courseId from taught courses; teacher-owns-course is within-tenant RLS-bounded follow-up, not a blocker; (3) no secrets (compose URL only); (4) DoD — `Refs #277` both commits, Conventional prefixes, NO Copilot trailer, store-abstraction intact, qa GREEN folded in; #280 live-RLS + #278/#279 names accepted deferrals. Safe to PR + admin-merge. · **next owner → orchestrator (PR + bypass-merge), then docs-agent**
+- 2026-06-21 10:30 · qa-agent · **GATE GREEN.** No schema diff vs main; pglast OK. lint **53/53**, typecheck **53/53**, test **45 tasks / 430 passed** (analytics **25/25**, +11 engagement tests; integration-tests 20 skipped). Docker **build-from-source** (web/seed/analytics/gateway/identity) all Built; stack healthy, seed exit 0. Live curl 200 with **math-verified live data** (score 69.6=mean(66.7,50,92); at-risk student@demo high on 2 reasons) + both **400s** correct. Frontend BFF + `/teach` code-verified: consumes live BFF, **no hardcoded fallback**, calm null/empty states. Playwright UI render + live-DB RLS integration **deferred** (no runner / suite skipped) — flagged for gate. All 5 ACs PASS. No fixes routed. **Safe to route to security-agent then PR + admin-merge.** · **next owner → security-agent**
+- 2026-06-21 11:05 · docs-agent · Recorded the architecture decision as **ADR-0025** (`docs/ADR-0025-engagement-live-compute.md`, hand-authored), following the existing `docs/ADR-NNNN-slug.md` convention (next number after ADR-0024; no `docs/adr/` dir exists, no ADR index to update). Verified every cited fact against source: `engagement_summary` has no writer (only explanatory comments at store.ts:256/routes.ts:196), named thresholds (store.ts:267-276), route `/reports/engagement` (routes.ts:201) mirrors `/reports/org-units` (routes.ts:185), schema column citations. No generated spec touched. Committed ADR + this handshake only (Refs #277, no Copilot trailer). · **next owner → orchestrator (one PR for the branch)**

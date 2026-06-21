@@ -16,7 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: pgvector/pgvector:pg15
+        # Pinned to an immutable version tag. The floating `pg15` tag was
+        # republished in a state the runner could not start as a service
+        # container (jobs failed at startup with zero steps), turning CI red
+        # repo-wide. A versioned tag is reproducible and avoids that drift.
+        image: pgvector/pgvector:0.8.3-pg15
         env:
           POSTGRES_USER: lms
           POSTGRES_PASSWORD: lms

@@ -126,6 +126,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@lms/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@lms/types':
         specifier: workspace:*
         version: link:../types

@@ -136,7 +136,7 @@ export default async function AnnouncementsPage({
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
 
-  const all = getAnnouncements(session.tenantId);
+  const all = await getAnnouncements(session.userId, session.tenantId);
   const summary = summarizeAnnouncements(all);
   const filter = parseFilter(searchParams?.scope);
   const visible = filter === "all" ? all : all.filter((a) => a.scope === filter);

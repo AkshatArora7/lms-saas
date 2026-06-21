@@ -95,11 +95,32 @@ export async function listCourseAnnouncements(
   }
 }
 
+/**
+ * List the currently-visible (published, non-expired) announcements for an org
+ * unit / course offering — the learner-facing read. Returns `[]` on error.
+ */
+export async function listVisibleAnnouncements(
+  orgUnitId: string,
+  tenantId: string = TENANT_ID,
+): Promise<Announcement[]> {
+  try {
+    const url = `${ANNOUNCEMENT_SERVICE_URL}/org-units/${encodeURIComponent(orgUnitId)}/announcements`;
+    const res = await fetch(url, {
+      headers: tenantHeader(tenantId),
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { announcements: Announcement[] };
+    return data.announcements ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getAnnouncement(
   id: string,
   tenantId: string = TENANT_ID,
-): Promise<AnnouncementResult> {
-  try {
+): Promise<AnnouncementResult> {  try {
     const res = await fetch(`${ANNOUNCEMENT_SERVICE_URL}/announcements/${id}`, {
       headers: tenantHeader(tenantId),
       cache: "no-store",

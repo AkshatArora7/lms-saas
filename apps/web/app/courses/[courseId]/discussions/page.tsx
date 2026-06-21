@@ -50,6 +50,10 @@ const discussionsCss = `
   margin: 0;
   overflow-wrap: anywhere;
 }
+.disc-excerpt {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .disc-row {
   align-items: center;
   display: flex;
@@ -68,10 +72,14 @@ export default async function CourseDiscussionsPage({
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
 
-  const course = getCourseDetail(params.courseId, session.tenantId);
+  const course = await getCourseDetail(
+    params.courseId,
+    session.userId,
+    session.tenantId,
+  );
   if (!course) notFound();
 
-  const threads = getCourseDiscussions(params.courseId, session.tenantId);
+  const threads = await getCourseDiscussions(params.courseId, session.tenantId);
   const summary = summarizeDiscussions(threads);
 
   return (
@@ -79,13 +87,15 @@ export default async function CourseDiscussionsPage({
       <style>{discussionsCss}</style>
       <Stack gap={4}>
         <Button href={`/courses/${course.id}`} size="sm" variant="ghost">
-          ← Back to {course.code}
+          ← Back to {course.code ?? course.title}
         </Button>
 
         <PageHeader
           title="Discussions"
           subtitle={`Threads for ${course.title}.`}
-          actions={<Badge tone="neutral">{course.code}</Badge>}
+          actions={
+            course.code ? <Badge tone="neutral">{course.code}</Badge> : undefined
+          }
         />
 
         {threads.length ? (
@@ -130,6 +140,9 @@ export default async function CourseDiscussionsPage({
                         {thread.author} · last activity{" "}
                         {relativeTime(thread.lastActivityAt)}
                       </p>
+                      {thread.excerpt ? (
+                        <p className="disc-excerpt">{thread.excerpt}</p>
+                      ) : null}
                     </Stack>
                   </Card>
                 </li>

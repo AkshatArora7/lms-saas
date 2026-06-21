@@ -1,16 +1,19 @@
 import { TENANT_ID } from "./auth";
+import { getEnrolledCourses } from "./enrolled";
+import {
+  listAssignments,
+  listSubmissions,
+  type Assignment as AssignmentRecord,
+} from "./assignments-api";
 
 /**
- * Assignment data for the learner assignments / upcoming work screen.
- *
- * In production this comes from the assignment/grading microservices (EPIC
- * #44), tenant-scoped via the gateway. Until that read path is wired in, we
- * resolve a small, deterministic set for the seeded demo tenant and an empty
- * collection for everyone else, so the screen renders a real happy path and a
- * real empty state with no backend dependency.
+ * Assignment data for the learner assignments / upcoming work screen, sourced
+ * live from the assignment microservice via the BFF server-fetch pattern
+ * (tenant-scoped with `x-tenant-id`). For each enrolled course we read its
+ * assignments and the learner's submission state. Returns `[]` (driving the
+ * empty state) when there is no work or a service is unreachable — no demo
+ * fallback.
  */
-
-const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
 
 export type AssignmentType = "Assignment" | "Quiz" | "Project" | "Essay";
 
@@ -24,11 +27,12 @@ export interface Assignment {
   id: string;
   courseId: string;
   course: string;
-  code: string;
+  /** Course code — not modelled by the course service yet, hence nullable. */
+  code: string | null;
   title: string;
   type: AssignmentType;
   points: number;
-  /** ISO due date. */
+  /** ISO due date (empty string when none is set). */
   dueAt: string;
   state: SubmissionState;
   /** Present only when state is "graded". */
@@ -46,76 +50,6 @@ export interface AssignmentsSummary {
   submitted: number;
 }
 
-const DEMO_ASSIGNMENTS: Assignment[] = [
-  {
-    id: "asg-1",
-    courseId: "course-cs",
-    course: "Intro to Computer Science",
-    code: "CS-101",
-    title: "Lab 4: Recursion",
-    type: "Assignment",
-    points: 20,
-    dueAt: "2026-06-19T23:59:00Z",
-    state: "not_started",
-  },
-  {
-    id: "asg-2",
-    courseId: "course-alg2",
-    course: "Algebra II",
-    code: "MATH-201",
-    title: "Problem Set 7",
-    type: "Assignment",
-    points: 15,
-    dueAt: "2026-06-16T23:59:00Z",
-    state: "not_started",
-  },
-  {
-    id: "asg-3",
-    courseId: "course-eng",
-    course: "English Literature",
-    code: "ENG-150",
-    title: "Comparative Essay",
-    type: "Essay",
-    points: 40,
-    dueAt: "2026-06-22T23:59:00Z",
-    state: "not_started",
-  },
-  {
-    id: "asg-4",
-    courseId: "course-bio",
-    course: "Biology",
-    code: "SCI-110",
-    title: "Cell Structure Quiz",
-    type: "Quiz",
-    points: 10,
-    dueAt: "2026-06-12T23:59:00Z",
-    state: "submitted",
-  },
-  {
-    id: "asg-5",
-    courseId: "course-hist",
-    course: "World History",
-    code: "HIST-120",
-    title: "Industrial Revolution Project",
-    type: "Project",
-    points: 50,
-    dueAt: "2026-06-09T23:59:00Z",
-    state: "graded",
-    score: 46,
-  },
-  {
-    id: "asg-6",
-    courseId: "course-alg2",
-    course: "Algebra II",
-    code: "MATH-201",
-    title: "Problem Set 6",
-    type: "Assignment",
-    points: 15,
-    dueAt: "2026-06-08T23:59:00Z",
-    state: "not_started",
-  },
-];
-
 /** Number of days from `now` to a due date; negative means past due. */
 const DUE_SOON_DAYS = 3;
 
@@ -123,6 +57,7 @@ function statusOf(assignment: Assignment, now: Date): AssignmentStatus {
   if (assignment.state !== "not_started") {
     return assignment.state;
   }
+  if (!assignment.dueAt) return "not_started";
   return new Date(assignment.dueAt).getTime() < now.getTime()
     ? "overdue"
     : "not_started";
@@ -142,24 +77,58 @@ function rank(status: AssignmentStatus): number {
   }
 }
 
+/** Map a persisted submission status to the learner-facing state. */
+function submissionState(status: string | undefined): SubmissionState {
+  if (status === "graded" || status === "returned") return "graded";
+  if (status) return "submitted";
+  return "not_started";
+}
+
 /**
- * Resolve the learner's assignments for the current tenant, annotated with a
+ * Resolve the learner's assignments across enrolled courses, annotated with a
  * derived status and sorted: overdue first, then by due date.
  */
-export function getAssignments(
+export async function getAssignments(
+  userId: string,
   tenantId: string = TENANT_ID,
   now: Date = new Date(),
-): AssignmentView[] {
-  if (tenantId !== DEMO_TENANT_ID) {
-    return [];
-  }
-  return DEMO_ASSIGNMENTS.map((assignment) => ({
-    ...assignment,
-    status: statusOf(assignment, now),
-  })).sort((a, b) => {
-    const byRank = rank(a.status) - rank(b.status);
-    return byRank !== 0 ? byRank : a.dueAt.localeCompare(b.dueAt);
-  });
+): Promise<AssignmentView[]> {
+  const enrolled = await getEnrolledCourses(userId, tenantId);
+  const perCourse = await Promise.all(
+    enrolled.map(async (course) => {
+      const result = await listAssignments(course.courseId, tenantId);
+      if (!result.ok) return [] as Assignment[];
+      const assignments = await Promise.all(
+        result.assignments.map(async (record: AssignmentRecord) => {
+          const submissions = await listSubmissions(record.id, tenantId);
+          const mine = submissions.find((s) => s.userId === userId);
+          return {
+            id: record.id,
+            courseId: course.courseId,
+            course: course.title,
+            code: null,
+            title: record.title,
+            type: "Assignment" as AssignmentType,
+            points: record.points,
+            dueAt: record.dueAt ?? "",
+            state: submissionState(mine?.status),
+          } satisfies Assignment;
+        }),
+      );
+      return assignments;
+    }),
+  );
+
+  return perCourse
+    .flat()
+    .map((assignment) => ({
+      ...assignment,
+      status: statusOf(assignment, now),
+    }))
+    .sort((a, b) => {
+      const byRank = rank(a.status) - rank(b.status);
+      return byRank !== 0 ? byRank : a.dueAt.localeCompare(b.dueAt);
+    });
 }
 
 /** Summarise overdue / due-soon / submitted counts. */

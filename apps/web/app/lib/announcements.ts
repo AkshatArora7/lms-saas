@@ -1,16 +1,19 @@
 import { TENANT_ID } from "./auth";
+import { getEnrolledCourses } from "./enrolled";
+import {
+  listVisibleAnnouncements,
+  type Announcement as AnnouncementRecord,
+} from "./announcements-api";
+import { getUser } from "./user-org-api";
 
 /**
- * Announcements for the learner announcements / notifications inbox.
- *
- * In production these come from a notifications/announcements service, fanned
- * out from school-wide and per-course posts and tenant-scoped via the gateway.
- * Until that read path is wired in, we resolve a small, deterministic set for
- * the seeded demo tenant and an empty collection for everyone else, so the
- * screen renders a real happy path and a real empty state with no backend.
+ * Announcements for the learner announcements / notifications inbox, sourced
+ * live from the announcement microservice via the BFF server-fetch pattern
+ * (tenant-scoped with `x-tenant-id`). We fan out across the learner's enrolled
+ * course offerings and resolve author display names from user-org. Returns `[]`
+ * (driving the empty state) when there is nothing to show or a service is
+ * unreachable — no demo fallback.
  */
-
-const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
 
 export type AnnouncementScope = "school" | "course";
 
@@ -32,71 +35,70 @@ export interface AnnouncementsSummary {
   unread: number;
 }
 
-const DEMO_ANNOUNCEMENTS: Announcement[] = [
-  {
-    id: "ann-1",
-    title: "Midterm schedule published",
-    body: "Midterm exams run the week of the 24th. Check your schedule for room assignments and bring your student ID.",
-    scope: "school",
-    source: "Northwind Academy",
-    author: "Registrar's Office",
-    postedAt: "2026-06-15T08:30:00Z",
-    unread: true,
-  },
-  {
-    id: "ann-2",
-    title: "Lab 4 due date extended",
-    body: "Because of the network outage on Tuesday, Lab 4 is now due Friday at 11:59 PM. No late penalty for submissions before then.",
-    scope: "course",
-    source: "Intro to Computer Science (CS-101)",
-    author: "Dr. Park",
-    postedAt: "2026-06-14T16:05:00Z",
-    unread: true,
-  },
-  {
-    id: "ann-3",
-    title: "Reading for next week",
-    body: "Please read chapters 5 and 6 before Monday's class. We'll start the seminar discussion right away.",
-    scope: "course",
-    source: "English Literature (ENG-150)",
-    author: "Mrs. Nguyen",
-    postedAt: "2026-06-13T12:00:00Z",
-    unread: false,
-  },
-  {
-    id: "ann-4",
-    title: "Library hours extended for finals",
-    body: "The library will be open until midnight starting next week to support exam preparation.",
-    scope: "school",
-    source: "Northwind Academy",
-    author: "Library Services",
-    postedAt: "2026-06-11T09:15:00Z",
-    unread: false,
-  },
-  {
-    id: "ann-5",
-    title: "Field trip permission slips",
-    body: "Permission slips for the Biology field trip are due by the end of the week. See Mr. Osei with any questions.",
-    scope: "course",
-    source: "Biology (SCI-110)",
-    author: "Mr. Osei",
-    postedAt: "2026-06-10T14:40:00Z",
-    unread: false,
-  },
-];
-
 function byNewest(a: Announcement, b: Announcement): number {
   return b.postedAt.localeCompare(a.postedAt);
 }
 
-/** Resolve the learner's announcements for the current tenant, newest first. */
-export function getAnnouncements(
+/**
+ * Resolve the learner's announcements across enrolled course offerings, newest
+ * first, with author display names resolved from user-org.
+ */
+export async function getAnnouncements(
+  userId: string,
   tenantId: string = TENANT_ID,
-): Announcement[] {
-  if (tenantId !== DEMO_TENANT_ID) {
-    return [];
-  }
-  return [...DEMO_ANNOUNCEMENTS].sort(byNewest);
+): Promise<Announcement[]> {
+  const enrolled = await getEnrolledCourses(userId, tenantId);
+  const perCourse = await Promise.all(
+    enrolled.map(async (course) => {
+      const records = await listVisibleAnnouncements(course.orgUnitId, tenantId);
+      return records.map((record) => ({ record, course }));
+    }),
+  );
+  const flat = perCourse.flat();
+
+  // Resolve author display names once per distinct author.
+  const authorIds = Array.from(
+    new Set(
+      flat
+        .map(({ record }) => record.authorId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+  const authorEntries = await Promise.all(
+    authorIds.map(async (id) => {
+      const user = await getUser(id, tenantId);
+      return [id, user?.displayName ?? "Staff"] as const;
+    }),
+  );
+  const authorNames = new Map(authorEntries);
+
+  return flat
+    .map(({ record, course }): Announcement =>
+      mapAnnouncement(record, course.title, authorNames),
+    )
+    .sort(byNewest);
+}
+
+function mapAnnouncement(
+  record: AnnouncementRecord,
+  courseTitle: string,
+  authorNames: Map<string, string>,
+): Announcement {
+  return {
+    id: record.id,
+    title: record.title,
+    body: record.body,
+    // Announcements in this surface are scoped to a course offering; a future
+    // school-wide root org unit would map to "school".
+    scope: "course",
+    source: courseTitle,
+    author: record.authorId
+      ? authorNames.get(record.authorId) ?? "Staff"
+      : "Staff",
+    postedAt: record.publishAt,
+    // No per-user read state is modelled yet, so nothing is marked unread.
+    unread: false,
+  };
 }
 
 /** Summarise total and unread counts. */

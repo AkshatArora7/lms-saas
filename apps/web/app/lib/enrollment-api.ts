@@ -86,6 +86,29 @@ export async function getRoster(
   }
 }
 
+/**
+ * List a learner's own enrollments (the "my courses" join). Returns `[]` on
+ * error so the dashboard renders a clean empty/offline state. Each enrollment's
+ * `orgUnitId` is the course OFFERING the learner belongs to.
+ */
+export async function getUserEnrollments(
+  userId: string,
+  tenantId: string = TENANT_ID,
+): Promise<Enrollment[]> {
+  try {
+    const url = `${ENROLLMENT_SERVICE_URL}/users/${encodeURIComponent(userId)}/enrollments`;
+    const res = await fetch(url, {
+      headers: tenantHeader(tenantId),
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { enrollments: Enrollment[] };
+    return data.enrollments ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getEnrollment(
   id: string,
   tenantId: string = TENANT_ID,

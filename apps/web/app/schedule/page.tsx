@@ -204,14 +204,17 @@ const SUMMARY_ACCENTS = {
 const NEXT_BADGE_TONE: BadgeTone = "accent";
 
 function formatTime(hhmm: string): string {
+  if (!hhmm) return "";
   const [hRaw = "0", m = "00"] = hhmm.split(":");
   const h = Number.parseInt(hRaw, 10);
+  if (Number.isNaN(h)) return "";
   const period = h >= 12 ? "PM" : "AM";
   const hour12 = h % 12 === 0 ? 12 : h % 12;
   return `${hour12}:${m} ${period}`;
 }
 
 function formatRange(entry: ScheduleEntry): string {
+  if (!entry.start && !entry.end) return "";
   return `${formatTime(entry.start)} – ${formatTime(entry.end)}`;
 }
 
@@ -220,7 +223,7 @@ export default async function SchedulePage() {
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
 
-  const entries = getWeekSchedule(session.tenantId);
+  const entries = await getWeekSchedule(session.userId, session.tenantId);
   const days = groupByDay(entries);
   const summary = summarizeWeek(entries);
   const nextEntryId = summary.next?.id;
@@ -336,12 +339,18 @@ export default async function SchedulePage() {
                                       ) : null}
                                       <p className="sched-course">{entry.course}</p>
                                     </div>
-                                    <Badge tone="neutral">{entry.code}</Badge>
+                                    {entry.code ? (
+                                      <Badge tone="neutral">{entry.code}</Badge>
+                                    ) : null}
                                   </Inline>
                                   <p className="sched-meta-line">
-                                    <span>{entry.room}</span>
-                                    <span aria-hidden="true">·</span>
-                                    <span>{entry.instructor}</span>
+                                    {entry.room ? <span>{entry.room}</span> : null}
+                                    {entry.room && entry.instructor ? (
+                                      <span aria-hidden="true">·</span>
+                                    ) : null}
+                                    {entry.instructor ? (
+                                      <span>{entry.instructor}</span>
+                                    ) : null}
                                   </p>
                                 </Stack>
                               </div>

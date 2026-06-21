@@ -1,16 +1,16 @@
 import { TENANT_ID } from "./auth";
+import { getEnrolledCourses } from "./enrolled";
+import { listTimetable, listBellSchedules } from "./calendar-api";
+import { getUser } from "./user-org-api";
 
 /**
- * Weekly timetable data for the learner schedule screen.
- *
- * In production this comes from the timetable backend (bell_schedule /
- * schedule_period / timetable_entry), tenant-scoped via the gateway. Until that
- * read path is wired in, we resolve a small, deterministic week for the seeded
- * demo tenant and an empty timetable for everyone else, so the screen renders a
- * real happy path and a real empty state with no backend dependency.
+ * Weekly timetable data for the learner schedule screen, sourced live from the
+ * calendar microservice via the BFF server-fetch pattern (tenant-scoped with
+ * `x-tenant-id`). For each enrolled course offering we read its timetable
+ * entries and the bell schedule that supplies each period's start/end times,
+ * then compose the weekly view. Returns `[]` (driving the empty state) when no
+ * timetable is published or a service is unreachable — no demo fallback.
  */
-
-const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
 
 export type Weekday = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday";
 
@@ -25,15 +25,17 @@ export const WEEKDAYS: Weekday[] = [
 export interface ScheduleEntry {
   id: string;
   day: Weekday;
-  /** 24h start time, "HH:MM". */
+  /** 24h start time, "HH:MM" (empty when the period has no time). */
   start: string;
-  /** 24h end time, "HH:MM". */
+  /** 24h end time, "HH:MM" (empty when the period has no time). */
   end: string;
   courseId: string;
   course: string;
-  code: string;
+  /** Course code — not modelled by the course service yet, hence nullable. */
+  code: string | null;
   room: string;
-  instructor: string;
+  /** Instructor display name, resolved from user-org; null when none. */
+  instructor: string | null;
 }
 
 export interface DaySchedule {
@@ -47,126 +49,88 @@ export interface ScheduleSummary {
   next: ScheduleEntry | null;
 }
 
-const DEMO_ENTRIES: ScheduleEntry[] = [
-  {
-    id: "mon-1",
-    day: "Monday",
-    start: "09:00",
-    end: "10:15",
-    courseId: "course-alg2",
-    course: "Algebra II",
-    code: "MATH-201",
-    room: "B204",
-    instructor: "Ms. Carter",
-  },
-  {
-    id: "mon-2",
-    day: "Monday",
-    start: "10:30",
-    end: "11:45",
-    courseId: "course-bio",
-    course: "Biology",
-    code: "SCI-110",
-    room: "Lab 3",
-    instructor: "Mr. Osei",
-  },
-  {
-    id: "tue-1",
-    day: "Tuesday",
-    start: "09:00",
-    end: "10:15",
-    courseId: "course-eng",
-    course: "English Literature",
-    code: "ENG-150",
-    room: "A112",
-    instructor: "Mrs. Nguyen",
-  },
-  {
-    id: "tue-2",
-    day: "Tuesday",
-    start: "13:00",
-    end: "14:15",
-    courseId: "course-hist",
-    course: "World History",
-    code: "HIST-120",
-    room: "A210",
-    instructor: "Mr. Dlamini",
-  },
-  {
-    id: "wed-1",
-    day: "Wednesday",
-    start: "09:00",
-    end: "10:15",
-    courseId: "course-alg2",
-    course: "Algebra II",
-    code: "MATH-201",
-    room: "B204",
-    instructor: "Ms. Carter",
-  },
-  {
-    id: "wed-2",
-    day: "Wednesday",
-    start: "11:00",
-    end: "12:15",
-    courseId: "course-cs",
-    course: "Intro to Computer Science",
-    code: "CS-101",
-    room: "Lab 1",
-    instructor: "Dr. Park",
-  },
-  {
-    id: "thu-1",
-    day: "Thursday",
-    start: "10:30",
-    end: "11:45",
-    courseId: "course-bio",
-    course: "Biology",
-    code: "SCI-110",
-    room: "Lab 3",
-    instructor: "Mr. Osei",
-  },
-  {
-    id: "thu-2",
-    day: "Thursday",
-    start: "13:00",
-    end: "14:15",
-    courseId: "course-eng",
-    course: "English Literature",
-    code: "ENG-150",
-    room: "A112",
-    instructor: "Mrs. Nguyen",
-  },
-  {
-    id: "fri-1",
-    day: "Friday",
-    start: "09:00",
-    end: "10:15",
-    courseId: "course-cs",
-    course: "Intro to Computer Science",
-    code: "CS-101",
-    room: "Lab 1",
-    instructor: "Dr. Park",
-  },
-  {
-    id: "fri-2",
-    day: "Friday",
-    start: "10:30",
-    end: "11:45",
-    courseId: "course-hist",
-    course: "World History",
-    code: "HIST-120",
-    room: "A210",
-    instructor: "Mr. Dlamini",
-  },
-];
+/** Normalise a Postgres time ("09:00:00") to a "HH:MM" display value. */
+function normalizeTime(time: string | null | undefined): string {
+  if (!time) return "";
+  const timeMatch = time.match(/\b(\d{2}:\d{2})(?::\d{2})?\b/);
+  if (timeMatch?.[1]) return timeMatch[1];
+  const date = new Date(time);
+  if (!Number.isNaN(date.getTime())) {
+    return `${`${date.getUTCHours()}`.padStart(2, "0")}:${`${date.getUTCMinutes()}`.padStart(2, "0")}`;
+  }
+  return "";
+}
 
 function byStart(a: ScheduleEntry, b: ScheduleEntry): number {
   return a.start.localeCompare(b.start);
 }
 
-/** Resolve the learner's weekly timetable for the current tenant. */
-export function getWeekSchedule(tenantId: string = TENANT_ID): ScheduleEntry[] {
-  return tenantId === DEMO_TENANT_ID ? DEMO_ENTRIES : [];
+/**
+ * Resolve the learner's weekly timetable live across enrolled course offerings.
+ * Mon-Fri entries only; entries outside the teaching week are skipped. Returns
+ * `[]` when no timetable is published or a service is unreachable.
+ */
+export async function getWeekSchedule(
+  userId: string,
+  tenantId: string = TENANT_ID,
+): Promise<ScheduleEntry[]> {
+  const enrolled = await getEnrolledCourses(userId, tenantId);
+  const instructorCache = new Map<string, string | null>();
+  const resolveInstructor = async (id: string): Promise<string | null> => {
+    const cached = instructorCache.get(id);
+    if (cached !== undefined) return cached;
+    const user = await getUser(id, tenantId);
+    const name = user?.displayName ?? null;
+    instructorCache.set(id, name);
+    return name;
+  };
+
+  const perCourse = await Promise.all(
+    enrolled.map(async (course) => {
+      const [entries, schedules] = await Promise.all([
+        listTimetable(course.orgUnitId, tenantId),
+        listBellSchedules(course.orgUnitId, tenantId),
+      ]);
+
+      const periods = new Map<string, { start: string; end: string }>();
+      for (const schedule of schedules) {
+        for (const period of schedule.periods) {
+          periods.set(period.id, {
+            start: normalizeTime(period.startTime),
+            end: normalizeTime(period.endTime),
+          });
+        }
+      }
+
+      const out: ScheduleEntry[] = [];
+      for (const entry of entries) {
+        // dayOfWeek: 1 = Monday … 5 = Friday (0=Sun, 6=Sat skipped).
+        if (entry.dayOfWeek == null || entry.dayOfWeek < 1 || entry.dayOfWeek > 5) {
+          continue;
+        }
+        const day = WEEKDAYS[entry.dayOfWeek - 1];
+        if (!day) continue;
+        const period = periods.get(entry.periodId);
+        const instructor = entry.instructorId
+          ? await resolveInstructor(entry.instructorId)
+          : null;
+        out.push({
+          id: entry.id,
+          day,
+          start: period?.start ?? "",
+          end: period?.end ?? "",
+          courseId: course.courseId,
+          course: course.title,
+          code: null,
+          room: entry.room ?? "",
+          instructor,
+        });
+      }
+      return out;
+    }),
+  );
+
+  return perCourse.flat();
 }
 
 /** Group timetable entries into ordered days, omitting empty days. */

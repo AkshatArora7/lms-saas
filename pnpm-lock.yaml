@@ -1237,6 +1237,9 @@ importers:
       '@lms/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
+      '@lms/service-analytics':
+        specifier: workspace:*
+        version: link:../../services/analytics
       '@lms/service-announcement':
         specifier: workspace:*
         version: link:../../services/announcement

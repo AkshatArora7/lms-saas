@@ -3,6 +3,8 @@ import { EVENT_TYPES } from "@lms/events";
 
 import {
   aggregateEvents,
+  ratePct,
+  round1,
   type AggregateDimension,
   type AnalyticsStore,
   type CaliperEventRecord,
@@ -10,6 +12,7 @@ import {
   type EventFilter,
   type NewCaliperEventInput,
   type NewXapiStatementInput,
+  type OrgUnitRollup,
   type XapiStatementRecord,
 } from "./store.js";
 
@@ -85,6 +88,69 @@ const CALIPER_SELECT = `
   SELECT id, tenant_id, actor_id, type, action, object_type, object_id,
          org_unit_id, event_time, envelope
     FROM caliper_event`;
+
+interface RollupRow {
+  org_unit_id: string;
+  name: string;
+  code: string | null;
+  course_count: number | string;
+  enrollment_count: number | string;
+  attendance_present: number | string;
+  attendance_total: number | string;
+  avg_grade: number | string | null;
+}
+
+function toRollup(row: RollupRow): OrgUnitRollup {
+  const present = Number(row.attendance_present);
+  const total = Number(row.attendance_total);
+  return {
+    orgUnitId: row.org_unit_id,
+    name: row.name,
+    code: row.code,
+    courseCount: Number(row.course_count),
+    enrollmentCount: Number(row.enrollment_count),
+    attendanceRate: ratePct(present, total),
+    averageGrade: row.avg_grade === null ? null : round1(Number(row.avg_grade)),
+  };
+}
+
+// One rollup row per `organization` org unit ("school"), summed across its
+// subtree. An org unit is in the subtree when its id equals the school id or
+// the school id appears in its materialised `path`. RLS (withTenant) scopes
+// every subquery to the caller's tenant, so no tenant_id filter is needed and
+// there are no uuid params to cast.
+const ROLLUP_SQL = `
+  SELECT
+    s.id   AS org_unit_id,
+    s.name AS name,
+    s.code AS code,
+    (SELECT count(*) FROM course c
+       JOIN org_unit ou ON ou.id = c.org_unit_id
+       WHERE ou.id = s.id OR s.id = ANY(ou.path))::int AS course_count,
+    (SELECT count(*) FROM enrollment e
+       JOIN org_unit ou ON ou.id = e.org_unit_id
+       WHERE ou.id = s.id OR s.id = ANY(ou.path))::int AS enrollment_count,
+    (SELECT count(*) FROM attendance_record ar
+       JOIN attendance_session ss ON ss.id = ar.session_id
+       JOIN org_unit ou ON ou.id = ss.org_unit_id
+       JOIN attendance_code ac
+         ON ac.tenant_id = ar.tenant_id AND ac.code = ar.code
+       WHERE ac.category = 'present'
+         AND (ou.id = s.id OR s.id = ANY(ou.path)))::int AS attendance_present,
+    (SELECT count(*) FROM attendance_record ar
+       JOIN attendance_session ss ON ss.id = ar.session_id
+       JOIN org_unit ou ON ou.id = ss.org_unit_id
+       WHERE ou.id = s.id OR s.id = ANY(ou.path))::int AS attendance_total,
+    (SELECT avg(g.points / gi.max_points * 100)
+       FROM grade g
+       JOIN grade_item gi ON gi.id = g.grade_item_id
+       JOIN course c ON c.id = gi.course_id
+       JOIN org_unit ou ON ou.id = c.org_unit_id
+       WHERE g.is_released AND g.points IS NOT NULL AND gi.max_points > 0
+         AND (ou.id = s.id OR s.id = ANY(ou.path))) AS avg_grade
+  FROM org_unit s
+  WHERE s.type = 'organization'
+  ORDER BY s.name ASC`;
 
 /** RLS-scoped LRS store (uuid params cast; outbox written in the same tx). */
 export function createPrismaStore(): AnalyticsStore {
@@ -177,6 +243,13 @@ export function createPrismaStore(): AnalyticsStore {
       // identical to the memory path, so behaviour matches across stores.
       const events = await this.listEvents(ctx, filter);
       return aggregateEvents(events, dimension);
+    },
+
+    async listOrgUnitRollups(ctx): Promise<OrgUnitRollup[]> {
+      return withTenant(ctx, async (db: Db) => {
+        const rows = await db.$queryRawUnsafe<RollupRow[]>(ROLLUP_SQL);
+        return rows.map(toRollup);
+      });
     },
   };
 }

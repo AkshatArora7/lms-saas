@@ -1,6 +1,13 @@
 # Multi-stage build for the discussion service (pnpm workspace).
 FROM node:20-slim AS base
 ENV PNPM_HOME=/pnpm PATH=$PNPM_HOME:$PATH
+# Prisma needs OpenSSL both at build time (so `prisma generate` selects the engine
+# matching node:20-slim = Debian bookworm / OpenSSL 3.0) and at runtime (libssl).
+# Without it Prisma fails with "cannot find libssl.so.1.1" or an engine-target
+# mismatch (generated debian-openssl-1.1.x vs runtime debian-openssl-3.0.x).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /app
 

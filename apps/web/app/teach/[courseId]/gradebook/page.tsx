@@ -154,7 +154,7 @@ export default async function GradebookPage({
     );
   }
 
-  const gradebook = getCourseGradebook(params.courseId, session.tenantId);
+  const gradebook = await getCourseGradebook(params.courseId, session.tenantId);
   if (!gradebook) notFound();
 
   const summary = summarizeGradebook(gradebook);
@@ -176,7 +176,7 @@ export default async function GradebookPage({
           subtitle="Every enrolled learner's score on each assignment, so you can spot missing work and how the class is doing."
           actions={
             <Inline gap={2}>
-              <Badge tone="neutral">{gradebook.code}</Badge>
+              {gradebook.code ? <Badge tone="neutral">{gradebook.code}</Badge> : null}
               <Button
                 href={`/courses/${gradebook.courseId}`}
                 size="sm"

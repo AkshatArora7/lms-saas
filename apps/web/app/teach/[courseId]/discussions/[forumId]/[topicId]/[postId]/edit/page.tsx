@@ -12,7 +12,7 @@ import {
 
 import { getBranding } from "../../../../../../../lib/branding";
 import { getSession } from "../../../../../../../lib/auth";
-import { canTeach, getTaughtCourses } from "../../../../../../../lib/teaching";
+import { canTeach, getTaughtCourse } from "../../../../../../../lib/teaching";
 import { listPosts } from "../../../../../../../lib/discussions-api";
 import SignOutButton from "../../../../../../../sign-out-button";
 import { updatePostAction } from "../../../../actions";
@@ -101,9 +101,7 @@ export default async function EditPostPage({
   }
 
   const { courseId, forumId, topicId, postId } = params;
-  const course = getTaughtCourses(session.tenantId).find(
-    (c) => c.id === courseId,
-  );
+  const course = await getTaughtCourse(session.userId, courseId, session.tenantId);
   if (!course) notFound();
 
   const base = `/teach/${courseId}/discussions/${forumId}/${topicId}`;

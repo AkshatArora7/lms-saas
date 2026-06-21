@@ -1,14 +1,18 @@
 import { TENANT_ID } from "./auth";
+import { getCourse } from "./courses-api";
+import { getRoster } from "./enrollment-api";
+import { getGradebook } from "./grading-api";
+import { getUser } from "./user-org-api";
 
 /**
  * Teacher gradebook read-model: every enrolled learner's score on each
- * assignment for a single course.
- *
- * In production this comes from the grading/gradebook microservices (EPIC #44),
- * tenant-scoped via the gateway. Until that read path is wired in, we resolve a
- * small, deterministic demo gradebook for the seeded demo tenant and null for
- * everyone else, so the screen renders a real happy path, a real empty state,
- * and a real not-found state with no backend dependency.
+ * assignment for a single course, sourced live from the grading microservice
+ * (EPIC #44) via the BFF server-fetch pattern (tenant-scoped with
+ * `x-tenant-id`). We read the course's grade items (the assignments) and grades
+ * from grading, the learner roster from enrollment (keyed by the course's org
+ * unit), and the learner display names from user-org, then build the matrix.
+ * Returns `null` only when the course id is unknown (driving a not-found state);
+ * a reachable course with no items/learners renders a real empty gradebook.
  */
 
 export interface GradebookAssignment {
@@ -33,134 +37,11 @@ export interface GradebookLearner {
 export interface CourseGradebook {
   courseId: string;
   title: string;
-  code: string;
+  /** Course code — not modelled by the course service yet, hence nullable. */
+  code: string | null;
   assignments: GradebookAssignment[];
   learners: GradebookLearner[];
 }
-
-const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
-
-const DEMO_GRADEBOOKS: Record<string, CourseGradebook> = {
-  "alg-101": {
-    courseId: "alg-101",
-    title: "Algebra I",
-    code: "ALG-101",
-    assignments: [
-      { id: "hw1", title: "Homework 1", points: 20 },
-      { id: "qz1", title: "Quiz 1", points: 25 },
-      { id: "hw2", title: "Homework 2", points: 20 },
-      { id: "mid", title: "Midterm", points: 100 },
-    ],
-    learners: [
-      {
-        id: "u-ava",
-        name: "Ava Nguyen",
-        entries: [
-          { assignmentId: "hw1", score: 19 },
-          { assignmentId: "qz1", score: 23 },
-          { assignmentId: "hw2", score: 18 },
-          { assignmentId: "mid", score: 91 },
-        ],
-      },
-      {
-        id: "u-sam",
-        name: "Sam Carter",
-        entries: [
-          { assignmentId: "hw1", score: 14 },
-          { assignmentId: "qz1", score: 16 },
-          { assignmentId: "hw2", score: null },
-          { assignmentId: "mid", score: 62 },
-        ],
-      },
-      {
-        id: "u-lena",
-        name: "Lena Park",
-        entries: [
-          { assignmentId: "hw1", score: 11 },
-          { assignmentId: "qz1", score: null },
-          { assignmentId: "hw2", score: null },
-          { assignmentId: "mid", score: 48 },
-        ],
-      },
-      {
-        id: "u-diego",
-        name: "Diego Romero",
-        entries: [
-          { assignmentId: "hw1", score: 20 },
-          { assignmentId: "qz1", score: 22 },
-          { assignmentId: "hw2", score: 19 },
-          { assignmentId: "mid", score: 84 },
-        ],
-      },
-    ],
-  },
-  "bio-110": {
-    courseId: "bio-110",
-    title: "Introduction to Biology",
-    code: "BIO-110",
-    assignments: [
-      { id: "lab1", title: "Lab 1", points: 30 },
-      { id: "qz1", title: "Quiz 1", points: 20 },
-      { id: "lab2", title: "Lab 2", points: 30 },
-    ],
-    learners: [
-      {
-        id: "u-omar",
-        name: "Omar Haddad",
-        entries: [
-          { assignmentId: "lab1", score: 24 },
-          { assignmentId: "qz1", score: 13 },
-          { assignmentId: "lab2", score: null },
-        ],
-      },
-      {
-        id: "u-mia",
-        name: "Mia Fischer",
-        entries: [
-          { assignmentId: "lab1", score: 27 },
-          { assignmentId: "qz1", score: 18 },
-          { assignmentId: "lab2", score: 25 },
-        ],
-      },
-      {
-        id: "u-jack",
-        name: "Jack Reyes",
-        entries: [
-          { assignmentId: "lab1", score: 12 },
-          { assignmentId: "qz1", score: null },
-          { assignmentId: "lab2", score: 9 },
-        ],
-      },
-    ],
-  },
-  "eng-205": {
-    courseId: "eng-205",
-    title: "World Literature",
-    code: "ENG-205",
-    assignments: [
-      { id: "es1", title: "Essay 1", points: 50 },
-      { id: "es2", title: "Essay 2", points: 50 },
-    ],
-    learners: [
-      {
-        id: "u-zoe",
-        name: "Zoe Adler",
-        entries: [
-          { assignmentId: "es1", score: 47 },
-          { assignmentId: "es2", score: 49 },
-        ],
-      },
-      {
-        id: "u-noah",
-        name: "Noah Bennett",
-        entries: [
-          { assignmentId: "es1", score: 44 },
-          { assignmentId: "es2", score: 46 },
-        ],
-      },
-    ],
-  },
-};
 
 export interface LearnerSummary {
   /** Earned points across graded (non-null) assignments. */
@@ -192,16 +73,65 @@ export interface GradebookSummary {
 }
 
 /**
- * Resolve the gradebook for a course in the given tenant. Returns null when the
- * tenant has no seeded demo data or the course id is unknown, so the page can
- * render a not-found state.
+ * Resolve the live gradebook for a course in the given tenant. Returns `null`
+ * when the course id is unknown (the page renders a not-found state). A course
+ * with no grade items or no learners returns an empty-but-valid gradebook so the
+ * page renders a real empty state rather than 404-ing.
  */
-export function getCourseGradebook(
+export async function getCourseGradebook(
   courseId: string,
   tenantId: string = TENANT_ID,
-): CourseGradebook | null {
-  if (tenantId !== DEMO_TENANT_ID) return null;
-  return DEMO_GRADEBOOKS[courseId] ?? null;
+): Promise<CourseGradebook | null> {
+  const course = await getCourse(courseId, tenantId);
+  if (!course) return null;
+
+  const [gradebook, roster] = await Promise.all([
+    getGradebook(courseId, tenantId),
+    // The roster is addressed by the course OFFERING (org unit), not the row id.
+    getRoster(course.orgUnitId, tenantId),
+  ]);
+
+  const assignments: GradebookAssignment[] = (gradebook?.items ?? [])
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((item) => ({ id: item.id, title: item.name, points: item.maxPoints }));
+
+  // Index grades by `${userId}:${gradeItemId}` for O(1) cell lookup.
+  const scoreByKey = new Map<string, number | null>();
+  for (const grade of gradebook?.grades ?? []) {
+    scoreByKey.set(`${grade.userId}:${grade.gradeItemId}`, grade.points);
+  }
+
+  const learnerEnrollments = roster.ok
+    ? roster.roster.filter((r) => r.role === "learner")
+    : [];
+
+  const learners: GradebookLearner[] = await Promise.all(
+    learnerEnrollments.map(async (enrollment): Promise<GradebookLearner> => {
+      const user = await getUser(enrollment.userId, tenantId);
+      const entries: GradebookEntry[] = assignments.map((a) => {
+        const key = `${enrollment.userId}:${a.id}`;
+        return {
+          assignmentId: a.id,
+          score: scoreByKey.has(key) ? (scoreByKey.get(key) ?? null) : null,
+        };
+      });
+      return {
+        id: enrollment.userId,
+        name: user?.displayName ?? "Unknown learner",
+        entries,
+      };
+    }),
+  );
+  learners.sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    courseId: course.id,
+    title: course.title,
+    code: null,
+    assignments,
+    learners,
+  };
 }
 
 function pointsFor(gradebook: CourseGradebook): Map<string, number> {

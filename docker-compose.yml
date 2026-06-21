@@ -666,12 +666,18 @@ services:
       IDENTITY_URL: http://identity:4001
       USER_ORG_SERVICE_URL: http://user-org:4003
       COURSE_SERVICE_URL: http://course:4005
+      TENANT_SERVICE_URL: http://tenant:4002
+      ANALYTICS_SERVICE_URL: http://analytics:4015
     depends_on:
       identity:
         condition: service_healthy
       user-org:
         condition: service_healthy
       course:
+        condition: service_healthy
+      tenant:
+        condition: service_healthy
+      analytics:
         condition: service_healthy
       seed:
         condition: service_completed_successfully

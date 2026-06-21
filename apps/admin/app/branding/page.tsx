@@ -6,18 +6,15 @@ import {
   BrandMark,
   Button,
   Card,
-  Chip,
   Grid,
   Inline,
   PageHeader,
-  ProgressBar,
   Stack,
-  ThemeStyle,
-  demoSchoolBrands,
 } from "@lms/ui";
 
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
+import { getTenant, getTenantBranding } from "../lib/tenant-api";
 import SignOutButton from "../sign-out-button";
 
 const brandingCss = `
@@ -52,10 +49,33 @@ const brandingCss = `
   width: 18px;
   flex-shrink: 0;
 }
+.brand-swatch--empty {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--lms-surface-2),
+    var(--lms-surface-2) 4px,
+    var(--lms-border) 4px,
+    var(--lms-border) 8px
+  );
+}
 `;
 
-function previewScope(tenantId: string): string {
-  return `brand-preview-${tenantId.slice(0, 8)}`;
+/** A single colour token row: swatch + value, or a clear "not set" state. */
+function ColorRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="brand-token">
+      <Inline align="center" gap={2}>
+        <span
+          aria-hidden="true"
+          className={`brand-swatch${value ? "" : " brand-swatch--empty"}`}
+          style={value ? { background: value } : undefined}
+        />
+        <span>
+          <strong>{label}</strong> {value ?? "Inherited / default"}
+        </span>
+      </Inline>
+    </div>
+  );
 }
 
 export default async function BrandingShowcase() {
@@ -79,6 +99,16 @@ export default async function BrandingShowcase() {
     );
   }
 
+  const [tenant, brandingResponse] = await Promise.all([
+    getTenant(session.tenantId),
+    getTenantBranding(session.tenantId),
+  ]);
+
+  const effective = brandingResponse?.branding ?? null;
+  const hasOverrides = brandingResponse?.overrides != null;
+  const displayName =
+    effective?.displayName ?? tenant?.name ?? "This tenant";
+
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>
       <style>{brandingCss}</style>
@@ -89,83 +119,74 @@ export default async function BrandingShowcase() {
 
         <PageHeader
           title="White-label branding"
-          subtitle="Every school renders the product in its own brand — logo, accent colour, typography, and corner style — resolved per tenant from the brand registry. Below is a live preview of each configured school brand."
+          subtitle="Your organisation renders the product in its own brand — name, logo, colours, and theme — resolved per tenant by the tenant service with inheritance from any parent district."
         />
 
-        {demoSchoolBrands.length ? (
+        {tenant && effective ? (
           <Grid gap={4} min="280px">
-            {demoSchoolBrands.map(({ tenantId, brand: school }) => {
-              const scope = previewScope(tenantId);
-              return (
-                <Card key={tenantId}>
-                  <Stack gap={3}>
-                    <p className="brand-token">
-                      <strong>Tenant</strong> {tenantId}
-                    </p>
+            <Card>
+              <Stack gap={3}>
+                <p className="brand-token">
+                  <strong>Tenant</strong> {tenant.id}
+                </p>
 
-                    <ThemeStyle brand={school} scope={`.${scope}`} />
-                    <div className={`lms-theme ${scope} brand-preview`}>
-                      <Stack gap={3}>
-                        <Inline gap={3}>
-                          <BrandMark brand={school} size={44} />
-                          <Stack gap={1}>
-                            <p className="brand-preview__name">{school.name}</p>
-                            <p className="brand-preview__tagline">
-                              {school.tagline}
-                            </p>
-                          </Stack>
-                        </Inline>
-
-                        <Inline gap={2}>
-                          <Button size="sm" variant="primary">
-                            Primary
-                          </Button>
-                          <Button size="sm" variant="secondary">
-                            Secondary
-                          </Button>
-                        </Inline>
-
-                        <Inline gap={2}>
-                          <Badge tone="accent">Accent</Badge>
-                          <Chip tone="success">Active</Chip>
-                          <Chip tone="neutral">Term 1</Chip>
-                        </Inline>
-
-                        <ProgressBar
-                          label={`${school.name} course progress`}
-                          value={72}
-                        />
-                      </Stack>
-                    </div>
-
+                <div className="brand-preview">
+                  <Inline gap={3}>
+                    <BrandMark brand={brand} size={44} />
                     <Stack gap={1}>
-                      <p className="brand-token">
-                        <Inline gap={2}>
-                          <span
-                            className="brand-swatch"
-                            style={{ background: school.accent }}
-                          />
-                          <span>
-                            <strong>Accent</strong> {school.accent}
-                          </span>
-                        </Inline>
-                      </p>
-                      <p className="brand-token">
-                        <strong>Radius</strong> {school.radius ?? "soft"}
-                      </p>
-                      <p className="brand-token">
-                        <strong>Type</strong> {school.fontFamily ?? "default"}
+                      <p className="brand-preview__name">{displayName}</p>
+                      <p className="brand-preview__tagline">
+                        {effective.supportEmail ?? tenant.subdomain}
                       </p>
                     </Stack>
-                  </Stack>
-                </Card>
-              );
-            })}
+                  </Inline>
+                </div>
+
+                <Stack gap={1}>
+                  <Inline gap={2}>
+                    <Badge tone="neutral">Theme: {effective.theme}</Badge>
+                    <Badge tone={hasOverrides ? "accent" : "neutral"}>
+                      {hasOverrides ? "Custom overrides" : "Defaults"}
+                    </Badge>
+                    {effective.inheritParent ? (
+                      <Badge tone="neutral">Inherits parent</Badge>
+                    ) : null}
+                  </Inline>
+                </Stack>
+              </Stack>
+            </Card>
+
+            <Card>
+              <Stack gap={3}>
+                <p className="brand-preview__name">Brand tokens</p>
+                <Stack gap={1}>
+                  <ColorRow label="Primary" value={effective.primaryColor} />
+                  <ColorRow
+                    label="Secondary"
+                    value={effective.secondaryColor}
+                  />
+                  <ColorRow label="Accent" value={effective.accentColor} />
+                </Stack>
+                <Stack gap={1}>
+                  <p className="brand-token">
+                    <strong>Logo</strong> {effective.logoUrl ?? "Default mark"}
+                  </p>
+                  <p className="brand-token">
+                    <strong>Custom domain</strong>{" "}
+                    {effective.customDomain ?? "—"}
+                  </p>
+                  <p className="brand-token">
+                    <strong>Support email</strong>{" "}
+                    {effective.supportEmail ?? "—"}
+                  </p>
+                </Stack>
+              </Stack>
+            </Card>
           </Grid>
         ) : (
-          <Alert tone="info">
-            No school brands are configured yet. Brands appear here once tenants
-            are onboarded with their white-label settings.
+          <Alert tone="warning">
+            The tenant service is unreachable, so branding cannot be shown right
+            now. Start the tenant service and reload.
           </Alert>
         )}
       </Stack>

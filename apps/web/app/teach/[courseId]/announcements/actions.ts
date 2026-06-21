@@ -68,7 +68,7 @@ export async function createAnnouncementAction(form: FormData): Promise<void> {
 
   const result = await createAnnouncement(
     {
-      orgUnitId: courseId,
+      orgUnitId: field(form, "orgUnitId") ?? courseId,
       title,
       body,
       publishAt: toIsoOrNull(field(form, "publishAt")),

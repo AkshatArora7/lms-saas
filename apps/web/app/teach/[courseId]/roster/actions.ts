@@ -53,7 +53,7 @@ export async function enrollUserAction(form: FormData): Promise<void> {
   }
 
   const result = await enrollUser(
-    { userId, orgUnitId: courseId, role },
+    { userId, orgUnitId: field(form, "orgUnitId") ?? courseId, role },
     tenantId,
   );
 

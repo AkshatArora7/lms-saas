@@ -17,6 +17,7 @@
     "@lms/eslint-config": "workspace:*",
     "@lms/service-announcement": "workspace:*",
     "@lms/service-assignment": "workspace:*",
+    "@lms/service-course": "workspace:*",
     "@lms/service-discussion": "workspace:*",
     "@lms/service-enrollment": "workspace:*",
     "@lms/service-notification": "workspace:*",

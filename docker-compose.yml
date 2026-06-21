@@ -97,6 +97,25 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # One-shot demo seeder (issue #266). Builds the workspace and runs the
+  # dedicated idempotent demo seed (packages/db/prisma/seed.demo.ts) against the
+  # in-compose Postgres: it creates the demo tenant (11111111-…-111111111111),
+  # the two demo accounts, and a full demo dataset (course, enrollment, grades,
+  # discussions, attendance, timetable …). Runs once and exits; identity/web/admin
+  # wait on it via `service_completed_successfully` so login can't be hit before
+  # the accounts exist. Re-running is safe (ON CONFLICT upserts by fixed uuids).
+  seed:
+    build:
+      context: .
+      dockerfile: packages/db/seed.Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/seed:latest
+    environment:
+      <<: *common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   gateway:
     # Local-build fallback (uncomment to build instead of pulling GHCR):
     # build:
@@ -148,14 +167,16 @@ services:
     environment:
       <<: *common-env
       PORT: 4001
-      # Local demo sign-in: seed the demo accounts (admin@demo.school /
-      # student@demo.school, password123) in an in-memory store so the
-      # web/admin login flow works against this bundled stack. The seeded
-      # Postgres has schema + RLS but no auth users. Unset for real deployments.
-      IDENTITY_STORE: "memory"
+      # DB-backed sign-in: with the demo seed applied (see the `seed` service),
+      # login flows through the RLS-scoped Prisma store — app_user +
+      # user_credential, roles via role_assignment→role→role_permission. The
+      # bundled demo accounts (admin@demo.school / student@demo.school,
+      # password123) are real rows under the demo tenant.
     depends_on:
       postgres:
         condition: service_healthy
+      seed:
+        condition: service_completed_successfully
     healthcheck: *svc-healthcheck
     ports:
       - "4001:4001"
@@ -603,6 +624,8 @@ services:
         condition: service_healthy
       attendance:
         condition: service_healthy
+      seed:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:'+(process.env.PORT||'3000')+'/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
       interval: 10s
@@ -632,6 +655,8 @@ services:
         condition: service_healthy
       course:
         condition: service_healthy
+      seed:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:'+(process.env.PORT||'3001')+'/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
       interval: 10s

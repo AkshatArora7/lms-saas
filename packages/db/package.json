@@ -13,6 +13,7 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts",
+    "db:seed:demo": "tsx prisma/seed.demo.ts",
     "clean": "rimraf dist .turbo"
   },
   "prisma": {
@@ -20,6 +21,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@lms/auth": "workspace:*",
     "@lms/types": "workspace:*",
     "@prisma/client": "^5.19.0"
   },

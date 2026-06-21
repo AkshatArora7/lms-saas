@@ -15,7 +15,7 @@ import { createLogger } from "@lms/logger";
 import type { TenantContext } from "@lms/types";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 
-import { registerAnalyticsRoutes, type AnalyticsRouteDeps } from "./routes.js";
+import { registerAnalyticsRoutes, type AnalyticsRouteDeps, type Caller } from "./routes.js";
 import { MemoryAnalyticsStore } from "./store.memory.js";
 import { createPrismaStore } from "./store.prisma.js";
 
@@ -27,6 +27,7 @@ export interface BuildAppOptions {
   config?: AppConfig;
   store?: AnalyticsRouteDeps["store"];
   resolveTenant?: AnalyticsRouteDeps["resolveTenant"];
+  resolveCaller?: AnalyticsRouteDeps["resolveCaller"];
 }
 
 /**
@@ -49,6 +50,29 @@ function headerTenantResolver(
   };
 }
 
+/**
+ * Default caller resolution for the engagement authorization guard (#284): the
+ * gateway/BFF stamps the verified identity as `x-user-id` + `x-user-roles`.
+ * Throws when `x-user-id` is absent so the route fails closed with 401.
+ */
+function headerCallerResolver(): (req: FastifyRequest) => Caller {
+  return (req) => {
+    const userId = req.headers["x-user-id"];
+    if (typeof userId !== "string" || userId.length === 0) {
+      throw new Error("missing x-user-id");
+    }
+    const rolesHeader = req.headers["x-user-roles"];
+    const raw = Array.isArray(rolesHeader)
+      ? rolesHeader.join(",")
+      : (rolesHeader ?? "");
+    const roles = raw
+      .split(",")
+      .map((r) => r.trim())
+      .filter((r) => r.length > 0);
+    return { userId, roles };
+  };
+}
+
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const config = options.config ?? loadConfig();
   const app = Fastify({ logger: false });
@@ -63,6 +87,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerAnalyticsRoutes(app, {
     store: options.store ?? createPrismaStore(),
     resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+    resolveCaller: options.resolveCaller ?? headerCallerResolver(),
   });
 
   return app;

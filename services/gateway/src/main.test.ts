@@ -231,6 +231,38 @@ describe("gateway reverse proxy", () => {
     await app.close();
   });
 
+  it("stamps trusted caller identity headers from the verified claims", async () => {
+    const capture: Captured[] = [];
+    const app = buildProxyApp(capture);
+    await app.inject({
+      method: "GET",
+      url: "/api/course/x",
+      headers: {
+        authorization: `Bearer ${await token({ sub: "teacher-7", roles: ["instructor", "org_admin"] })}`,
+      },
+    });
+    expect(capture[0].headers["x-user-id"]).toBe("teacher-7");
+    expect(capture[0].headers["x-user-roles"]).toBe("instructor,org_admin");
+    await app.close();
+  });
+
+  it("overwrites spoofed client x-user-id / x-user-roles with the token's identity", async () => {
+    const capture: Captured[] = [];
+    const app = buildProxyApp(capture);
+    await app.inject({
+      method: "GET",
+      url: "/api/course/x",
+      headers: {
+        authorization: `Bearer ${await token({ sub: "teacher-7", roles: ["instructor"] })}`,
+        "x-user-id": "super-admin-victim",
+        "x-user-roles": "super_admin,org_admin",
+      },
+    });
+    expect(capture[0].headers["x-user-id"]).toBe("teacher-7");
+    expect(capture[0].headers["x-user-roles"]).toBe("instructor");
+    await app.close();
+  });
+
   it("forwards a JSON body on POST", async () => {
     const capture: Captured[] = [];
     const app = buildProxyApp(capture);

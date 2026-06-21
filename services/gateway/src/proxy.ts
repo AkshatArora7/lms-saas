@@ -7,6 +7,8 @@
  *      trust the gateway, which injects the verified `x-tenant-id` itself.
  *   2. A client-supplied `x-tenant-id` is always overwritten with the value the
  *      gateway resolved from the token, so a caller can never spoof a tenant.
+ *      The same strip-then-stamp applies to the trusted caller-identity headers
+ *      `x-user-id` / `x-user-roles` (#284), derived from the verified claims.
  *
  * Upstream resolution and the HTTP client are injected so routing is unit
  * testable without standing up the 20+ domain services.
@@ -29,6 +31,8 @@ const STRIP_REQUEST_HEADERS = new Set([
   "connection",
   "content-length",
   "x-tenant-id",
+  "x-user-id",
+  "x-user-roles",
 ]);
 
 function buildUpstreamUrl(
@@ -78,6 +82,12 @@ export function createProxyHandler(options: ProxyOptions): RouteHandlerMethod {
       headers[key] = Array.isArray(value) ? value.join(",") : String(value);
     }
     headers["x-tenant-id"] = req.tenant.tenantId;
+    // Re-stamp the trusted caller identity from the verified claims (the inbound
+    // copies were stripped above), so downstream authz cannot be spoofed (#284).
+    if (req.claims) {
+      headers["x-user-id"] = req.claims.sub;
+      headers["x-user-roles"] = req.claims.roles.join(",");
+    }
 
     const method = req.method.toUpperCase();
     const hasBody = method !== "GET" && method !== "HEAD";

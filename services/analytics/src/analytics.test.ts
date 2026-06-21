@@ -10,6 +10,7 @@ import {
   aggregateEvents,
   buildCourseEngagement,
   buildOrgUnitRollups,
+  isCourseReadAuthorized,
   ratePct,
   round1,
   summarizeOrgUnitRollups,
@@ -265,6 +266,23 @@ describe("org-unit reporting rollups (#269)", () => {
 
 const DEMO_COURSE = "d0000000-0003-0000-0000-000000000001";
 const DEMO_STUDENT = "d0000000-00a1-0000-0000-000000000002";
+const DEMO_TEACHER = "d0000000-00a1-0000-0000-000000000001";
+// Trusted caller identity headers the gateway/BFF stamp from verified claims (#284).
+const TEACHER_H = {
+  "x-tenant-id": TENANT,
+  "x-user-id": DEMO_TEACHER,
+  "x-user-roles": "instructor",
+};
+const ADMIN_H = {
+  "x-tenant-id": TENANT,
+  "x-user-id": "a0000000-0000-0000-0000-000000000001",
+  "x-user-roles": "org_admin",
+};
+const OTHER_ADMIN_H = {
+  "x-tenant-id": OTHER,
+  "x-user-id": "a0000000-0000-0000-0000-000000000002",
+  "x-user-roles": "org_admin",
+};
 
 function engagementSource(
   overrides: Partial<EngagementSourceData> = {},
@@ -441,12 +459,28 @@ describe("course engagement + at-risk (#277, pure builder)", () => {
   });
 });
 
+describe("isCourseReadAuthorized (#284, pure)", () => {
+  it("allows a teacher of the course", () => {
+    expect(isCourseReadAuthorized({ roles: ["instructor"], teaches: true })).toBe(true);
+  });
+  it("denies a teacher who does not teach the course", () => {
+    expect(isCourseReadAuthorized({ roles: ["instructor"], teaches: false })).toBe(false);
+  });
+  it("allows an admin even when they do not teach", () => {
+    expect(isCourseReadAuthorized({ roles: ["org_admin"], teaches: false })).toBe(true);
+    expect(isCourseReadAuthorized({ roles: ["super_admin"], teaches: false })).toBe(true);
+  });
+  it("denies an unrelated role", () => {
+    expect(isCourseReadAuthorized({ roles: ["learner"], teaches: false })).toBe(false);
+  });
+});
+
 describe("GET /reports/engagement (#277)", () => {
   it("returns the seeded demo course engagement + high-risk learner", async () => {
     const res = await build().app.inject({
       method: "GET",
       url: `/reports/engagement?courseId=${DEMO_COURSE}`,
-      headers: H,
+      headers: TEACHER_H,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -473,22 +507,63 @@ describe("GET /reports/engagement (#277)", () => {
     const missing = await build().app.inject({
       method: "GET",
       url: "/reports/engagement",
-      headers: H,
+      headers: TEACHER_H,
     });
     expect(missing.statusCode).toBe(400);
     const bad = await build().app.inject({
       method: "GET",
       url: "/reports/engagement?courseId=not-a-uuid",
-      headers: H,
+      headers: TEACHER_H,
     });
     expect(bad.statusCode).toBe(400);
   });
 
-  it("isolates tenants: a different tenant sees an empty engagement", async () => {
+  it("401 when no caller identity (x-user-id) is present", async () => {
     const res = await build().app.inject({
       method: "GET",
       url: `/reports/engagement?courseId=${DEMO_COURSE}`,
-      headers: OTHER_H,
+      headers: H,
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toBe("unauthorized");
+  });
+
+  it("403 when a teacher requests a course they do not teach", async () => {
+    const otherCourse = "c0000000-0000-0000-0000-0000000000ff";
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${otherCourse}`,
+      headers: TEACHER_H,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe("forbidden");
+  });
+
+  it("200 when a teacher requests their own course", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${DEMO_COURSE}`,
+      headers: TEACHER_H,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().engagement.courseId).toBe(DEMO_COURSE);
+  });
+
+  it("200 for an admin even when they do not teach the course", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${DEMO_COURSE}`,
+      headers: ADMIN_H,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().engagement.courseId).toBe(DEMO_COURSE);
+  });
+
+  it("isolates tenants: an admin in another tenant sees an empty engagement", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${DEMO_COURSE}`,
+      headers: OTHER_ADMIN_H,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();

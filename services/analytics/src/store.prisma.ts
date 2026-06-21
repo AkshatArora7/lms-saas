@@ -198,6 +198,22 @@ const ENGAGEMENT_GRADES_SQL = `
    WHERE gi.course_id = $1::uuid
      AND g.is_released AND g.points IS NOT NULL AND gi.max_points > 0`;
 
+// --- Course-read authorization (#284) --------------------------------------
+// Trusted "does this user teach this course?" signal for the engagement guard.
+// RLS-scoped (withTenant) and fully BOUND — both uuid params are cast per the
+// #267 rule. A teaching enrollment = a row on the course's offering
+// (course.org_unit_id) with a teaching role and an active/completed status.
+const TEACHES_COURSE_SQL = `
+  SELECT 1
+    FROM enrollment e
+    JOIN course c ON c.org_unit_id = e.org_unit_id
+    JOIN role   r ON r.id = e.role_id
+   WHERE c.id = $1::uuid
+     AND e.user_id = $2::uuid
+     AND r.name IN ('instructor','teacher','teaching_assistant')
+     AND e.status IN ('active','completed')
+   LIMIT 1`;
+
 interface LearnerRow {
   learner_id: string;
 }
@@ -347,6 +363,21 @@ export function createPrismaStore(): AnalyticsStore {
           })),
         };
         return buildCourseEngagement(courseId, data);
+      });
+    },
+
+    async teachesCourse(
+      ctx,
+      userId: string,
+      courseId: string,
+    ): Promise<boolean> {
+      return withTenant(ctx, async (db: Db) => {
+        const rows = await db.$queryRawUnsafe<unknown[]>(
+          TEACHES_COURSE_SQL,
+          courseId,
+          userId,
+        );
+        return rows.length > 0;
       });
     },
   };

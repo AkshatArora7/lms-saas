@@ -2,16 +2,30 @@ import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
+  ADMIN_ROLES,
   AGGREGATE_DIMENSIONS,
+  isCourseReadAuthorized,
   summarizeOrgUnitRollups,
   type AggregateDimension,
   type AnalyticsStore,
   type EventFilter,
 } from "./store.js";
 
+/** Trusted caller identity, stamped by the gateway/BFF from verified claims. */
+export interface Caller {
+  userId: string;
+  roles: string[];
+}
+
 export interface AnalyticsRouteDeps {
   store: AnalyticsStore;
   resolveTenant: (req: FastifyRequest) => TenantContext;
+  /**
+   * Resolve the authenticated caller from the trusted `x-user-id` /
+   * `x-user-roles` headers (#284). Throws when `x-user-id` is absent so the
+   * engagement guard can fail closed with 401.
+   */
+  resolveCaller: (req: FastifyRequest) => Caller;
 }
 
 function resolveTenantOr400(
@@ -25,6 +39,27 @@ function resolveTenantOr400(
     void reply
       .code(400)
       .send({ error: "tenant_required", message: "Missing tenant context." });
+    return null;
+  }
+}
+
+/**
+ * Resolve the trusted caller or respond 401 (fail closed). The gateway/BFF
+ * always stamp `x-user-id` for an authenticated request, so its absence means
+ * the request is unauthenticated or misconfigured.
+ */
+function resolveCallerOr401(
+  deps: AnalyticsRouteDeps,
+  req: FastifyRequest,
+  reply: FastifyReply,
+): Caller | null {
+  try {
+    return deps.resolveCaller(req);
+  } catch {
+    void reply.code(401).send({
+      error: "unauthorized",
+      message: "Authentication is required.",
+    });
     return null;
   }
 }
@@ -194,9 +229,10 @@ export function registerAnalyticsRoutes(
   // Per-course engagement score + at-risk learners for the teacher `/teach`
   // insights (#277). Tenant-scoped via withTenant + RLS; computed LIVE over
   // enrollment/attendance/submission/grade (the engagement_summary CQRS table
-  // has no writer — ADR-277). Teacher scoping is a BFF concern; the endpoint is
-  // tenant-scoped only, like /reports/org-units. 400 on a missing/invalid
-  // courseId.
+  // has no writer — ADR-277). Defence-in-depth course authorization (#284):
+  // only an instructor of the course (or a tenant admin) may read it, layered
+  // ON TOP of RLS. 400 on a missing/invalid courseId; 401 without a caller;
+  // 403 when the caller neither teaches the course nor is an admin.
   app.get<{ Querystring: { courseId?: string } }>(
     "/reports/engagement",
     async (req, reply) => {
@@ -206,7 +242,22 @@ export function registerAnalyticsRoutes(
       if (!isUuid(courseId)) {
         return badRequest(reply, "courseId must be a valid uuid.");
       }
-      const result = await deps.store.getCourseEngagement(ctx, courseId.trim());
+      const caller = resolveCallerOr401(deps, req, reply);
+      if (!caller) return reply;
+      const id = courseId.trim();
+      const isAdmin = caller.roles.some((r) =>
+        (ADMIN_ROLES as readonly string[]).includes(r),
+      );
+      const teaches = isAdmin
+        ? true
+        : await deps.store.teachesCourse(ctx, caller.userId, id);
+      if (!isCourseReadAuthorized({ roles: caller.roles, teaches })) {
+        return reply.code(403).send({
+          error: "forbidden",
+          message: "You do not have access to this course's engagement.",
+        });
+      }
+      const result = await deps.store.getCourseEngagement(ctx, id);
       return reply.code(200).send(result);
     },
   );

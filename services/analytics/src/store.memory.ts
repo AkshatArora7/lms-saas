@@ -29,6 +29,7 @@ const DEMO_ROOT = "d0000000-0001-0000-0000-000000000001"; // org: "Demo School"
 const DEMO_OFFERING = "d0000000-0002-0000-0000-000000000001"; // course offering
 const DEMO_COURSE = "d0000000-0003-0000-0000-000000000001"; // course (course.id)
 const DEMO_STUDENT = "d0000000-00a1-0000-0000-000000000002"; // the lone learner
+const DEMO_TEACHER = "d0000000-00a1-0000-0000-000000000001"; // instructor (seed.demo.ts:339)
 
 /**
  * Reporting rollup source for the demo tenant, matching the seed: one school
@@ -125,6 +126,12 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   // Per-course engagement source, tenant→(courseId→source); demo tenant only.
   private engagementSource: Map<string, Map<string, EngagementSourceData>> =
     new Map([[DEMO_TENANT_ID, new Map([[DEMO_COURSE, DEMO_ENGAGEMENT_SOURCE]])]]);
+  // Teaching enrollments, tenant→(courseId→teacher user ids); mirrors the DB
+  // `teachesCourse` query so the memory and Prisma authz paths agree (#284).
+  // Seeded so DEMO_TEACHER teaches DEMO_COURSE in the demo tenant.
+  private teachingSource: Map<string, Map<string, Set<string>>> = new Map([
+    [DEMO_TENANT_ID, new Map([[DEMO_COURSE, new Set([DEMO_TEACHER])]])],
+  ]);
 
   constructor(
     private readonly generateId: () => string = randomUUID,
@@ -209,5 +216,15 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
       this.engagementSource.get(ctx.tenantId)?.get(courseId) ??
       EMPTY_ENGAGEMENT_SOURCE;
     return buildCourseEngagement(courseId, data);
+  }
+
+  async teachesCourse(
+    ctx: TenantContext,
+    userId: string,
+    courseId: string,
+  ): Promise<boolean> {
+    return (
+      this.teachingSource.get(ctx.tenantId)?.get(courseId)?.has(userId) ?? false
+    );
   }
 }

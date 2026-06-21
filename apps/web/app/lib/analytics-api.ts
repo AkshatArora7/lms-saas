@@ -73,8 +73,29 @@ export type CourseEngagementResult =
   | { ok: true; report: CourseEngagementReport }
   | { ok: false; error: string };
 
-function tenantHeader(tenantId: string): HeadersInit {
-  return { "x-tenant-id": tenantId };
+/**
+ * Trusted identity headers for a direct (non-gateway) BFF call to analytics.
+ *
+ * The `/teach` page calls analytics directly from the server, bypassing the
+ * gateway, so we forward the same three trusted headers the gateway would stamp
+ * from verified claims (auth.ts): `x-tenant-id`, `x-user-id` (= session userId),
+ * and `x-user-roles` (the roles joined EXACTLY as the gateway does —
+ * `roles.join(",")`, comma-separated, no spaces; see
+ * services/gateway/src/auth.ts). These come only from the server-side session,
+ * never from any client-supplied value, so the analytics teacher-owns-course
+ * guard (#284) can authorize the caller. Empty roles forward as "" (never
+ * "undefined").
+ */
+function callerHeaders(
+  tenantId: string,
+  userId: string,
+  roles: string[],
+): HeadersInit {
+  return {
+    "x-tenant-id": tenantId,
+    "x-user-id": userId,
+    "x-user-roles": roles.join(","),
+  };
 }
 
 const UNREACHABLE =
@@ -84,17 +105,23 @@ const UNREACHABLE =
  * Fetch the per-course engagement score + at-risk learners for the tenant.
  * Returns a discriminated union so the caller renders error/empty/data states
  * without a try/catch at the render site; never throws to the page.
+ *
+ * `userId`/`roles` are the authenticated server-side session identity, forwarded
+ * as trusted `x-user-id`/`x-user-roles` headers so the analytics authorization
+ * guard (#284) — which 401s without a caller — accepts this direct BFF call.
  */
 export async function getCourseEngagement(
   courseId: string,
   tenantId: string = TENANT_ID,
+  userId: string,
+  roles: string[],
 ): Promise<CourseEngagementResult> {
   try {
     const url = `${ANALYTICS_SERVICE_URL}/reports/engagement?courseId=${encodeURIComponent(
       courseId,
     )}`;
     const res = await fetch(url, {
-      headers: tenantHeader(tenantId),
+      headers: callerHeaders(tenantId, userId, roles),
       cache: "no-store",
     });
     if (!res.ok) {

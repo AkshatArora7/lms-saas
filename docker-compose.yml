@@ -616,6 +616,7 @@ services:
       ANNOUNCEMENT_SERVICE_URL: http://announcement:4011
       CALENDAR_SERVICE_URL: http://calendar:4013
       ATTENDANCE_SERVICE_URL: http://attendance:4025
+      ANALYTICS_SERVICE_URL: http://analytics:4015
     depends_on:
       identity:
         condition: service_healthy
@@ -638,6 +639,8 @@ services:
       calendar:
         condition: service_healthy
       attendance:
+        condition: service_healthy
+      analytics:
         condition: service_healthy
       seed:
         condition: service_completed_successfully

@@ -29,7 +29,7 @@
 | UX design | ux-designer | ☐ (optional) | Restoring prior shipped elements; see §4.4 |
 | Data & RLS | schema-agent | ☑ n/a | No schema change — compute live (ADR-277) |
 | Backend | service-builder | ☑ done | §4 Implementation; analytics typecheck+lint+test green (25/25) |
-| Frontend | frontend-dev | ☐ | |
+| Frontend | frontend-dev | ☑ done | §4 Implementation (frontend); web typecheck+lint green |
 | QA / tests | qa-agent | ☐ | |
 | Security & DoD | security-agent | ☐ | |
 | Docs | docs-agent | ☐ | |
@@ -95,6 +95,50 @@ At-risk sorted high→medium, then reason-count desc, then learnerId asc.
 No design corrections were needed; no schema change.
 
 **Verification:** `pnpm --filter @lms/service-analytics` typecheck ✓ · lint ✓ · test ✓ (25/25).
+
+### Implementation (frontend-dev) — #277 /teach wiring
+
+**BFF client (new):** `apps/web/app/lib/analytics-api.ts` — mirrors `attendance.ts`
+(discriminated union, `x-tenant-id`, `cache:"no-store"`, never throws).
+- `getCourseEngagement(courseId: string, tenantId?: string): Promise<CourseEngagementResult>`
+  where `CourseEngagementResult = { ok: true; report: CourseEngagementReport } | { ok: false; error: string }`.
+  Non-200 → `{ ok:false, error }`; network throw → `{ ok:false, error: UNREACHABLE }`.
+- Typed payload: `CourseEngagementReport { engagement: CourseEngagement; atRisk: AtRiskLearner[] }`
+  matching the service contract exactly (`score:number|null`, `components.{attendanceRate,
+  submissionRate,gradeAverage}:number|null`, `riskLevel:"high"|"medium"`, reason codes).
+- Display helpers (text-first, colour never the only signal): `RISK_LEVEL_DISPLAY`
+  (high→danger "High risk", medium→warning "Medium risk"), `RISK_REASON_DISPLAY`
+  (low_attendance→"Low attendance", missing_submissions→"Missing work", low_grades→"Low grades"),
+  and `learnerLabel(id)` → `"Learner <uuid-head>"` (NO fabricated names; displayName is
+  rendered when non-null, else this id-derived label — pending #278/#279).
+
+**`apps/web/app/teach/page.tsx`:** after `getTaughtCourses`, fan out
+`getCourseEngagement` per course in PARALLEL (`Promise.all`, alongside the existing
+roster fetch). Restored the three dropped elements:
+1. **Engagement score** (`CourseEngagementPanel`): labelled `ProgressBar` (aria-label
+   "Engagement score N percent" + visible `N%` text — not colour/value-only) plus the
+   three component sub-metrics (Attendance/Submissions/Grade avg). `score === null` →
+   "Not enough data yet" (NOT 0%, NOT a fake number). `ok:false` → "Engagement insights
+   are unavailable."
+2. **At-risk list** (`CourseAtRiskPanel`): per-learner id-derived label, text risk-level
+   Badge (high/medium), reason codes as human-readable Chips. Empty `atRisk` → "No at-risk
+   learners 🎉"; `ok:false` → "At-risk insights are unavailable."
+3. **At-risk count stat**: third summary-band stat = Σ `atRisk.length` over courses whose
+   read succeeded (errored/no-data courses contribute 0 — never fabricated), warning-tinted
+   only when > 0.
+
+**Responsive/a11y (one pass, all breakpoints):** reused the existing `/teach` token-driven
+CSS (`var(--lms-*)`); engagement/components/reasons rows are flex-wrap + `min-width:0`,
+risk items `overflow-wrap:anywhere`; no fixed widths → no horizontal overflow at 360px;
+reflows 1-up (phone) → grid (tablet/desktop). Risk carried by text pill + label, not colour.
+
+**Compose:** web service was MISSING `ANALYTICS_SERVICE_URL` → added
+`ANALYTICS_SERVICE_URL: http://analytics:4015` to the web env + `analytics: { condition:
+service_healthy }` to web `depends_on` (admin already had it from #276).
+
+**Verification:** `pnpm --filter @lms/web` typecheck ✓ · lint ✓ (host gate; standalone build
+EPERMs on Windows host — Docker/Linux image build is qa-agent's bar). displayName shows
+id-derived label pending #278/#279.
 
 ### Architecture (architect) — #277 engagement + at-risk read endpoint
 
@@ -234,3 +278,4 @@ Data ownership: all reads tenant-scoped via `withTenant`; analytics = read/repor
 - 2026-06-21 10:08 · orchestrator-setup · branch + handshake created, #277 claimed & board In Progress · **next owner → architect**
 - 2026-06-21 10:12 · architect · Recorded design: per-course `GET /reports/engagement?courseId=` (live computation over enrollment/attendance/submission/grade, store-abstraction six-file plan, /teach wiring, build sequence, ADR-277 = compute live not materialize engagement_summary). No schema change. · **next owner → service-builder** (then frontend-dev → qa-agent → security-agent)
 - 2026-06-21 10:16 · service-builder · Implemented `GET /reports/engagement?courseId=` in analytics (store types + pure `buildCourseEngagement` + memory seed + prisma five bound `$1::uuid` sub-queries under withTenant + route w/ uuid validation). Confirmed schema columns (category='present', is_released, submission statuses, learner role). +11 tests → 25/25; typecheck+lint+test green. No schema change. · **next owner → frontend-dev** (then qa-agent → security-agent)
+- 2026-06-21 10:24 · frontend-dev · Wired `/teach` to live analytics: new web BFF `apps/web/app/lib/analytics-api.ts` (`getCourseEngagement` discriminated union, `x-tenant-id`, no-store) + restored 3 dropped elements in `page.tsx` (engagement ProgressBar w/ aria+text + component sub-metrics, at-risk learner list w/ text risk pills + reason chips, at-risk count stat) with graceful null/empty/error states (no fabricated data). Added missing `ANALYTICS_SERVICE_URL` to web service in docker-compose.yml (+ analytics depends_on). displayName→id-derived label pending #278/#279. web typecheck+lint green. · **next owner → qa-agent** (then security-agent)

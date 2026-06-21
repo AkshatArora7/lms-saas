@@ -10,7 +10,12 @@
   },
   "scripts": {
     "start": "docker compose up -d",
+    "start:pull": "docker compose up -d",
+    "start:build": "docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build",
     "stop": "docker compose down",
+    "down": "docker compose down",
+    "down:clean": "docker compose down -v",
+    "ps": "docker compose ps",
     "logs": "docker compose logs -f",
     "build": "turbo run build",
     "dev": "turbo run dev",

@@ -1,0 +1,174 @@
+# -----------------------------------------------------------------------------
+# Build-from-source OVERRIDE for the LMS mesh.
+#
+# The canonical docker-compose.yml defaults to owner-built GHCR images
+# (ghcr.io/akshatarora7/lms-saas/<name>:latest). Those images are private to the
+# repo owner, so a collaborator who clones the repo and CANNOT pull them — or who
+# simply wants to run the CURRENT source — uses this override to build every
+# buildable service locally instead. ZERO external accounts are required: no
+# Supabase, no GHCR access, no Upstash (the bundled in-compose Postgres + Redis
+# are used by default; leave the DB URLs empty in .env).
+#
+# This file only adds a `build:` block per service. Compose DEEP-MERGES it onto
+# the base file, so every service keeps its base environment / ports / depends_on
+# / healthcheck and its existing `image:` tag (the locally built image is tagged
+# with that same name for consistency).
+#
+# Bring the WHOLE platform up, built from local source, in one command:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#
+# (npm script shortcut: `pnpm start:build`.)
+#
+# The default pull path stays unchanged:  docker compose up -d   (`pnpm start`).
+# -----------------------------------------------------------------------------
+name: lms
+
+services:
+  # One-shot demo seeder (already builds in the base file; kept here for parity).
+  seed:
+    build:
+      context: .
+      dockerfile: packages/db/seed.Dockerfile
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+
+  identity:
+    build:
+      context: .
+      dockerfile: services/identity/Dockerfile
+
+  tenant:
+    build:
+      context: .
+      dockerfile: services/tenant/Dockerfile
+
+  user-org:
+    build:
+      context: .
+      dockerfile: services/user-org/Dockerfile
+
+  enrollment:
+    build:
+      context: .
+      dockerfile: services/enrollment/Dockerfile
+
+  course:
+    build:
+      context: .
+      dockerfile: services/course/Dockerfile
+
+  content:
+    build:
+      context: .
+      dockerfile: services/content/Dockerfile
+
+  assignment:
+    build:
+      context: .
+      dockerfile: services/assignment/Dockerfile
+
+  assessment:
+    build:
+      context: .
+      dockerfile: services/assessment/Dockerfile
+
+  grading:
+    build:
+      context: .
+      dockerfile: services/grading/Dockerfile
+
+  discussion:
+    build:
+      context: .
+      dockerfile: services/discussion/Dockerfile
+
+  announcement:
+    build:
+      context: .
+      dockerfile: services/announcement/Dockerfile
+
+  notification:
+    build:
+      context: .
+      dockerfile: services/notification/Dockerfile
+
+  calendar:
+    build:
+      context: .
+      dockerfile: services/calendar/Dockerfile
+
+  rubric:
+    build:
+      context: .
+      dockerfile: services/rubric/Dockerfile
+
+  analytics:
+    build:
+      context: .
+      dockerfile: services/analytics/Dockerfile
+
+  reporting:
+    build:
+      context: .
+      dockerfile: services/reporting/Dockerfile
+
+  ai:
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+
+  lti:
+    build:
+      context: .
+      dockerfile: services/lti/Dockerfile
+
+  sis:
+    build:
+      context: .
+      dockerfile: services/sis/Dockerfile
+
+  video:
+    build:
+      context: .
+      dockerfile: services/video/Dockerfile
+
+  search:
+    build:
+      context: .
+      dockerfile: services/search/Dockerfile
+
+  billing:
+    build:
+      context: .
+      dockerfile: services/billing/Dockerfile
+
+  audit:
+    build:
+      context: .
+      dockerfile: services/audit/Dockerfile
+
+  mobile-bff:
+    build:
+      context: .
+      dockerfile: services/mobile-bff/Dockerfile
+
+  attendance:
+    build:
+      context: .
+      dockerfile: services/attendance/Dockerfile
+
+  # Learner web app (already builds in the base file; kept here for parity).
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+
+  # Admin console (already builds in the base file; kept here for parity).
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile

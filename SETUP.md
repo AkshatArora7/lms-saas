@@ -210,9 +210,26 @@ docker compose -f docker-compose.infra.yml down -v # stop and wipe (re-applies s
 The `schema.sql` and `rls.sql` are mounted as init scripts, so a fresh volume is
 seeded automatically. This mirrors the Postgres used in CI.
 
-> Note: the bare `docker compose up -d` now brings up the **entire** app mesh
-> (Postgres + Redis + all services + web + admin) from `docker-compose.yml`. For
-> just the DB + Redis the integration tests need, use the infra-only file above.
+> **Run the WHOLE app, not just infra.** The commands above bring up only
+> Postgres + Redis (what the integration tests need). To run the **entire
+> platform** locally in **one command** — Postgres + Redis + all 26 services +
+> web (3000) + admin (3001) — the recommended path for collaborators is to build
+> every image from local source (needs only Docker Desktop; **no Supabase, no
+> GHCR access, no accounts**):
+>
+> ```bash
+> pnpm start:build   # docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+> ```
+>
+> A bare `docker compose up -d` (`pnpm start`) instead **pulls** the owner-built
+> GHCR images and also brings up the full mesh. Either way, **leave the DB URLs
+> in `.env` empty** (`DATABASE_URL` and friends — that is how `.env.example`
+> ships) so the bundled in-compose Postgres is used; only set `DATABASE_URL` to
+> target Supabase/remote. Sign in at <http://localhost:3000> with
+> `admin@demo.school` / `student@demo.school` (password `password123`). Tear down
+> with `pnpm down` (keep data) or `pnpm down:clean` (wipe + re-seed). Full
+> details: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#run-the-full-app-in-one-command-docker)
+> and [`README.md`](README.md#getting-started).
 
 ### Integration tests (RLS isolation + golden path)
 

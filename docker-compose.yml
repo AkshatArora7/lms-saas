@@ -75,6 +75,9 @@ services:
     volumes:
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./database/policies/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
+      # Runtime least-privilege role (#286 / ADR-0026). Runs AFTER schema + rls as
+      # the owner `lms`. Services switch DATABASE_URL to app_user (service-builder).
+      - ./database/roles.sql:/docker-entrypoint-initdb.d/03-roles.sql:ro
       - lms_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lms"]

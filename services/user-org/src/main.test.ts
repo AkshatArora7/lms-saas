@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { buildApp } from "./main.js";
 import { DEMO_TENANT_ID, MemoryUserOrgStore } from "./store.memory.js";
+import { groupMembershipsByUser } from "./store.js";
+import type { UserMembership, UserRecord } from "./store.js";
 
 const config = {
   TENANT_MODE: "hybrid",
@@ -363,6 +365,124 @@ describe("users & roles (story #23)", () => {
   });
 });
 
+describe("groupMembershipsByUser (pure helper)", () => {
+  const user = (id: string, displayName: string): UserRecord => ({
+    id,
+    tenantId: DEMO_TENANT_ID,
+    email: `${id}@demo.school`,
+    displayName,
+    status: "active",
+    locale: "en",
+    createdAt: "2026-01-01T00:00:00.000Z",
+  });
+
+  const membership = (
+    userId: string,
+    roleName: string,
+    orgUnitId: string,
+  ): UserMembership => ({
+    userId,
+    assignmentId: `as-${userId}-${roleName}-${orgUnitId}`,
+    roleId: `role-${roleName}`,
+    roleName,
+    orgUnitId,
+    cascade: true,
+  });
+
+  it("pairs multiple roles across multiple org units to the right user", () => {
+    const users = [user("u1", "Ann"), user("u2", "Bob")];
+    const memberships = [
+      membership("u1", "instructor", "ou-math"),
+      membership("u1", "course_builder", "ou-sci"),
+      membership("u2", "learner", "ou-math"),
+    ];
+
+    const profiles = groupMembershipsByUser(users, memberships);
+
+    const ann = profiles.find((p) => p.id === "u1")!;
+    expect(ann.memberships).toEqual([
+      expect.objectContaining({ roleName: "instructor", orgUnitId: "ou-math" }),
+      expect.objectContaining({
+        roleName: "course_builder",
+        orgUnitId: "ou-sci",
+      }),
+    ]);
+    const bob = profiles.find((p) => p.id === "u2")!;
+    expect(bob.memberships).toEqual([
+      expect.objectContaining({ roleName: "learner", orgUnitId: "ou-math" }),
+    ]);
+  });
+
+  it("gives users with no assignments an empty memberships array", () => {
+    const profiles = groupMembershipsByUser([user("u1", "Ann")], []);
+    expect(profiles).toEqual([
+      expect.objectContaining({ id: "u1", memberships: [] }),
+    ]);
+  });
+});
+
+describe("GET /users enriched shape", () => {
+  it("returns each user with their org-unit role memberships", async () => {
+    const app = buildTestApp();
+    const orgA = (await createOrgUnit(app, { type: "organization", name: "A" }))
+      .json()
+      .orgUnit.id;
+    const orgB = (
+      await createOrgUnit(app, {
+        type: "department",
+        name: "B",
+        parentId: orgA,
+      })
+    )
+      .json()
+      .orgUnit.id;
+    const userId = (
+      await createUser(app, { email: "t@demo.school", displayName: "Tess" })
+    )
+      .json()
+      .user.id;
+    // A user with no assignments to prove memberships: [].
+    await createUser(app, { email: "noroles@demo.school", displayName: "Norm" });
+
+    await app.inject({
+      method: "POST",
+      url: `/users/${userId}/roles`,
+      headers: HEADERS,
+      payload: { role: "instructor", orgUnitId: orgA },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/users/${userId}/roles`,
+      headers: HEADERS,
+      payload: { role: "course_builder", orgUnitId: orgB },
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/users",
+      headers: HEADERS,
+    });
+    expect(res.statusCode).toBe(200);
+    const users = res.json().users as Array<{
+      id: string;
+      memberships: Array<{ roleName: string; orgUnitId: string }>;
+    }>;
+    expect(users).toHaveLength(2);
+
+    const tess = users.find((u) => u.id === userId)!;
+    expect(tess.memberships).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ roleName: "instructor", orgUnitId: orgA }),
+        expect.objectContaining({ roleName: "course_builder", orgUnitId: orgB }),
+      ]),
+    );
+    expect(tess.memberships).toHaveLength(2);
+
+    const norm = users.find((u) => u.id !== userId)!;
+    expect(norm.memberships).toEqual([]);
+  });
+});
+
 describe("tenant isolation", () => {
   it("never returns another tenant's org units or users", async () => {
     const store = new MemoryUserOrgStore();
@@ -371,7 +491,18 @@ describe("tenant isolation", () => {
     const org = (await createOrgUnit(app, { type: "organization", name: "A-Org" }))
       .json()
       .orgUnit.id;
-    await createUser(app, { email: "a@demo.school", displayName: "A" });
+    const userId = (
+      await createUser(app, { email: "a@demo.school", displayName: "A" })
+    )
+      .json()
+      .user.id;
+    // Give the tenant-A user a role so we can prove memberships don't leak.
+    await app.inject({
+      method: "POST",
+      url: `/users/${userId}/roles`,
+      headers: HEADERS,
+      payload: { role: "instructor", orgUnitId: org },
+    });
 
     // Other tenant sees nothing.
     const otherOrgs = await app.inject({
@@ -387,6 +518,16 @@ describe("tenant isolation", () => {
       headers: OTHER_HEADERS,
     });
     expect(otherUsers.json().users).toHaveLength(0);
+
+    // Tenant A still sees its user enriched with the assignment — proving the
+    // batched membership read is scoped, not globally joined.
+    const ownUsers = await app.inject({
+      method: "GET",
+      url: "/users",
+      headers: HEADERS,
+    });
+    expect(ownUsers.json().users).toHaveLength(1);
+    expect(ownUsers.json().users[0].memberships).toHaveLength(1);
 
     // Other tenant cannot fetch this tenant's org unit by id.
     const crossFetch = await app.inject({

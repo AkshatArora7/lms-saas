@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { TenantContext } from "@lms/types";
 
+import { groupMembershipsByUser } from "./store.js";
 import type {
   AssignRoleInput,
   AssignRoleResult,
@@ -195,8 +196,8 @@ export class MemoryUserOrgStore implements UserOrgStore {
   async listUsers(
     ctx: TenantContext,
     filter: UserFilter = {},
-  ): Promise<UserRecord[]> {
-    return this.users.filter((u) => {
+  ): Promise<UserProfile[]> {
+    const users = this.users.filter((u) => {
       if (u.tenantId !== ctx.tenantId) return false;
       if (filter.status !== undefined && u.status !== filter.status) {
         return false;
@@ -211,6 +212,12 @@ export class MemoryUserOrgStore implements UserOrgStore {
       }
       return true;
     });
+    // Project memberships from the in-memory assignments exactly as getUser
+    // does, then group via the shared pure helper so memory + prisma agree.
+    const memberships = this.assignments
+      .filter((a) => a.tenantId === ctx.tenantId)
+      .map(({ tenantId: _t, ...m }) => m);
+    return groupMembershipsByUser(users, memberships);
   }
 
   async updateUser(

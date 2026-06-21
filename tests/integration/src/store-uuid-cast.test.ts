@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { createPrismaStore as createAnnouncementStore } from "@lms/service-announcement/dist/store.prisma.js";
 import { createPrismaStore as createAssignmentStore } from "@lms/service-assignment/dist/store.prisma.js";
+import { createPrismaStore as createCourseStore } from "@lms/service-course/dist/store.prisma.js";
 import { createPrismaStore as createDiscussionStore } from "@lms/service-discussion/dist/store.prisma.js";
 import { createPrismaStore as createEnrollmentStore } from "@lms/service-enrollment/dist/store.prisma.js";
 import type { TenantContext } from "@lms/types";
@@ -31,6 +32,10 @@ import {
  * genuinely applies — proving the casts work AND tenant scoping is intact.
  *
  * Skipped when DATABASE_URL is unset (e.g. local runs without the compose stack).
+ *
+ * Issue #268 extends this lane with the course store's create (INSERT) path: that
+ * bug was the same root-cause class on a write — an app-generated id bound as text
+ * into a `uuid` column threw 42804 on INSERT until the `::uuid` casts landed.
  */
 describe.skipIf(!dbAvailable)("Prisma store uuid casts: create+read round-trips (no uuid = text)", () => {
   let admin: PgPool;
@@ -90,6 +95,32 @@ describe.skipIf(!dbAvailable)("Prisma store uuid casts: create+read round-trips 
     }
     if (savedDatabaseUrl === undefined) delete process.env.DATABASE_URL;
     else process.env.DATABASE_URL = savedDatabaseUrl;
+  });
+
+  it("course store: create (insert) then list and read by id", async () => {
+    // Regression guard for issue #268: createCourse inserts an org_unit row and a
+    // course row. Before #267's `::uuid` casts, Postgres threw 42804 `column "id"
+    // is of type uuid but expression is of type text` on INSERT because the
+    // app-generated id was bound as text. This exercises the real insert+read
+    // path the admin "New course" flow hits via the BFF.
+    const store = createCourseStore();
+
+    const marker = `Algebra II ${randomUUID()}`;
+    const created = await store.createCourse(ctx, {
+      title: marker,
+      description: "Polynomials and functions",
+    });
+    expect(created.id).toBeTruthy();
+    expect(created.orgUnitId).toBeTruthy();
+    expect(created.title).toBe(marker);
+
+    // WHERE id = $1::uuid — and proves the insert persisted under RLS.
+    const byId = await store.getCourse(ctx, created.id);
+    expect(byId?.id).toBe(created.id);
+
+    // SELECT ... FROM course — the exact read the admin /courses screen renders.
+    const list = await store.listCourses(ctx);
+    expect(list.some((c) => c.id === created.id && c.title === marker)).toBe(true);
   });
 
   it("assignment store: create then read by id and by course_id", async () => {

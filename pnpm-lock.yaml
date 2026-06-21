@@ -1240,6 +1240,9 @@ importers:
       '@lms/service-assignment':
         specifier: workspace:*
         version: link:../../services/assignment
+      '@lms/service-course':
+        specifier: workspace:*
+        version: link:../../services/course
       '@lms/service-discussion':
         specifier: workspace:*
         version: link:../../services/discussion

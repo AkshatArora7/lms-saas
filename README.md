@@ -502,22 +502,47 @@ AGENTS.md    rules every contributor/AI agent must follow
 > **New collaborator?** Start with [`SETUP.md`](SETUP.md) — a step-by-step guide
 > from a fresh clone to a running, understood project.
 
-### Run the whole platform (Docker — one command)
+### Run the whole platform locally (one command)
 
 One command brings up the **entire** platform — Postgres + Redis + all 26
 services behind the API gateway + the web app (3000) + the admin console (3001) —
-exactly the way it runs on a container host in production:
+exactly the way it runs on a container host in production. There are two ways to
+get the images, and **brand-new collaborators want the first one**:
+
+| | Build from source (collaborators / contributors) | Pull prebuilt images (owner / CI) |
+| --- | --- | --- |
+| **Command** | `pnpm start:build` | `pnpm start` (= `docker compose up -d`) |
+| **Raw** | `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build` | `docker compose up -d` |
+| **Needs** | only **Docker Desktop + this repo** | access to the owner's private GHCR images |
+| **Accounts** | **none** — no Supabase, no GHCR, no Upstash | GHCR pull access |
+| **Images** | built from the **current source** | `ghcr.io/akshatarora7/lms-saas/<name>:latest` |
+
+> **First run builds ~29 images** (26 services + seed + web + admin) and can take
+> a while; later runs are cached and fast.
+
+**Prerequisite:** Docker Desktop installed and running. That's the only
+requirement for the build-from-source path — no external accounts.
 
 ```bash
-docker compose up -d   # or: pnpm start
+# Recommended for collaborators — build everything from local source:
+pnpm start:build
+
+# Owner / CI — pull the prebuilt GHCR images instead:
+pnpm start
 ```
 
-By default this pulls the owner-built GHCR images
-(`ghcr.io/akshatarora7/lms-saas/<name>:latest`) and runs against the bundled
-in-compose Postgres, which **auto-applies** `schema.sql` + `rls.sql` on first
-boot — so tenant RLS is enforced with zero external setup. To build the images
-locally instead of pulling, uncomment the `build:` block kept above each
-`image:` line in `docker-compose.yml`.
+Both paths run against the **bundled in-compose Postgres**, which
+**auto-applies** `schema.sql` + `rls.sql` on first boot — so tenant RLS is
+enforced with **zero external setup**.
+
+> **⚠️ Collaborators: leave the DB URLs empty.** For the local Docker run, keep
+> `DATABASE_URL` (and `MIGRATION_DATABASE_URL` / `DIRECT_URL` /
+> `CONTROL_PLANE_DATABASE_URL`) **empty in `.env`** — or don't create a `.env` at
+> all — so the mesh uses the bundled Postgres. `.env.example` already ships them
+> empty. **Only** set `DATABASE_URL` when you deliberately want to target
+> Supabase / a remote Postgres (see below).
+
+**Public surfaces** once it's up:
 
 - **Web app (learner):** http://localhost:3000
 - **Admin console:** http://localhost:3001
@@ -525,7 +550,21 @@ locally instead of pulling, uncomment the `build:` block kept above each
   `/api/:service/*` to the owning service.
 - Every service is also published on its own `40xx` port for direct inspection
   (see the port map in [`.env.example`](.env.example)).
-- **Stop:** `pnpm stop` / `docker compose down`. **Tail logs:** `pnpm logs`.
+
+**Demo logins** (seeded automatically on first boot) — sign in at `/login`:
+
+| Account | Lands on |
+| ------- | -------- |
+| `admin@demo.school` / `password123` | web **and** admin console |
+| `student@demo.school` / `password123` | web app (admin console shows "not authorized") |
+
+**Tear down:**
+
+```bash
+pnpm down        # stop the stack, KEEP the Postgres data (= docker compose down)
+pnpm down:clean  # stop AND wipe the Postgres volume (re-seeds on next up; = down -v)
+pnpm ps          # show container status   ·   pnpm logs   # tail logs
+```
 
 The gateway is wired to each service via `SERVICE_URL_*`, and all services share
 one `JWT_SECRET` so identity-issued tokens verify at the edge. The placeholder

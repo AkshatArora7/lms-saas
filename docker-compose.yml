@@ -49,8 +49,8 @@ x-common-env: &common-env
   # DATABASE_URL below). Override DATABASE_URL in .env (e.g. a Supabase pooler URL
   # for IPv4, pointed at a least-priv role) to point the whole mesh at Supabase.
   DATABASE_URL: ${DATABASE_URL:-postgresql://app_user:app_user@postgres:5432/lms}
-  DIRECT_URL: ${DIRECT_URL:-${DATABASE_URL}}
-  CONTROL_PLANE_DATABASE_URL: ${CONTROL_PLANE_DATABASE_URL:-${DATABASE_URL}}
+  DIRECT_URL: ${DIRECT_URL:-postgresql://app_user:app_user@postgres:5432/lms}
+  CONTROL_PLANE_DATABASE_URL: ${CONTROL_PLANE_DATABASE_URL:-postgresql://app_user:app_user@postgres:5432/lms}
   JWT_SECRET: ${JWT_SECRET:-local-compose-dev-secret-change-me-please}
   JWT_ISSUER: ${JWT_ISSUER:-https://auth.lms.local}
   JWT_AUDIENCE: ${JWT_AUDIENCE:-lms-api}

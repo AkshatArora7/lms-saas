@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import type { CSSProperties } from "react";
 import {
   Alert,
-  AppShell,
   Badge,
   Button,
   Card,
@@ -20,6 +19,7 @@ import {
   groupAttendanceByDate,
   summarizeAttendance,
 } from "../lib/attendance";
+import { AppShell, ScheduleIcon } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
 /**
@@ -256,7 +256,7 @@ export default async function Attendance() {
             ) : (
               <EmptyState
                 description="Once your sessions are recorded, your attendance history will appear here."
-                icon="🗓️"
+                icon={<ScheduleIcon />}
                 title="No attendance recorded yet"
               />
             )}

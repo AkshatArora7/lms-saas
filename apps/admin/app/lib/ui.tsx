@@ -89,3 +89,49 @@ export function OrgUnitsIcon(): ReactElement {
     />
   );
 }
+
+/** Bar-chart glyph for district reports: a baseline axis with three bars. */
+export function ReportsIcon(): ReactElement {
+  return (
+    <EmptyIcon
+      paths={[
+        "M4 4v15a1 1 0 0 0 1 1h15",
+        "M8 16v-3",
+        "M12 16v-6",
+        "M16 16v-9",
+      ]}
+    />
+  );
+}
+
+/** Palette/swatch glyph for white-label branding: a rounded panel with dots. */
+export function BrandingIcon(): ReactElement {
+  return (
+    <EmptyIcon
+      paths={[
+        "M5 6.5A1.5 1.5 0 0 1 6.5 5h11A1.5 1.5 0 0 1 19 6.5v11A1.5 1.5 0 0 1 17.5 19h-11A1.5 1.5 0 0 1 5 17.5z",
+        "M9 9.5h.01",
+        "M9 14.5h6",
+      ]}
+    />
+  );
+}
+
+/** Gear glyph for tenant settings: a centre ring with four simplified spokes. */
+export function SettingsIcon(): ReactElement {
+  return (
+    <EmptyIcon
+      paths={[
+        "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
+        "M12 3.5v2",
+        "M12 18.5v2",
+        "M3.5 12h2",
+        "M18.5 12h2",
+        "M6 6l1.4 1.4",
+        "M16.6 16.6 18 18",
+        "M18 6l-1.4 1.4",
+        "M7.4 16.6 6 18",
+      ]}
+    />
+  );
+}

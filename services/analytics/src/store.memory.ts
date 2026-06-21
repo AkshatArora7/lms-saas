@@ -31,6 +31,72 @@ const DEMO_COURSE = "d0000000-0003-0000-0000-000000000001"; // course (course.id
 const DEMO_STUDENT = "d0000000-00a1-0000-0000-000000000002"; // the lone learner
 const DEMO_TEACHER = "d0000000-00a1-0000-0000-000000000001"; // instructor (seed.demo.ts:339)
 
+// ---------------------------------------------------------------------------
+// Org-unit-scoped admin override model (#294). Mirrors the Prisma
+// `adminScopesCourse` query: an `org_admin` role_assignment scopes a course
+// when its org unit equals the course's org unit, or — when the assignment
+// cascades — is an ancestor of it (present in the course org unit's
+// materialised `path`). Modelled with an org-unit ancestry tree + assignments
+// so the unit tests are meaningful.
+// ---------------------------------------------------------------------------
+
+/** An org unit the course is placed under, plus its ancestor-id path. */
+interface CoursePlacement {
+  ouId: string;
+  path: string[];
+}
+/** An `org_admin` assignment: the unit it administers and whether it cascades. */
+interface AdminAssignment {
+  userId: string;
+  orgUnitId: string;
+  cascade: boolean;
+}
+interface AdminScopeData {
+  courseOrgUnit: Map<string, CoursePlacement>;
+  assignments: AdminAssignment[];
+}
+
+// Org tree for the demo tenant (ancestor ids in `path`, root first):
+//   DISTRICT → SCHOOL_A → DEPT_A1 ; sibling SCHOOL_B under DISTRICT.
+const DEMO_DISTRICT = "d0000000-00b0-0000-0000-000000000001";
+const DEMO_SCHOOL_A = "d0000000-00b0-0000-0000-000000000002";
+const DEMO_DEPT_A1 = "d0000000-00b0-0000-0000-000000000003";
+const DEMO_SCHOOL_B = "d0000000-00b0-0000-0000-000000000004";
+// Course offerings (course.org_unit_id) + their ancestor paths.
+const DEMO_OFF_IN = "d0000000-00b0-0000-0000-00000000000a"; // DEMO_COURSE, under DEPT_A1
+const DEMO_OFF_OUT = "d0000000-00b0-0000-0000-00000000000b"; // COURSE_OUT, under SCHOOL_B
+/** A second course in the demo tenant, placed OUTSIDE the SCHOOL_A subtree. */
+export const DEMO_COURSE_OUT = "d0000000-0003-0000-0000-0000000000ff";
+
+// org_admin callers used by the authz tests.
+export const ORG_ADMIN_IN_SUBTREE = "a0000000-0000-0000-0000-000000000001"; // @ SCHOOL_A cascade=true → scopes DEMO_COURSE
+export const ORG_ADMIN_EXACT = "a0000000-0000-0000-0000-00000000000e"; // @ DEMO_OFF_IN cascade=false → scopes DEMO_COURSE (exact)
+export const ORG_ADMIN_ANCESTOR_NOCASCADE = "a0000000-0000-0000-0000-00000000000a"; // @ SCHOOL_A cascade=false → does NOT scope DEMO_COURSE
+export const ORG_ADMIN_AND_TEACHER = "a0000000-0000-0000-0000-0000000000b0"; // @ SCHOOL_B (out of subtree) BUT teaches DEMO_COURSE
+
+/** Org-scope source for the demo tenant covering every #294 authz branch. */
+const DEMO_ADMIN_SCOPE_SOURCE: AdminScopeData = {
+  courseOrgUnit: new Map<string, CoursePlacement>([
+    [DEMO_COURSE, { ouId: DEMO_OFF_IN, path: [DEMO_DISTRICT, DEMO_SCHOOL_A, DEMO_DEPT_A1] }],
+    [DEMO_COURSE_OUT, { ouId: DEMO_OFF_OUT, path: [DEMO_DISTRICT, DEMO_SCHOOL_B] }],
+  ]),
+  assignments: [
+    // In-subtree, cascading: scopes DEMO_COURSE (SCHOOL_A ∈ path), not COURSE_OUT.
+    { userId: ORG_ADMIN_IN_SUBTREE, orgUnitId: DEMO_SCHOOL_A, cascade: true },
+    // Exact, non-cascading: scopes DEMO_COURSE only by exact unit match.
+    { userId: ORG_ADMIN_EXACT, orgUnitId: DEMO_OFF_IN, cascade: false },
+    // Ancestor-only, non-cascading: does NOT scope DEMO_COURSE.
+    { userId: ORG_ADMIN_ANCESTOR_NOCASCADE, orgUnitId: DEMO_SCHOOL_A, cascade: false },
+    // Out-of-subtree admin who ALSO teaches DEMO_COURSE (allowed via teacher path).
+    { userId: ORG_ADMIN_AND_TEACHER, orgUnitId: DEMO_SCHOOL_B, cascade: true },
+  ],
+};
+
+const EMPTY_ADMIN_SCOPE_SOURCE: AdminScopeData = {
+  courseOrgUnit: new Map(),
+  assignments: [],
+};
+
 /**
  * Reporting rollup source for the demo tenant, matching the seed: one school
  * (organization) with one course offering under it carrying 1 course,
@@ -128,9 +194,17 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
     new Map([[DEMO_TENANT_ID, new Map([[DEMO_COURSE, DEMO_ENGAGEMENT_SOURCE]])]]);
   // Teaching enrollments, tenant→(courseId→teacher user ids); mirrors the DB
   // `teachesCourse` query so the memory and Prisma authz paths agree (#284).
-  // Seeded so DEMO_TEACHER teaches DEMO_COURSE in the demo tenant.
+  // Seeded so DEMO_TEACHER teaches DEMO_COURSE; ORG_ADMIN_AND_TEACHER also
+  // teaches DEMO_COURSE (covers the both-roles precedence test, #294).
   private teachingSource: Map<string, Map<string, Set<string>>> = new Map([
-    [DEMO_TENANT_ID, new Map([[DEMO_COURSE, new Set([DEMO_TEACHER])]])],
+    [
+      DEMO_TENANT_ID,
+      new Map([[DEMO_COURSE, new Set([DEMO_TEACHER, ORG_ADMIN_AND_TEACHER])]]),
+    ],
+  ]);
+  // Org-unit-scoped admin override source, tenant-scoped; demo tenant only (#294).
+  private adminScopeSource: Map<string, AdminScopeData> = new Map([
+    [DEMO_TENANT_ID, DEMO_ADMIN_SCOPE_SOURCE],
   ]);
 
   constructor(
@@ -225,6 +299,22 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   ): Promise<boolean> {
     return (
       this.teachingSource.get(ctx.tenantId)?.get(courseId)?.has(userId) ?? false
+    );
+  }
+
+  async adminScopesCourse(
+    ctx: TenantContext,
+    userId: string,
+    courseId: string,
+  ): Promise<boolean> {
+    const data = this.adminScopeSource.get(ctx.tenantId) ?? EMPTY_ADMIN_SCOPE_SOURCE;
+    const cou = data.courseOrgUnit.get(courseId);
+    if (!cou) return false;
+    return data.assignments.some(
+      (a) =>
+        a.userId === userId &&
+        (a.orgUnitId === cou.ouId ||
+          (a.cascade && cou.path.includes(a.orgUnitId))),
     );
   }
 }

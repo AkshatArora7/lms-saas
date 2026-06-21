@@ -2,8 +2,9 @@ import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
-  ADMIN_ROLES,
   AGGREGATE_DIMENSIONS,
+  ORG_ADMIN_ROLE,
+  SUPER_ADMIN_ROLE,
   isCourseReadAuthorized,
   summarizeOrgUnitRollups,
   type AggregateDimension,
@@ -229,10 +230,11 @@ export function registerAnalyticsRoutes(
   // Per-course engagement score + at-risk learners for the teacher `/teach`
   // insights (#277). Tenant-scoped via withTenant + RLS; computed LIVE over
   // enrollment/attendance/submission/grade (the engagement_summary CQRS table
-  // has no writer — ADR-277). Defence-in-depth course authorization (#284):
-  // only an instructor of the course (or a tenant admin) may read it, layered
+  // has no writer — ADR-277). Defence-in-depth course authorization (#284,
+  // refined #294): a tenant-wide super_admin, an org_admin whose org-unit scope
+  // contains the course, or an instructor of the course may read it, layered
   // ON TOP of RLS. 400 on a missing/invalid courseId; 401 without a caller;
-  // 403 when the caller neither teaches the course nor is an admin.
+  // 403 when the caller neither teaches the course nor admin-scopes it.
   app.get<{ Querystring: { courseId?: string } }>(
     "/reports/engagement",
     async (req, reply) => {
@@ -245,13 +247,21 @@ export function registerAnalyticsRoutes(
       const caller = resolveCallerOr401(deps, req, reply);
       if (!caller) return reply;
       const id = courseId.trim();
-      const isAdmin = caller.roles.some((r) =>
-        (ADMIN_ROLES as readonly string[]).includes(r),
-      );
-      const teaches = isAdmin
-        ? true
-        : await deps.store.teachesCourse(ctx, caller.userId, id);
-      if (!isCourseReadAuthorized({ roles: caller.roles, teaches })) {
+      const isSuperAdmin = caller.roles.includes(SUPER_ADMIN_ROLE);
+      const isOrgAdmin = caller.roles.includes(ORG_ADMIN_ROLE);
+      // super_admin is tenant-wide — allow with ZERO store calls (#294). Gather
+      // org-scope only for an org_admin, and teaches only when still undecided.
+      const adminScopesCourse =
+        !isSuperAdmin && isOrgAdmin
+          ? await deps.store.adminScopesCourse(ctx, caller.userId, id)
+          : false;
+      const teaches =
+        isSuperAdmin || adminScopesCourse
+          ? false
+          : await deps.store.teachesCourse(ctx, caller.userId, id);
+      if (
+        !isCourseReadAuthorized({ roles: caller.roles, teaches, adminScopesCourse })
+      ) {
         return reply.code(403).send({
           error: "forbidden",
           message: "You do not have access to this course's engagement.",

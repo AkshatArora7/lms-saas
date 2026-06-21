@@ -214,6 +214,25 @@ const TEACHES_COURSE_SQL = `
      AND e.status IN ('active','completed')
    LIMIT 1`;
 
+// Org-scope signal for #294: does the user hold an `org_admin` role_assignment
+// whose org unit contains the course's org unit — the unit itself, or (when the
+// assignment cascades) any ancestor of it via the materialised `org_unit.path`?
+// RLS (withTenant) scopes every table to the caller's tenant; both uuid params
+// are cast per the #267 rule ($1 = courseId, $2 = userId).
+const ADMIN_SCOPES_COURSE_SQL = `
+  SELECT 1
+    FROM role_assignment ra
+    JOIN role     r   ON r.id = ra.role_id
+    JOIN course   c   ON c.id = $1::uuid
+    JOIN org_unit cou ON cou.id = c.org_unit_id
+   WHERE ra.user_id = $2::uuid
+     AND r.name = 'org_admin'
+     AND (
+           ra.org_unit_id = cou.id
+        OR (ra.cascade AND ra.org_unit_id = ANY(cou.path))
+     )
+   LIMIT 1`;
+
 interface LearnerRow {
   learner_id: string;
 }
@@ -374,6 +393,21 @@ export function createPrismaStore(): AnalyticsStore {
       return withTenant(ctx, async (db: Db) => {
         const rows = await db.$queryRawUnsafe<unknown[]>(
           TEACHES_COURSE_SQL,
+          courseId,
+          userId,
+        );
+        return rows.length > 0;
+      });
+    },
+
+    async adminScopesCourse(
+      ctx,
+      userId: string,
+      courseId: string,
+    ): Promise<boolean> {
+      return withTenant(ctx, async (db: Db) => {
+        const rows = await db.$queryRawUnsafe<unknown[]>(
+          ADMIN_SCOPES_COURSE_SQL,
           courseId,
           userId,
         );

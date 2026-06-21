@@ -78,7 +78,10 @@ Introduce a single, platform-wide contract for trusted caller identity,
 - **Per-resource authorization becomes possible across all services** as
   defence in depth — services can now answer "is this user allowed?" without an
   extra network hop to identity, using their own RLS-scoped data and the trusted
-  identity headers.
+  identity headers. Analytics engagement (`GET /reports/engagement`) is the first
+  consumer: it allows teacher-owns-course, tenant-wide `super_admin`, or
+  org-unit-scoped `org_admin` (administered subtree via `org_unit.path` +
+  `role_assignment.cascade`) — #284, refined #294.
 - **Explicit trust assumption:** a service trusts `x-user-id`/`x-user-roles`
   **only** because they arrive via the gateway (or the trusted web BFF on the
   internal network). This is the **same** trust model already in force for

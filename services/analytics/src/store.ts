@@ -249,6 +249,211 @@ export function summarizeOrgUnitRollups(rollups: OrgUnitRollup[]): RollupSummary
   };
 }
 
+// ---------------------------------------------------------------------------
+// Per-course engagement + at-risk learners (issue #277) — a tenant-scoped read
+// powering the teacher `/teach` insights. Analytics is the reporting bounded
+// context; it computes LIVE from the existing domain tables under RLS
+// (withTenant) — the `engagement_summary` CQRS table has no writer, so it is
+// intentionally NOT used (ADR-277). No new tables.
+// ---------------------------------------------------------------------------
+
+/** At-risk rule codes — each only contributes when its signal exists. */
+export type RiskReasonCode =
+  | "low_attendance"
+  | "missing_submissions"
+  | "low_grades";
+
+/** Below this attendance percentage a learner trips `low_attendance`. */
+export const LOW_ATTENDANCE_THRESHOLD = 80;
+/**
+ * Below this per-learner submission percentage a learner trips
+ * `missing_submissions` (i.e. a missing fraction above 30%).
+ */
+export const SUBMISSION_RATE_THRESHOLD = 70;
+/** Below this grade percentage a learner trips `low_grades`. */
+export const LOW_GRADE_THRESHOLD = 60;
+/** A learner is `high` risk at this many tripped rules, else `medium`. */
+export const HIGH_RISK_MIN_REASONS = 2;
+
+/** One tripped at-risk rule, with the learner's metric and its threshold. */
+export interface RiskReason {
+  code: RiskReasonCode;
+  /** The learner's value for this signal (0-100, 1 dp). */
+  metric: number;
+  /** The threshold the metric fell below. */
+  threshold: number;
+}
+
+/** An enrolled learner flagged at risk, with the rules they tripped. */
+export interface AtRiskLearner {
+  /** `app_user.id` = `enrollment.user_id`. */
+  learnerId: string;
+  /** Intentionally null until roster-name enrichment (#278/#279); ids only. */
+  displayName: string | null;
+  riskLevel: "high" | "medium";
+  reasons: RiskReason[];
+}
+
+/** The three equal-weighted engagement signals, each null when no data. */
+export interface EngagementComponents {
+  /** Share of attendance records marked present, 0-100 (1 dp); null if none. */
+  attendanceRate: number | null;
+  /** Submissions over expected (assignments × learners), 0-100; null if none. */
+  submissionRate: number | null;
+  /** Mean released grade as a percentage, 0-100 (1 dp); null if none. */
+  gradeAverage: number | null;
+}
+
+/** Per-course engagement headline. */
+export interface CourseEngagement {
+  courseId: string;
+  /** Equal-weighted mean of the non-null components, 0-100; null if all null. */
+  score: number | null;
+  /** Distinct enrolled learners (learner role, active/completed). */
+  learnerCount: number;
+  components: EngagementComponents;
+}
+
+/** The full engagement read: headline + the at-risk roster. */
+export interface CourseEngagementResult {
+  engagement: CourseEngagement;
+  atRisk: AtRiskLearner[];
+}
+
+/**
+ * Minimal per-learner domain rows the engagement aggregation consumes, for ONE
+ * course in ONE tenant. The Prisma store derives this shape in SQL; the memory
+ * store holds it literally. Keeping the aggregation pure (below) makes it
+ * unit-testable without a DB.
+ */
+export interface EngagementSourceData {
+  /** Enrolled learner ids (learner role, status active/completed). */
+  learnerIds: string[];
+  /** Number of assignments in the course (the per-learner submission target). */
+  assignmentCount: number;
+  /** One attendance record per row, keyed by the learner and present flag. */
+  attendance: { learnerId: string; present: boolean }[];
+  /** One counted submission per row (submitted/resubmitted/returned). */
+  submissions: { learnerId: string }[];
+  /** One released grade as a 0-100 percentage, keyed by the learner. */
+  grades: { learnerId: string; pct: number }[];
+}
+
+/** Mean (1 dp) of the non-null component scores; null when all are null. */
+function meanOfComponents(components: EngagementComponents): number | null {
+  const present = [
+    components.attendanceRate,
+    components.submissionRate,
+    components.gradeAverage,
+  ].filter((v): v is number => v !== null);
+  if (present.length === 0) return null;
+  return round1(present.reduce((s, v) => s + v, 0) / present.length);
+}
+
+/** Mean (1 dp) of a list of percentages, or null when empty. */
+function meanPct(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return round1(values.reduce((s, v) => s + v, 0) / values.length);
+}
+
+/**
+ * Pure aggregation: compute a course's engagement components + score and the
+ * at-risk learner roster from the raw per-learner signals. Signals are scoped
+ * to enrolled learners; each at-risk rule contributes only when its underlying
+ * signal exists for that learner. Sorted high→medium, then reason count desc,
+ * then learnerId asc, for stable output.
+ */
+export function buildCourseEngagement(
+  courseId: string,
+  data: EngagementSourceData,
+): CourseEngagementResult {
+  const learners = new Set(data.learnerIds);
+  const learnerCount = learners.size;
+
+  // Scope every signal to enrolled learners so components and per-learner
+  // at-risk rules agree (non-learner rows, e.g. an instructor, are ignored).
+  const attendance = data.attendance.filter((a) => learners.has(a.learnerId));
+  const submissions = data.submissions.filter((s) => learners.has(s.learnerId));
+  const grades = data.grades.filter((g) => learners.has(g.learnerId));
+
+  const attendanceRate = ratePct(
+    attendance.filter((a) => a.present).length,
+    attendance.length,
+  );
+  const submissionRate =
+    data.assignmentCount > 0 && learnerCount > 0
+      ? ratePct(submissions.length, data.assignmentCount * learnerCount)
+      : null;
+  const gradeAverage = meanPct(grades.map((g) => g.pct));
+
+  const components: EngagementComponents = {
+    attendanceRate,
+    submissionRate,
+    gradeAverage,
+  };
+
+  const atRisk: AtRiskLearner[] = [];
+  for (const learnerId of data.learnerIds) {
+    const reasons: RiskReason[] = [];
+
+    const la = attendance.filter((a) => a.learnerId === learnerId);
+    const lAttendance = ratePct(la.filter((a) => a.present).length, la.length);
+    if (lAttendance !== null && lAttendance < LOW_ATTENDANCE_THRESHOLD) {
+      reasons.push({
+        code: "low_attendance",
+        metric: lAttendance,
+        threshold: LOW_ATTENDANCE_THRESHOLD,
+      });
+    }
+
+    if (data.assignmentCount > 0) {
+      const submitted = submissions.filter(
+        (s) => s.learnerId === learnerId,
+      ).length;
+      const lSubmission = round1((submitted / data.assignmentCount) * 100);
+      if (lSubmission < SUBMISSION_RATE_THRESHOLD) {
+        reasons.push({
+          code: "missing_submissions",
+          metric: lSubmission,
+          threshold: SUBMISSION_RATE_THRESHOLD,
+        });
+      }
+    }
+
+    const lGrade = meanPct(
+      grades.filter((g) => g.learnerId === learnerId).map((g) => g.pct),
+    );
+    if (lGrade !== null && lGrade < LOW_GRADE_THRESHOLD) {
+      reasons.push({
+        code: "low_grades",
+        metric: lGrade,
+        threshold: LOW_GRADE_THRESHOLD,
+      });
+    }
+
+    if (reasons.length === 0) continue;
+    atRisk.push({
+      learnerId,
+      displayName: null,
+      riskLevel: reasons.length >= HIGH_RISK_MIN_REASONS ? "high" : "medium",
+      reasons,
+    });
+  }
+
+  const riskRank = (r: AtRiskLearner): number => (r.riskLevel === "high" ? 0 : 1);
+  atRisk.sort(
+    (a, b) =>
+      riskRank(a) - riskRank(b) ||
+      b.reasons.length - a.reasons.length ||
+      a.learnerId.localeCompare(b.learnerId),
+  );
+
+  return {
+    engagement: { courseId, score: meanOfComponents(components), learnerCount, components },
+    atRisk,
+  };
+}
+
 /** Tenant-scoped LRS persistence (RLS via withTenant). */
 export interface AnalyticsStore {
   /** Persist a Caliper event AND a transactional outbox row in one tx. */
@@ -278,4 +483,14 @@ export interface AnalyticsStore {
    * Read-only; aggregates the tenant's existing domain tables under RLS.
    */
   listOrgUnitRollups(ctx: TenantContext): Promise<OrgUnitRollup[]>;
+
+  /**
+   * Per-course engagement score + at-risk learners for the teacher `/teach`
+   * insights (#277). Read-only; computes LIVE over the tenant's enrollment,
+   * attendance, submission and grade tables under RLS. No writes.
+   */
+  getCourseEngagement(
+    ctx: TenantContext,
+    courseId: string,
+  ): Promise<CourseEngagementResult>;
 }

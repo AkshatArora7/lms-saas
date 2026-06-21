@@ -36,6 +36,11 @@ function badRequest(reply: FastifyReply, message: string): FastifyReply {
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_RE.test(value.trim());
+}
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -185,4 +190,24 @@ export function registerAnalyticsRoutes(
       .code(200)
       .send({ orgUnits, summary: summarizeOrgUnitRollups(orgUnits) });
   });
+
+  // Per-course engagement score + at-risk learners for the teacher `/teach`
+  // insights (#277). Tenant-scoped via withTenant + RLS; computed LIVE over
+  // enrollment/attendance/submission/grade (the engagement_summary CQRS table
+  // has no writer — ADR-277). Teacher scoping is a BFF concern; the endpoint is
+  // tenant-scoped only, like /reports/org-units. 400 on a missing/invalid
+  // courseId.
+  app.get<{ Querystring: { courseId?: string } }>(
+    "/reports/engagement",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const { courseId } = req.query;
+      if (!isUuid(courseId)) {
+        return badRequest(reply, "courseId must be a valid uuid.");
+      }
+      const result = await deps.store.getCourseEngagement(ctx, courseId.trim());
+      return reply.code(200).send(result);
+    },
+  );
 }

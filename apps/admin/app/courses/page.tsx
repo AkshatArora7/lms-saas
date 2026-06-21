@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Badge,
   Button,
   Card,
@@ -15,6 +14,7 @@ import {
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
 import { listCourses, type Course } from "../lib/courses-api";
+import { AppShell, CoursesIcon } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 import { deleteCourseAction, publishCourseAction } from "./actions";
 
@@ -33,36 +33,28 @@ const coursesCss = `
   color: var(--lms-text-muted);
   margin: 0;
 }
-.cat-name {
-  color: var(--lms-accent);
-  font-weight: 600;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
 .cat-meta {
   color: var(--lms-text-muted);
   margin: 0;
   overflow-wrap: anywhere;
 }
-.cat-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--lms-space-3);
-  list-style: none;
+/* Data-dense course catalogue table. The wrapper scrolls horizontally on small
+   screens within a labelled region so columns are never silently clipped. */
+.admin-course-name {
+  color: var(--lms-accent);
+  font-weight: 600;
   margin: 0;
-  padding: 0;
+  overflow-wrap: anywhere;
 }
-.cat-row {
-  align-items: start;
-  display: grid;
-  gap: var(--lms-space-3);
-  grid-template-columns: 1fr;
+.admin-course-meta {
+  color: var(--lms-text-muted);
+  font-size: var(--lms-font-size-sm);
+  margin: 0;
+  overflow-wrap: anywhere;
 }
-@media (min-width: 760px) {
-  .cat-row {
-    align-items: center;
-    grid-template-columns: minmax(0, 2fr) auto auto;
-  }
+.admin-courses-table td:first-child,
+.admin-courses-table th:first-child {
+  min-width: 220px;
 }
 .cat-actions {
   display: flex;
@@ -168,68 +160,88 @@ export default async function AdminCourses({
               <h2 className="admin-section-title" id="catalogue-heading">
                 Courses
               </h2>
-              <ul className="cat-list">
-                {courses.map((course) => {
-                  const range = dateRange(course);
-                  return (
-                    <li key={course.id}>
-                      <Card>
-                        <div className="cat-row">
-                          <Stack gap={1}>
-                            <p className="cat-name">{course.title}</p>
-                            <p className="cat-meta">
+              <div
+                aria-label="Course catalogue"
+                className="lms-table-wrap"
+                role="region"
+                tabIndex={0}
+              >
+                <table className="lms-table admin-courses-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Course</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {courses.map((course) => {
+                      const range = dateRange(course);
+                      return (
+                        <tr key={course.id}>
+                          <td>
+                            <p className="admin-course-name">{course.title}</p>
+                            <p className="admin-course-meta">
                               {course.description ?? "No description"}
                               {range ? ` - ${range}` : ""}
                             </p>
-                          </Stack>
-                          <Chip
-                            tone={course.isPublished ? "success" : "warning"}
-                          >
-                            {course.isPublished ? "Published" : "Draft"}
-                          </Chip>
-                          <div className="cat-actions">
-                            <Button
-                              href={`/courses/${course.id}/edit`}
-                              size="sm"
-                              variant="secondary"
+                          </td>
+                          <td>
+                            <Chip
+                              tone={course.isPublished ? "success" : "warning"}
                             >
-                              Edit
-                            </Button>
-                            {!course.isPublished ? (
-                              <form action={publishCourseAction}>
+                              {course.isPublished ? "Published" : "Draft"}
+                            </Chip>
+                          </td>
+                          <td>
+                            <div className="cat-actions">
+                              <Button
+                                href={`/courses/${course.id}/edit`}
+                                size="sm"
+                                variant="secondary"
+                              >
+                                Edit
+                              </Button>
+                              {!course.isPublished ? (
+                                <form action={publishCourseAction}>
+                                  <input
+                                    name="id"
+                                    type="hidden"
+                                    value={course.id}
+                                  />
+                                  <Button size="sm" type="submit">
+                                    Publish
+                                  </Button>
+                                </form>
+                              ) : null}
+                              <form action={deleteCourseAction}>
                                 <input
                                   name="id"
                                   type="hidden"
                                   value={course.id}
                                 />
-                                <Button size="sm" type="submit">
-                                  Publish
+                                <Button
+                                  size="sm"
+                                  type="submit"
+                                  variant="danger"
+                                >
+                                  Delete
                                 </Button>
                               </form>
-                            ) : null}
-                            <form action={deleteCourseAction}>
-                              <input
-                                name="id"
-                                type="hidden"
-                                value={course.id}
-                              />
-                              <Button size="sm" type="submit" variant="danger">
-                                Delete
-                              </Button>
-                            </form>
-                          </div>
-                        </div>
-                      </Card>
-                    </li>
-                  );
-                })}
-              </ul>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </Stack>
           </section>
         ) : result.ok ? (
           <EmptyState
             description="Create your first course to start building the catalogue."
-            icon="[ ]"
+            icon={<CoursesIcon />}
             title="No courses yet"
           />
         ) : (

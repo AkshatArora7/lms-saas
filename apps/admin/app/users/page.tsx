@@ -1,14 +1,12 @@
 import { redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Badge,
   Button,
   Card,
   Chip,
   EmptyState,
   Grid,
-  Inline,
   PageHeader,
   Stack,
 } from "@lms/ui";
@@ -17,6 +15,7 @@ import type { BadgeTone } from "@lms/ui";
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
 import { getDirectory, type UserStatus } from "../lib/directory";
+import { AppShell, UsersIcon } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
 const usersCss = `
@@ -41,30 +40,30 @@ const usersCss = `
   overflow-wrap: anywhere;
   text-decoration: none;
 }
+.admin-user-name:hover {
+  text-decoration: underline;
+}
 .admin-user-email {
   color: var(--lms-text-muted);
+  font-size: var(--lms-font-size-sm);
   margin: 0;
   overflow-wrap: anywhere;
 }
-.admin-user-list {
+/* Data-dense directory table. The wrapper scrolls horizontally on small
+   screens with a labelled region so columns are never silently clipped. */
+.admin-user-roles {
   display: flex;
-  flex-direction: column;
-  gap: var(--lms-space-3);
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  flex-wrap: wrap;
+  gap: var(--lms-space-1);
 }
-.admin-user-row {
-  align-items: start;
-  display: grid;
-  gap: var(--lms-space-3);
-  grid-template-columns: 1fr;
+.admin-users-table th,
+.admin-users-table td {
+  white-space: nowrap;
 }
-@media (min-width: 720px) {
-  .admin-user-row {
-    align-items: center;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1fr) auto;
-  }
+.admin-users-table td:first-child,
+.admin-users-table th:first-child {
+  white-space: normal;
+  min-width: 180px;
 }
 `;
 
@@ -141,14 +140,27 @@ export default async function AdminUsers() {
                   Directory
                 </h2>
                 {directory.users.length ? (
-                  <ul className="admin-user-list">
-                    {directory.users.map((user) => {
-                      const status = STATUS_META[user.status];
-                      return (
-                        <li key={user.id}>
-                          <Card>
-                            <div className="admin-user-row">
-                              <Stack gap={1}>
+                  <div
+                    aria-label="User directory"
+                    className="lms-table-wrap"
+                    role="region"
+                    tabIndex={0}
+                  >
+                    <table className="lms-table admin-users-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">Name</th>
+                          <th scope="col">Roles</th>
+                          <th scope="col">Org unit</th>
+                          <th scope="col">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {directory.users.map((user) => {
+                          const status = STATUS_META[user.status];
+                          return (
+                            <tr key={user.id}>
+                              <td>
                                 <a
                                   className="admin-user-name"
                                   href={`/users/${user.id}`}
@@ -156,30 +168,41 @@ export default async function AdminUsers() {
                                   {user.name}
                                 </a>
                                 <p className="admin-user-email">{user.email}</p>
-                              </Stack>
-                              <Inline gap={2}>
-                                {user.roles.length ? (
-                                  user.roles.map((role) => (
-                                    <Badge key={role} tone="accent">
-                                      {role}
-                                    </Badge>
-                                  ))
-                                ) : (
-                                  <Badge tone="neutral">No roles</Badge>
-                                )}
-                              </Inline>
-                              <Badge tone="neutral">{user.orgUnit}</Badge>
-                              <Chip tone={status.tone}>{status.label}</Chip>
-                            </div>
-                          </Card>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                              </td>
+                              <td>
+                                <span className="admin-user-roles">
+                                  {user.roles.length ? (
+                                    user.roles.map((role) => (
+                                      <Badge key={role} tone="accent">
+                                        {role}
+                                      </Badge>
+                                    ))
+                                  ) : (
+                                    <Badge tone="neutral">No roles</Badge>
+                                  )}
+                                </span>
+                              </td>
+                              <td>
+                                <Badge tone="neutral">{user.orgUnit}</Badge>
+                              </td>
+                              <td>
+                                <Chip tone={status.tone}>{status.label}</Chip>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
                   <EmptyState
-                    description="Invite people or connect your SIS to populate the directory."
-                    icon="👤"
+                    actions={
+                      <Button href="/users/invite" variant="primary">
+                        Invite user
+                      </Button>
+                    }
+                    description="Invite teammates to this organization to manage their access and roles."
+                    icon={<UsersIcon />}
                     title="No users yet"
                   />
                 )}

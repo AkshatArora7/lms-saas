@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import type { CSSProperties } from "react";
 import {
-  AppShell,
   Badge,
   Button,
   Card,
@@ -21,6 +20,7 @@ import {
   summarizeWeek,
   type ScheduleEntry,
 } from "../lib/schedule";
+import { AppShell, ScheduleIcon } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
 const scheduleCss = `
@@ -367,7 +367,7 @@ export default async function SchedulePage() {
         ) : (
           <EmptyState
             description="Once your school publishes a timetable, your weekly classes will appear here."
-            icon="🗓️"
+            icon={<ScheduleIcon />}
             title="No schedule published"
           />
         )}

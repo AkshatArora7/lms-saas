@@ -1,0 +1,476 @@
+{
+  "$schema-note": "Build-ready dual-tone token spec for @lms/ui. Maps onto existing --lms-* CSS vars + .lms-* component layer (packages/ui/src/theme.ts + styles.ts). TENANT-SAFE: this file defines ONLY neutrals, semantics, type scale, spacing, radius name->value mappings, shadows, focus ring, and the DEFAULT FALLBACK accent. Per-tenant accent/fontFamily/radius are NEVER defined here — they continue to flow from the tenant brand and override the fallback at runtime.",
+  "meta": {
+    "screen": "Foundation — dual-tone design system (@lms/ui token + component layer)",
+    "story": "#<n> (UI modernization: dual-tone design system — see handshake feat/ui-modernization-dual-tone)",
+    "goal": "Give @lms/ui a tenant-safe two-tone foundation so admin renders as a data-dense professional B2B dashboard and web renders as an approachable, credible learner/teacher experience, without ever overriding tenant accent/font/radius.",
+    "primaryUsers": ["org_admin", "super_admin", "instructor", "learner"],
+    "audienceNote": "Primary human audience age ~25-55: default body text must be >=16px; admin keeps 16px base but tightens density via spacing/shadow/radius, not by shrinking body text below 16px.",
+    "mechanism": "tone?: 'admin' | 'web' selected on buildTheme/themeToCssVars/ThemeStyle/AppShell, default 'web' (backward-compatible). tone picks the neutral+semantic set + scale.density below. Tenant accent/font/radius are layered ON TOP and win.",
+    "tenantSafe": {
+      "ownedHere": ["bg", "surface", "surface2", "border", "text", "textMuted", "success", "warning", "danger", "successContrast", "warningContrast", "dangerContrast", "focus", "fontSize", "line", "headingRamp", "spacing", "radiusNameToValue", "shadows", "fallbackAccent"],
+      "neverDefinedHere": ["tenant accent", "tenant accentHover", "tenant accentContrast", "tenant accentSoft", "tenant fontFamily", "tenant radius choice (sharp/soft/round) — tenant only PICKS a name; the name->value table lives here)"]
+    },
+    "wcag": "2.2 AA minimum for both tones; web body text targets AAA (>=7:1) where feasible."
+  },
+
+  "admin": {
+    "intent": "Cool slate/navy neutrals, crisp and calm. Data-dense B2B SaaS dashboard. Tighter density, small crisp shadows, smaller default radius feel. Min WCAG AA.",
+    "color": {
+      "bg": "#F1F4F8",
+      "surface": "#FFFFFF",
+      "surface2": "#E9EDF3",
+      "surface2Hover": "#E1E7EF",
+      "border": "#D4DBE5",
+      "borderStrong": "#B7C1CF",
+      "text": "#0F1B2D",
+      "textMuted": "#516074",
+      "textSubtle": "#73808F",
+      "success": "#0B7A52",
+      "successContrast": "#FFFFFF",
+      "successSoftBg": "#E2F3EC",
+      "successSoftText": "#0A5F40",
+      "warning": "#8A5A00",
+      "warningContrast": "#FFFFFF",
+      "warningSoftBg": "#F6ECD7",
+      "warningSoftText": "#6E4700",
+      "danger": "#C2261B",
+      "dangerContrast": "#FFFFFF",
+      "dangerSoftBg": "#FBE3E1",
+      "dangerSoftText": "#9A1C13",
+      "info": "#0E5FAE",
+      "infoContrast": "#FFFFFF",
+      "infoSoftBg": "#E1ECFA",
+      "infoSoftText": "#0B4C8C",
+      "focus": "#1D5FD6",
+      "overlayScrim": "rgba(15, 27, 45, 0.45)"
+    },
+    "contrastChecks": [
+      { "pair": "text #0F1B2D on surface #FFFFFF", "ratio": "16.9:1", "passes": "AAA" },
+      { "pair": "text #0F1B2D on bg #F1F4F8", "ratio": "15.4:1", "passes": "AAA" },
+      { "pair": "text #0F1B2D on surface2 #E9EDF3", "ratio": "14.0:1", "passes": "AAA" },
+      { "pair": "textMuted #516074 on surface #FFFFFF", "ratio": "6.6:1", "passes": "AA (body), AAA (large)" },
+      { "pair": "textMuted #516074 on bg #F1F4F8", "ratio": "6.0:1", "passes": "AA" },
+      { "pair": "textSubtle #73808F on surface #FFFFFF", "ratio": "4.0:1", "passes": "AA large/UI only — do NOT use for body" },
+      { "pair": "border #D4DBE5 on surface #FFFFFF", "ratio": "1.45:1", "note": "decorative border; non-text. borderStrong used where 3:1 UI boundary needed." },
+      { "pair": "borderStrong #B7C1CF on surface #FFFFFF", "ratio": "1.9:1", "note": "input outline relies on borderStrong + 1.5px; pairs with focus ring for state. For a strict 3:1 control boundary, focus/invalid states carry the contrast." },
+      { "pair": "success #0B7A52 on #FFFFFF", "ratio": "4.6:1", "passes": "AA" },
+      { "pair": "successSoftText #0A5F40 on successSoftBg #E2F3EC", "ratio": "6.2:1", "passes": "AA" },
+      { "pair": "warning #8A5A00 on #FFFFFF", "ratio": "5.5:1", "passes": "AA" },
+      { "pair": "warningSoftText #6E4700 on warningSoftBg #F6ECD7", "ratio": "6.4:1", "passes": "AA" },
+      { "pair": "danger #C2261B on #FFFFFF", "ratio": "5.6:1", "passes": "AA" },
+      { "pair": "dangerSoftText #9A1C13 on dangerSoftBg #FBE3E1", "ratio": "6.5:1", "passes": "AA" },
+      { "pair": "white on success #0B7A52", "ratio": "4.6:1", "passes": "AA" },
+      { "pair": "white on danger #C2261B", "ratio": "5.6:1", "passes": "AA" },
+      { "pair": "white on warning #8A5A00", "ratio": "5.5:1", "passes": "AA" },
+      { "pair": "focus ring #1D5FD6 on surface #FFFFFF", "ratio": "4.6:1", "passes": "AA — meets 3:1 UI-component requirement clearly" },
+      { "pair": "focus ring #1D5FD6 on surface2 #E9EDF3", "ratio": "3.9:1", "passes": ">=3:1 UI" }
+    ],
+    "density": {
+      "fontSize": "16px",
+      "line": "1.5",
+      "spacingMultiplier": 1.0,
+      "componentVerticalPaddingHint": "tight — buttons/inputs keep 44px min touch target but rows and cards use space-3 vertical rhythm",
+      "defaultRadiusName": "sharp",
+      "shadowTier": "crisp"
+    },
+    "shadow": {
+      "sm": "0 1px 2px rgba(15, 27, 45, 0.08)",
+      "md": "0 2px 6px rgba(15, 27, 45, 0.10), 0 1px 2px rgba(15, 27, 45, 0.06)",
+      "lg": "0 8px 20px rgba(15, 27, 45, 0.14)"
+    },
+    "fallbackAccent": {
+      "accent": "#0E5FAE",
+      "accentHover": "#0B4F92",
+      "accentContrast": "#FFFFFF",
+      "accentSoftBg": "#E1ECFA",
+      "note": "Used ONLY when a tenant has not configured an accent. A tenant accent overrides all four. white on #0E5FAE = 5.4:1 (AA)."
+    }
+  },
+
+  "web": {
+    "intent": "Warmer/softer neutrals (navy + green direction), more whitespace, softer radii, calmer. Learner/teacher: approachable but credible. Body text targets WCAG AAA.",
+    "color": {
+      "bg": "#FAFAF8",
+      "surface": "#FFFFFF",
+      "surface2": "#F2F1EC",
+      "surface2Hover": "#EAE9E2",
+      "border": "#E4E2D9",
+      "borderStrong": "#C8C5B8",
+      "text": "#1B2430",
+      "textMuted": "#46505C",
+      "textSubtle": "#6B7480",
+      "success": "#0B7A52",
+      "successContrast": "#FFFFFF",
+      "successSoftBg": "#E4F4ED",
+      "successSoftText": "#0A5F40",
+      "warning": "#8A5A00",
+      "warningContrast": "#FFFFFF",
+      "warningSoftBg": "#F8EFD9",
+      "warningSoftText": "#6E4700",
+      "danger": "#C2261B",
+      "dangerContrast": "#FFFFFF",
+      "dangerSoftBg": "#FCE6E3",
+      "dangerSoftText": "#9A1C13",
+      "info": "#1E4E8C",
+      "infoContrast": "#FFFFFF",
+      "infoSoftBg": "#E6EDF6",
+      "infoSoftText": "#173C6C",
+      "focus": "#1E4E8C",
+      "overlayScrim": "rgba(27, 36, 48, 0.40)"
+    },
+    "contrastChecks": [
+      { "pair": "text #1B2430 on surface #FFFFFF", "ratio": "15.2:1", "passes": "AAA" },
+      { "pair": "text #1B2430 on bg #FAFAF8", "ratio": "14.6:1", "passes": "AAA — body text AAA target met" },
+      { "pair": "text #1B2430 on surface2 #F2F1EC", "ratio": "13.4:1", "passes": "AAA" },
+      { "pair": "textMuted #46505C on surface #FFFFFF", "ratio": "8.3:1", "passes": "AAA — secondary text still AAA" },
+      { "pair": "textMuted #46505C on bg #FAFAF8", "ratio": "8.0:1", "passes": "AAA" },
+      { "pair": "textSubtle #6B7480 on surface #FFFFFF", "ratio": "4.6:1", "passes": "AA — placeholders/captions only, not long body" },
+      { "pair": "border #E4E2D9 on surface #FFFFFF", "ratio": "1.3:1", "note": "decorative; borderStrong for boundaries needing visibility" },
+      { "pair": "borderStrong #C8C5B8 on surface #FFFFFF", "ratio": "1.7:1", "note": "soft control border; focus/invalid carry state contrast" },
+      { "pair": "success #0B7A52 on #FFFFFF", "ratio": "4.6:1", "passes": "AA" },
+      { "pair": "successSoftText #0A5F40 on successSoftBg #E4F4ED", "ratio": "6.1:1", "passes": "AA" },
+      { "pair": "warning #8A5A00 on #FFFFFF", "ratio": "5.5:1", "passes": "AA" },
+      { "pair": "danger #C2261B on #FFFFFF", "ratio": "5.6:1", "passes": "AA" },
+      { "pair": "dangerSoftText #9A1C13 on dangerSoftBg #FCE6E3", "ratio": "6.4:1", "passes": "AA" },
+      { "pair": "white on info/focus #1E4E8C", "ratio": "8.2:1", "passes": "AAA" },
+      { "pair": "focus ring #1E4E8C on surface #FFFFFF", "ratio": "8.2:1", "passes": "AAA — highly visible on light warm surfaces" },
+      { "pair": "focus ring #1E4E8C on surface2 #F2F1EC", "ratio": "7.2:1", "passes": "AAA" }
+    ],
+    "density": {
+      "fontSize": "16px",
+      "line": "1.6",
+      "spacingMultiplier": 1.0,
+      "componentVerticalPaddingHint": "roomy — cards/sections use space-5/space-6 vertical rhythm; generous whitespace",
+      "defaultRadiusName": "soft",
+      "shadowTier": "soft"
+    },
+    "shadow": {
+      "sm": "0 1px 3px rgba(27, 36, 48, 0.06)",
+      "md": "0 6px 16px rgba(27, 36, 48, 0.10)",
+      "lg": "0 16px 40px rgba(27, 36, 48, 0.14)"
+    },
+    "fallbackAccent": {
+      "accent": "#1E4E8C",
+      "accentHover": "#173C6C",
+      "accentContrast": "#FFFFFF",
+      "accentSoftBg": "#E6EDF6",
+      "note": "Used ONLY when a tenant has not configured an accent. Tenant accent overrides all four. white on #1E4E8C = 8.2:1 (AAA)."
+    }
+  },
+
+  "scale": {
+    "note": "Shared across both tones except where density (above) overrides fontSize/line/defaultRadiusName/shadowTier. Spacing rhythm and radius name->value mapping are identical so a tenant's radius choice resolves the same numeric value in either app; tone only changes the DEFAULT name when the tenant has not chosen one.",
+    "typography": {
+      "fontFamilyFallback": "system-ui, -apple-system, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "fontFamilyNote": "This is the FALLBACK only. Tenant fontFamily overrides it. Do not hardcode a brand font.",
+      "baseSize": "16px",
+      "rationale": "16px base chosen for the 25-55 audience and to satisfy web AAA body; admin keeps 16px body and gains density through spacing/shadow/radius, not smaller text.",
+      "scale": {
+        "xs": "12px",
+        "sm": "14px",
+        "base": "16px",
+        "lg": "18px",
+        "xl": "20px",
+        "2xl": "24px"
+      },
+      "headingRamp": {
+        "note": "Use clamp() for fluid headings; px values are the upper bound. h1 already fluid in .lms-page-header__title (clamp(22px,5vw,32px)).",
+        "h1": { "size": "clamp(24px, 5vw, 32px)", "weight": 700, "line": 1.2 },
+        "h2": { "size": "clamp(20px, 4vw, 26px)", "weight": 700, "line": 1.25 },
+        "h3": { "size": "clamp(18px, 3vw, 21px)", "weight": 600, "line": 1.3 },
+        "h4": { "size": "16px", "weight": 600, "line": 1.35 },
+        "bodyLarge": { "size": "18px", "weight": 400, "line": 1.6 },
+        "body": { "size": "16px", "weight": 400, "line": "tone-dependent (admin 1.5 / web 1.6)" },
+        "small": { "size": "14px", "weight": 400, "line": 1.45 },
+        "caption": { "size": "12px", "weight": 500, "line": 1.4 }
+      },
+      "weight": { "regular": 400, "medium": 500, "semibold": 600, "bold": 700 },
+      "lineHeight": { "tight": 1.2, "snug": 1.35, "normal": 1.5, "relaxed": 1.6 }
+    },
+    "space": {
+      "scale": { "1": "4px", "2": "8px", "3": "12px", "4": "16px", "5": "24px", "6": "32px", "7": "48px", "8": "64px" },
+      "unit": "px",
+      "note": "Matches existing --lms-space-1..8. Density is expressed via WHICH step a component reaches for (admin smaller, web larger), not by changing the step values."
+    },
+    "radius": {
+      "note": "name->value mapping. Tenant chooses ONE name (sharp/soft/round); tone supplies the DEFAULT name when none chosen (admin=sharp, web=soft). The numeric values per name live here and are tenant-safe.",
+      "nameToValue": {
+        "sharp": { "sm": "4px", "md": "6px", "lg": "10px" },
+        "soft": { "sm": "8px", "md": "12px", "lg": "16px" },
+        "round": { "sm": "12px", "md": "18px", "lg": "26px" }
+      },
+      "pill": "999px"
+    },
+    "shadowTiers": {
+      "note": "Two named tiers; tone picks one (admin=crisp, web=soft). Both expose sm/md/lg consumed by --lms-shadow-sm/md and a new --lms-shadow-lg.",
+      "crisp": {
+        "sm": "0 1px 2px rgba(15, 27, 45, 0.08)",
+        "md": "0 2px 6px rgba(15, 27, 45, 0.10), 0 1px 2px rgba(15, 27, 45, 0.06)",
+        "lg": "0 8px 20px rgba(15, 27, 45, 0.14)"
+      },
+      "soft": {
+        "sm": "0 1px 3px rgba(27, 36, 48, 0.06)",
+        "md": "0 6px 16px rgba(27, 36, 48, 0.10)",
+        "lg": "0 16px 40px rgba(27, 36, 48, 0.14)"
+      }
+    },
+    "motion": {
+      "hoverTransition": "150ms ease (admin) / 200ms ease (web)",
+      "range": "150-300ms",
+      "easing": "cubic-bezier(0.2, 0, 0, 1)",
+      "reducedMotion": "Under prefers-reduced-motion: reduce, disable transforms/animations; keep instant state color changes and a static focus ring (extend the existing @media block in styles.ts).",
+      "focusRing": "3px solid var(--lms-focus); outline-offset: 2px (keep existing). Visible on ALL interactive elements via :focus-visible."
+    }
+  },
+
+  "newCssVars": {
+    "note": "Vars frontend-dev should ADD to themeToCssVars() so component specs below resolve. Existing vars keep their names; these extend the set. Soft semantic backgrounds are emitted as solid tone-specific values (not rgba of tenant accent) so they stay tenant-independent and legible.",
+    "add": [
+      "--lms-surface-2-hover",
+      "--lms-border-strong",
+      "--lms-text-subtle",
+      "--lms-shadow-lg",
+      "--lms-success-contrast",
+      "--lms-warning-contrast",
+      "--lms-success-soft-bg", "--lms-success-soft-text",
+      "--lms-warning-soft-bg", "--lms-warning-soft-text",
+      "--lms-danger-soft-bg", "--lms-danger-soft-text",
+      "--lms-info", "--lms-info-contrast", "--lms-info-soft-bg", "--lms-info-soft-text",
+      "--lms-overlay-scrim"
+    ],
+    "changed": [
+      "--lms-font-size: 15px -> 16px",
+      "--lms-line: 1.5 -> tone-dependent (admin 1.5 / web 1.6)",
+      "--lms-shadow-sm / --lms-shadow-md: now tone-dependent (crisp vs soft tier)"
+    ],
+    "migrationNote": "Badge/alert rules in styles.ts currently hardcode rgba(15,123,108,...) etc. Replace those with the new --lms-*-soft-bg/--lms-*-soft-text vars so they follow the tone and stay tenant-safe."
+  },
+
+  "components": [
+    {
+      "name": "Button",
+      "selector": ".lms-btn (+ --primary/--secondary/--ghost/--danger, --sm/--full)",
+      "purpose": "Primary action affordance; primary uses TENANT accent, all other tokens tone-neutral.",
+      "minTouchTarget": "44x44px (existing min-height:44px kept; --sm is 36px, use only in dense toolbars with adequate spacing)",
+      "transition": "background/color/border-color per scale.motion.hoverTransition; none under reduced-motion",
+      "variants": {
+        "primary": {
+          "default": "bg var(--lms-accent); color var(--lms-accent-contrast); border var(--lms-accent)",
+          "hover": "bg var(--lms-accent-hover); border var(--lms-accent-hover)",
+          "focus-visible": "outline 3px solid var(--lms-focus); outline-offset 2px",
+          "disabled": "opacity .5; cursor not-allowed; pointer-events none"
+        },
+        "secondary": {
+          "default": "bg var(--lms-surface); color var(--lms-text); border 1px solid var(--lms-border-strong)",
+          "hover": "bg var(--lms-surface-2)",
+          "focus-visible": "outline 3px solid var(--lms-focus); outline-offset 2px",
+          "disabled": "opacity .5; cursor not-allowed"
+        },
+        "ghost": {
+          "default": "bg transparent; color var(--lms-text); border transparent",
+          "hover": "bg var(--lms-surface-2)",
+          "focus-visible": "outline 3px solid var(--lms-focus); outline-offset 2px",
+          "disabled": "opacity .5; cursor not-allowed"
+        },
+        "danger": {
+          "default": "bg var(--lms-danger); color var(--lms-danger-contrast); border var(--lms-danger)",
+          "hover": "bg darken(danger) — frontend may use a slightly darker danger or filter:brightness(0.92)",
+          "focus-visible": "outline 3px solid var(--lms-focus); outline-offset 2px",
+          "disabled": "opacity .5; cursor not-allowed"
+        }
+      },
+      "toneNote": "secondary border bumped from --lms-border to --lms-border-strong so the control boundary stays perceivable in both tones (border alone is decorative-contrast only)."
+    },
+    {
+      "name": "Input / Select / Textarea",
+      "selector": ".lms-input, .lms-select, .lms-textarea (+ .lms-field label/help/error)",
+      "purpose": "Text entry; legible boundary + unmistakable focus/invalid states.",
+      "minTouchTarget": "min-height 44px (kept)",
+      "states": {
+        "default": "bg var(--lms-surface); color var(--lms-text); border 1px solid var(--lms-border-strong); radius var(--lms-radius-sm)",
+        "placeholder": "color var(--lms-text-subtle) — captions-grade contrast, never used for entered values",
+        "hover": "border-color var(--lms-text-subtle)",
+        "focus-visible": "outline 3px solid var(--lms-focus); outline-offset 2px; border-color var(--lms-focus)",
+        "invalid": "border-color var(--lms-danger); aria-invalid=true; field error text color var(--lms-danger) with leading inline-SVG warning icon (not emoji)",
+        "disabled": "opacity .6; cursor not-allowed; bg var(--lms-surface-2)"
+      },
+      "labelSpec": "label var(--lms-text) weight 600 size 14px; help var(--lms-text-muted) 13px; error var(--lms-danger) 13px",
+      "a11y": "Every control has an associated <label>; error referenced via aria-describedby; invalid via aria-invalid."
+    },
+    {
+      "name": "Card / Surface",
+      "selector": ".lms-card (+ .lms-card--interactive)",
+      "purpose": "Content container; interactive variant is a clickable surface (links to detail).",
+      "states": {
+        "static": "bg var(--lms-surface); border 1px solid var(--lms-border); radius var(--lms-radius-md); shadow var(--lms-shadow-sm); padding admin space-4 / web space-5",
+        "interactive-default": "cursor pointer; same as static",
+        "interactive-hover": "shadow var(--lms-shadow-md); admin translateY(-1px) / web translateY(-2px); under reduced-motion no transform",
+        "interactive-focus-visible": "outline 3px solid var(--lms-focus); outline-offset 2px"
+      },
+      "toneNote": "admin cards = crisp shadow + sharp radius + tighter padding; web cards = soft shadow + soft radius + roomier padding. Pure token-driven, no forked CSS."
+    },
+    {
+      "name": "Table / DataTable row",
+      "selector": ".lms-table, .lms-table__row (NEW — frontend adds; admin-primary but available to both)",
+      "purpose": "Data-dense listing (admin users/reports). Scannable rows with hover + optional zebra.",
+      "anatomy": ["thead (sticky on desktop)", "th sortable", "tbody rows", "td cells"],
+      "states": {
+        "header": "bg var(--lms-surface-2); color var(--lms-text-muted); font-size 14px; weight 600; text-transform none; border-bottom 1px solid var(--lms-border-strong)",
+        "row-default": "bg var(--lms-surface); border-bottom 1px solid var(--lms-border); td padding admin space-2 space-3 / web space-3 space-4",
+        "row-zebra": "optional: even rows bg var(--lms-surface-2) at low emphasis — admin default ON, web default OFF",
+        "row-hover": "bg var(--lms-surface-2-hover); transition background per motion; cursor pointer when row is a link",
+        "row-focus-within": "outline 2px solid var(--lms-focus); outline-offset -2px",
+        "sort-active-th": "color var(--lms-text); inline-SVG caret indicates asc/desc"
+      },
+      "responsive": {
+        "phone": "stack to card-list (label:value pairs) OR horizontal scroll container with role=region aria-label + visible affordance; never silent overflow",
+        "tablet": "condensed columns, hide low-priority columns",
+        "desktop": "full table, sticky header"
+      },
+      "a11y": "Native <table> with <th scope>; sort controls are <button> in <th> with aria-sort; row links wrap the primary cell, not the whole row, for screen-reader clarity."
+    },
+    {
+      "name": "Badge",
+      "selector": ".lms-badge (+ --neutral/--accent/--success/--danger/--warning, add --info)",
+      "purpose": "Compact status label.",
+      "tones": {
+        "neutral": "bg var(--lms-surface-2); color var(--lms-text-muted)",
+        "accent": "bg var(--lms-accent-soft); color var(--lms-accent) — tenant accent (only accent-derived token in this list)",
+        "success": "bg var(--lms-success-soft-bg); color var(--lms-success-soft-text)",
+        "warning": "bg var(--lms-warning-soft-bg); color var(--lms-warning-soft-text)",
+        "danger": "bg var(--lms-danger-soft-bg); color var(--lms-danger-soft-text)",
+        "info": "bg var(--lms-info-soft-bg); color var(--lms-info-soft-text)"
+      },
+      "note": "All soft pairs verified >=6:1 (see contrastChecks). Replaces today's hardcoded rgba badge colors with tone-aware vars."
+    },
+    {
+      "name": "Alert",
+      "selector": ".lms-alert (+ --info/--success/--warning/--danger)",
+      "purpose": "Inline contextual message; the natural home for permission-denied and error flows.",
+      "tones": {
+        "info": "bg var(--lms-info-soft-bg); border 1px solid (info @ ~25% or --lms-border-strong); body var(--lms-text)",
+        "success": "bg var(--lms-success-soft-bg); body var(--lms-success-soft-text)",
+        "warning": "bg var(--lms-warning-soft-bg); body var(--lms-warning-soft-text)",
+        "danger": "bg var(--lms-danger-soft-bg); body var(--lms-danger-soft-text)"
+      },
+      "anatomy": ["leading inline-SVG icon (per tone, NOT emoji)", "body text", "optional action button"],
+      "a11y": "role=status (info/success) or role=alert (warning/danger); icon aria-hidden, meaning carried by text."
+    },
+    {
+      "name": "Nav / Topbar",
+      "selector": ".lms-topbar, .lms-shell, .lms-shell__main, .lms-topbar__name (NEW: .lms-nav__link)",
+      "purpose": "App shell chrome; persistent brand + primary nav + actions.",
+      "states": {
+        "topbar": "bg var(--lms-surface); border-bottom 1px solid var(--lms-border); admin min-height 56px tight / web min-height 60px",
+        "brandName": "color var(--lms-accent); 13px; uppercase; letter-spacing .04em (kept)",
+        "nav-link-default": "color var(--lms-text-muted); padding space-2 space-3; radius var(--lms-radius-sm)",
+        "nav-link-hover": "color var(--lms-text); bg var(--lms-surface-2)",
+        "nav-link-active": "color var(--lms-accent); bg var(--lms-accent-soft); aria-current=page",
+        "nav-link-focus-visible": "outline 3px solid var(--lms-focus); outline-offset 2px"
+      },
+      "toneNote": "admin shell may carry a left sidebar nav for data-dense IA; web shell stays top-nav + roomy main. Same tokens, layout differs per app composition (not forked CSS in @lms/ui).",
+      "responsive": "topbar wraps gracefully; on phone collapse nav into a disclosure (<button aria-expanded>) — no horizontal overflow at 360px.",
+      "a11y": "<header> landmark + <nav aria-label>; main is <main>; active link aria-current=page."
+    },
+    {
+      "name": "EmptyState",
+      "selector": ".lms-empty-state (icon slot becomes inline SVG)",
+      "purpose": "Communicate 'nothing here yet' with a clear next action; replaces emoji icons (👤/📖).",
+      "anatomy": ["inline-SVG illustration/icon (from emptyStateIcons below)", "title", "description (real copy)", "actions"],
+      "iconSpec": "render chosen emptyStateIcons SVG sized ~40-48px, stroke=var(--lms-text-subtle), aria-hidden=true; remove .lms-empty-state__icon font-size emoji styling",
+      "content": {
+        "users": { "title": "No users yet", "desc": "Invite teammates to this organization to manage their access and roles.", "action": "Invite user" },
+        "courses": { "title": "No courses yet", "desc": "Create your first course to start building lessons and enrolling learners.", "action": "Create course" },
+        "content": { "title": "No content here", "desc": "Add lessons, files, or assignments to fill out this section.", "action": "Add content" },
+        "searchNone": { "title": "No results found", "desc": "Try a different search term or clear your filters.", "action": "Clear filters" },
+        "generic": { "title": "Nothing to show", "desc": "There's nothing here yet. Check back later or take an action to get started.", "action": null }
+      }
+    }
+  ],
+
+  "emptyStateIcons": {
+    "note": "Inline SVG path data, Heroicons/Lucide-style outline. Render in a 24x24 viewBox, fill='none', stroke='currentColor' (currentColor = --lms-text-subtle via inline style), stroke-width=1.6, stroke-linecap='round', stroke-linejoin='round', aria-hidden='true'. Scale up via width/height ~40-48px. NO emoji.",
+    "viewBox": "0 0 24 24",
+    "icons": {
+      "users": {
+        "desc": "Two people (team)",
+        "paths": [
+          "M15 19.5v-1.5a3.5 3.5 0 0 0-3.5-3.5H6.5A3.5 3.5 0 0 0 3 18v1.5",
+          "M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
+          "M21 19.5V18a3.5 3.5 0 0 0-2.6-3.4",
+          "M15.5 5.2a3 3 0 0 1 0 5.6"
+        ]
+      },
+      "courses": {
+        "desc": "Open book",
+        "paths": [
+          "M12 6.5C10.5 5.3 8.5 5 6 5 5.4 5 5 5.4 5 6v11c0 .6.4 1 1 1 2.5 0 4.5.3 6 1.5",
+          "M12 6.5C13.5 5.3 15.5 5 18 5c.6 0 1 .4 1 1v11c0 .6-.4 1-1 1-2.5 0-4.5.3-6 1.5",
+          "M12 6.5v13"
+        ]
+      },
+      "content": {
+        "desc": "Document with lines",
+        "paths": [
+          "M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V8z",
+          "M14 3v4.5A1.5 1.5 0 0 0 15.5 9H19",
+          "M9 13h6",
+          "M9 16.5h6",
+          "M9 9.5h2"
+        ]
+      },
+      "searchNone": {
+        "desc": "Magnifier (no results)",
+        "paths": [
+          "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z",
+          "M20 20l-4-4",
+          "M9 11h4"
+        ]
+      },
+      "generic": {
+        "desc": "Empty tray / inbox",
+        "paths": [
+          "M4 13l2.2-7.3A1.5 1.5 0 0 1 7.6 4.6h8.8a1.5 1.5 0 0 1 1.4 1.1L20 13",
+          "M4 13v4.5A1.5 1.5 0 0 0 5.5 19h13a1.5 1.5 0 0 0 1.5-1.5V13",
+          "M4 13h4l1.5 2.2h5L16 13h4"
+        ]
+      }
+    },
+    "semanticInlineIcons": {
+      "note": "For Alert/Field error icons — same render rules.",
+      "warning": ["M12 3.5 2.5 20h19L12 3.5Z", "M12 9.5v4", "M12 16.5h.01"],
+      "danger": ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 8v5", "M12 16h.01"],
+      "success": ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M8.5 12.2l2.4 2.4 4.6-4.8"],
+      "info": ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 11v5", "M12 8h.01"]
+    }
+  },
+
+  "flows": [
+    "Happy path — admin data-dense table renders with hover/zebra/sort; web cards render roomy with soft shadows; tenant accent applied on primary buttons/links only.",
+    "Empty state — inline-SVG EmptyState with real copy and a primary action (no emoji).",
+    "Loading — existing .lms-skeleton + .lms-spinner; reduced-motion stops shimmer/spin (kept).",
+    "Error — Alert --danger with inline-SVG icon + retry action.",
+    "Permission denied (non-admin) — Alert --warning/--danger: 'You don't have access to this area. Contact your organization admin if you think this is a mistake.' inside a Card; no data leak.",
+    "Disabled — buttons/inputs opacity-reduced, pointer-events none, aria-disabled."
+  ],
+
+  "accessibility": {
+    "wcag": "2.2 AA (web body targets AAA)",
+    "contrastMin": "4.5:1 body text / 3:1 large text & UI components & focus ring",
+    "focusOrder": "logical DOM order; visible :focus-visible ring (3px solid var(--lms-focus), offset 2px) on every interactive element in BOTH tones",
+    "focusRingContrast": "admin focus #1D5FD6 >=3.9:1 on all surfaces; web focus #1E4E8C >=7:1 on all surfaces",
+    "motion": "respect prefers-reduced-motion (extend existing @media block); transitions 150-300ms otherwise",
+    "touchTargets": "44x44px min for all controls (existing min-height kept)",
+    "semantics": "header/nav/main/footer landmarks; h1->h6 ramp; native controls labelled; aria only where native won't do; icons aria-hidden with text equivalents",
+    "noColorOnly": "status never conveyed by color alone — badges/alerts carry text + inline-SVG icon"
+  },
+
+  "openQuestions": [
+    "Default tone per app: admin app should pass tone='admin', web app tone='web'. Confirm AppShell default stays 'web' for backward compatibility (per orchestrator decision) — frontend to thread tone at each app's AppShell call site.",
+    "Admin IA: does admin want a persistent left sidebar nav (recommended for data density) or stay top-nav? Affects shell composition only, not @lms/ui tokens. Needs product confirmation.",
+    "Table component is net-new in @lms/ui (today screens likely roll their own). Confirm we standardize .lms-table here vs leaving tables app-local. Recommended: add it to @lms/ui for consistency.",
+    "Dark mode: spec'd as stretch only (handshake). If pursued, both tones need a parallel dark neutral+semantic set behind prefers-color-scheme — out of scope for AC sign-off.",
+    "Zebra striping default: proposed admin ON / web OFF — confirm with product, easily toggled via a modifier class."
+  ]
+}

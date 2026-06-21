@@ -1,6 +1,5 @@
 import { notFound, redirect } from "next/navigation";
 import {
-  AppShell,
   Badge,
   Button,
   Card,
@@ -17,6 +16,7 @@ import {
   type ContentItemStatus,
   type ContentItemType,
 } from "../../lib/dashboard";
+import { AppShell, ContentIcon } from "../../lib/ui";
 import SignOutButton from "../../sign-out-button";
 
 /**
@@ -237,7 +237,7 @@ export default async function CoursePage({
             ) : (
               <EmptyState
                 description="Content for this course hasn't been published yet."
-                icon="📖"
+                icon={<ContentIcon />}
                 title="No modules yet"
               />
             )}

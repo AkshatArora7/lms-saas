@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Badge,
   BrandMark,
   Button,
@@ -15,13 +14,15 @@ import {
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
 import { getTenant, getTenantBranding } from "../lib/tenant-api";
+import { AppShell } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
 const brandingCss = `
 .brand-token {
   color: var(--lms-text-muted);
-  font-size: 13px;
+  font-size: var(--lms-font-size-sm);
   margin: 0;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 .brand-token strong {

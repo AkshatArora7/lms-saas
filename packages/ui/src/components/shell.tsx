@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import { ThemeStyle, UIStyles } from "../styles.js";
-import type { Brand } from "../theme.js";
+import type { Brand, Tone } from "../theme.js";
 import { Container } from "./layout.js";
 
 export interface BrandMarkProps {
@@ -12,6 +12,7 @@ export interface BrandMarkProps {
 
 export interface AppShellProps {
   brand: Brand;
+  tone?: Tone;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -27,12 +28,18 @@ export function BrandMark({ brand, size = 36, className }: BrandMarkProps): Reac
   );
 }
 
-export function AppShell({ brand, actions, children, className }: AppShellProps): ReactElement {
+export function AppShell({
+  brand,
+  tone = "web",
+  actions,
+  children,
+  className,
+}: AppShellProps): ReactElement {
   return (
     <>
       <UIStyles />
-      <ThemeStyle brand={brand} />
-      <div className={joinClassNames("lms-theme", "lms-shell", className)}>
+      <ThemeStyle brand={brand} tone={tone} />
+      <div className={joinClassNames("lms-theme", "lms-shell", className)} data-tone={tone}>
         <header className="lms-topbar">
           <div className="lms-topbar__brand">
             <BrandMark brand={brand} />

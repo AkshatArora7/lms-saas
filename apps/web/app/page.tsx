@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import type { CSSProperties, ReactNode } from "react";
 import {
-  AppShell,
   Avatar,
   Badge,
   Button,
@@ -14,6 +13,7 @@ import {
 } from "@lms/ui";
 
 import { getBranding } from "./lib/branding";
+import { AppShell, CoursesIcon, GenericIcon, SuccessIcon } from "./lib/ui";
 import { getSession } from "./lib/auth";
 import { getDashboardCourses } from "./lib/dashboard";
 import {
@@ -266,7 +266,7 @@ export default async function Home() {
                 ) : (
                   <EmptyState
                     description="Once you're enrolled, your courses will appear here."
-                    icon="📚"
+                    icon={<CoursesIcon />}
                     title="No courses yet"
                   />
                 )}
@@ -314,7 +314,7 @@ export default async function Home() {
                     ) : (
                       <EmptyState
                         description="You're all caught up. New work will show up here."
-                        icon="✅"
+                        icon={<SuccessIcon />}
                         title="Nothing due"
                       />
                     )}
@@ -372,7 +372,7 @@ export default async function Home() {
                     ) : (
                       <EmptyState
                         description="School and course updates will appear here."
-                        icon="📣"
+                        icon={<GenericIcon />}
                         title="No announcements"
                       />
                     )}

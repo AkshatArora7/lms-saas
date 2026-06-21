@@ -2,10 +2,10 @@ import { redirect } from "next/navigation";
 import type { ReactElement } from "react";
 import {
   Alert,
-  AppShell,
   Badge,
   Button,
   Card,
+  EmptyState,
   Grid,
   Inline,
   PageHeader,
@@ -20,6 +20,7 @@ import {
   type OrgUnit,
   type OrgUnitType,
 } from "../lib/org-units";
+import { AppShell, OrgUnitsIcon } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
 const orgCss = `
@@ -37,31 +38,49 @@ const orgCss = `
   color: var(--lms-text-muted);
   margin: 0;
 }
+/* Data-dense org hierarchy. The recursive tree is the correct representation
+   (parent -> children), so it stays a nested <ul> rather than a flat table.
+   Admin density: tighter rhythm via space-1, a left rail on nested levels, and
+   a subtle hover affordance on each node row so the tree scans like the rest of
+   the admin console. All values are tokens — fully white-label. */
 .org-tree,
 .org-tree ul {
   display: flex;
   flex-direction: column;
-  gap: var(--lms-space-2);
+  gap: var(--lms-space-1);
   list-style: none;
   margin: 0;
   padding: 0;
 }
 .org-tree ul {
   border-left: 1px solid var(--lms-border);
-  margin-top: var(--lms-space-2);
+  margin-top: var(--lms-space-1);
   padding-left: var(--lms-space-3);
 }
 .org-node {
   align-items: center;
+  border-radius: var(--lms-radius-sm);
   display: flex;
   flex-wrap: wrap;
   gap: var(--lms-space-2);
   justify-content: space-between;
+  min-width: 0;
+  padding: var(--lms-row-pad-y) var(--lms-space-2);
+  transition: background-color 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+.org-node:hover {
+  background: var(--lms-surface-2);
 }
 .org-node__name {
   font-weight: 600;
   margin: 0;
+  min-width: 0;
   overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: reduce) {
+  .org-node {
+    transition: none;
+  }
 }
 `;
 
@@ -183,10 +202,11 @@ export default async function AdminOrgUnits() {
                 </ul>
               </Card>
             ) : (
-              <Alert tone="info">
-                No org units yet. Connect your SIS or create units to build the
-                hierarchy.
-              </Alert>
+              <EmptyState
+                description="Connect your SIS or create units to build the hierarchy of districts, schools, departments, and grades."
+                icon={<OrgUnitsIcon />}
+                title="No org units yet"
+              />
             )}
           </Stack>
         </section>

@@ -606,21 +606,36 @@ services:
       PORT: 3000
       HOSTNAME: "0.0.0.0"
       IDENTITY_URL: http://identity:4001
+      USER_ORG_SERVICE_URL: http://user-org:4003
       ENROLLMENT_SERVICE_URL: http://enrollment:4004
+      COURSE_SERVICE_URL: http://course:4005
+      CONTENT_SERVICE_URL: http://content:4006
       ASSIGNMENT_SERVICE_URL: http://assignment:4007
+      GRADING_SERVICE_URL: http://grading:4009
       DISCUSSION_SERVICE_URL: http://discussion:4010
       ANNOUNCEMENT_SERVICE_URL: http://announcement:4011
+      CALENDAR_SERVICE_URL: http://calendar:4013
       ATTENDANCE_SERVICE_URL: http://attendance:4025
     depends_on:
       identity:
         condition: service_healthy
+      user-org:
+        condition: service_healthy
       enrollment:
         condition: service_healthy
+      course:
+        condition: service_healthy
+      content:
+        condition: service_healthy
       assignment:
+        condition: service_healthy
+      grading:
         condition: service_healthy
       discussion:
         condition: service_healthy
       announcement:
+        condition: service_healthy
+      calendar:
         condition: service_healthy
       attendance:
         condition: service_healthy

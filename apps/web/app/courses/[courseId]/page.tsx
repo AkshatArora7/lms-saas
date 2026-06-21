@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation";
-import type { CSSProperties } from "react";
 import {
   AppShell,
   Badge,
@@ -7,7 +6,6 @@ import {
   Card,
   Chip,
   EmptyState,
-  ProgressBar,
   Stack,
 } from "@lms/ui";
 import type { BadgeTone } from "@lms/ui";
@@ -137,14 +135,6 @@ const COURSE_STYLES = `
 }
 `;
 
-const progressRowStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "var(--lms-space-2)",
-  flexWrap: "wrap",
-};
-
 const TYPE_LABEL: Record<ContentItemType, string> = {
   lesson: "Lesson",
   assignment: "Assignment",
@@ -165,7 +155,11 @@ export default async function CoursePage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
-  const course = getCourseDetail(params.courseId, session.tenantId);
+  const course = await getCourseDetail(
+    params.courseId,
+    session.userId,
+    session.tenantId,
+  );
   if (!course) notFound();
 
   return (
@@ -185,8 +179,8 @@ export default async function CoursePage({
                 <p className="lms-cd__desc">{course.description}</p>
               ) : null}
               <div className="lms-cd__meta">
-                <Badge tone="neutral">{course.code}</Badge>
-                <Badge tone="neutral">{course.term}</Badge>
+                {course.code ? <Badge tone="neutral">{course.code}</Badge> : null}
+                {course.term ? <Badge tone="neutral">{course.term}</Badge> : null}
                 <Chip tone="accent">{course.role}</Chip>
               </div>
             </div>
@@ -255,29 +249,31 @@ export default async function CoursePage({
                 <h2 className="lms-cd__section-heading" id="overview-heading">
                   Overview
                 </h2>
-                <Stack gap={2}>
-                  <div style={progressRowStyle}>
-                    <span className="lms-cd__ov-label">Course progress</span>
-                    <Badge tone="accent">{course.progress}% complete</Badge>
-                  </div>
-                  <ProgressBar
-                    label={`${course.title} progress`}
-                    value={course.progress}
-                  />
-                </Stack>
                 <Stack gap={3}>
                   <div className="lms-cd__ov-row">
-                    <span className="lms-cd__ov-label">Instructor</span>
-                    <span className="lms-cd__ov-value">{course.instructor}</span>
+                    <span className="lms-cd__ov-label">Your role</span>
+                    <span className="lms-cd__ov-value">{course.role}</span>
                   </div>
-                  <div className="lms-cd__ov-row">
-                    <span className="lms-cd__ov-label">Term</span>
-                    <span className="lms-cd__ov-value">{course.term}</span>
-                  </div>
-                  <div className="lms-cd__ov-row">
-                    <span className="lms-cd__ov-label">Course code</span>
-                    <span className="lms-cd__ov-value">{course.code}</span>
-                  </div>
+                  {course.instructor ? (
+                    <div className="lms-cd__ov-row">
+                      <span className="lms-cd__ov-label">Instructor</span>
+                      <span className="lms-cd__ov-value">
+                        {course.instructor}
+                      </span>
+                    </div>
+                  ) : null}
+                  {course.term ? (
+                    <div className="lms-cd__ov-row">
+                      <span className="lms-cd__ov-label">Term</span>
+                      <span className="lms-cd__ov-value">{course.term}</span>
+                    </div>
+                  ) : null}
+                  {course.code ? (
+                    <div className="lms-cd__ov-row">
+                      <span className="lms-cd__ov-label">Course code</span>
+                      <span className="lms-cd__ov-value">{course.code}</span>
+                    </div>
+                  ) : null}
                 </Stack>
               </Stack>
             </Card>

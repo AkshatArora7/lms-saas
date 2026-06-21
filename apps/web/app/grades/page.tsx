@@ -181,7 +181,7 @@ export default async function Grades() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
-  const grades = getCourseGrades(session.tenantId);
+  const grades = await getCourseGrades(session.userId, session.tenantId);
   const summary = summarizeGrades(grades);
 
   return (
@@ -232,7 +232,9 @@ export default async function Grades() {
                         <div className="grd-head">
                           <div className="grd-head__main">
                             <h3 className="grd-title">{grade.title}</h3>
-                            <Badge tone="neutral">{grade.code}</Badge>
+                            {grade.code ? (
+                              <Badge tone="neutral">{grade.code}</Badge>
+                            ) : null}
                           </div>
                           <div
                             className="grd-grade"

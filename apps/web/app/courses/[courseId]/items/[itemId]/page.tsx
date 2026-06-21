@@ -294,7 +294,12 @@ export default async function ContentItemPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
-  const view = getContentItem(params.courseId, params.itemId, session.tenantId);
+  const view = await getContentItem(
+    params.courseId,
+    params.itemId,
+    session.userId,
+    session.tenantId,
+  );
   if (!view) notFound();
 
   const { course, module, item } = view;

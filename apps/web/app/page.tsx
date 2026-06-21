@@ -10,7 +10,6 @@ import {
   EmptyState,
   Grid,
   Inline,
-  ProgressBar,
   Stack,
 } from "@lms/ui";
 
@@ -178,16 +177,19 @@ export default async function Home() {
   if (!session) redirect("/login");
 
   const brand = getBranding(session.tenantId);
-  const courses = getDashboardCourses(session.tenantId);
+  const courses = await getDashboardCourses(session.userId, session.tenantId);
 
-  const allAnnouncements = getAnnouncements(session.tenantId);
+  const allAnnouncements = await getAnnouncements(
+    session.userId,
+    session.tenantId,
+  );
   const announcementsSummary = summarizeAnnouncements(allAnnouncements);
   const recentAnnouncements = allAnnouncements.slice(0, 3);
 
-  const upNext: AssignmentView[] = getAssignments(session.tenantId)
-    .filter(
-      (a) => a.status === "overdue" || a.status === "not_started",
-    )
+  const upNext: AssignmentView[] = (
+    await getAssignments(session.userId, session.tenantId)
+  )
+    .filter((a) => a.status === "overdue" || a.status === "not_started")
     .slice(0, 4);
 
   return (
@@ -243,23 +245,19 @@ export default async function Home() {
                         key={course.id}
                       >
                         <Stack gap={3}>
-                          <Inline gap={2} justify="space-between">
-                            <Badge tone="accent">{course.code}</Badge>
-                            <Badge tone="neutral">{course.term}</Badge>
-                          </Inline>
-                          <h3 style={sectionTitleStyle}>{course.title}</h3>
-                          <Stack gap={2}>
+                          {course.code || course.term ? (
                             <Inline gap={2} justify="space-between">
-                              <span style={labelStyle}>Progress</span>
-                              <span style={{ fontWeight: 700 }}>
-                                {course.progress}%
-                              </span>
+                              {course.code ? (
+                                <Badge tone="accent">{course.code}</Badge>
+                              ) : (
+                                <span />
+                              )}
+                              {course.term ? (
+                                <Badge tone="neutral">{course.term}</Badge>
+                              ) : null}
                             </Inline>
-                            <ProgressBar
-                              label={`${course.title} progress`}
-                              value={course.progress}
-                            />
-                          </Stack>
+                          ) : null}
+                          <h3 style={sectionTitleStyle}>{course.title}</h3>
                           <Chip tone="accent">{course.role}</Chip>
                         </Stack>
                       </Card>

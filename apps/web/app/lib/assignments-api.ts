@@ -42,7 +42,6 @@ export interface AssignmentInput {
 export type ListResult =
   | { ok: true; assignments: Assignment[] }
   | { ok: false; error: string };
-
 export type AssignmentResult =
   | { ok: true; assignment: Assignment }
   | { ok: false; error: string };
@@ -87,6 +86,36 @@ export async function listAssignments(
     return { ok: true, assignments: data.assignments };
   } catch {
     return { ok: false, error: UNREACHABLE };
+  }
+}
+
+export interface Submission {
+  id: string;
+  tenantId: string;
+  assignmentId: string;
+  userId: string;
+  body: string | null;
+  blobUrl: string | null;
+  status: string;
+  submittedAt: string | null;
+  isLate: boolean;
+}
+
+/** List submissions for an assignment. Returns `[]` on error. */
+export async function listSubmissions(
+  assignmentId: string,
+  tenantId: string = TENANT_ID,
+): Promise<Submission[]> {
+  try {
+    const res = await fetch(
+      `${ASSIGNMENT_SERVICE_URL}/assignments/${encodeURIComponent(assignmentId)}/submissions`,
+      { headers: tenantHeader(tenantId), cache: "no-store" },
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { submissions: Submission[] };
+    return data.submissions ?? [];
+  } catch {
+    return [];
   }
 }
 

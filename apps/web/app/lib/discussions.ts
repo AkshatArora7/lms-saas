@@ -1,20 +1,20 @@
 import { TENANT_ID } from "./auth";
+import { listForums, listTopics, listPosts } from "./discussions-api";
+import { getUser } from "./user-org-api";
 
 /**
- * Discussion threads for the learner course discussions screen.
- *
- * In production these come from the discussion service, scoped to a course and
- * tenant via the gateway. Until that read path is wired in, we resolve a small,
- * deterministic set of threads for known demo courses and an empty list
- * otherwise, so the screen renders a real happy path and a real empty state
- * with no backend dependency.
+ * Discussion threads for the learner course discussions screen, sourced live
+ * from the discussion microservice via the BFF server-fetch pattern
+ * (tenant-scoped with `x-tenant-id`). A course's forums → topics → posts are
+ * collapsed into a flat thread list (one thread per topic). Returns `[]`
+ * (driving the empty state) when there are no threads or a service is
+ * unreachable — no demo fallback.
  */
-
-const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
 
 export interface DiscussionThread {
   id: string;
   title: string;
+  excerpt: string;
   author: string;
   replies: number;
   /** ISO timestamp of the most recent activity. */
@@ -29,76 +29,6 @@ export interface DiscussionsSummary {
   unanswered: number;
 }
 
-const DEMO_THREADS_BY_COURSE: Record<string, DiscussionThread[]> = {
-  "alg-101": [
-    {
-      id: "alg-101-t0",
-      title: "Read this first: discussion etiquette",
-      author: "Dr. Priya Natarajan",
-      replies: 0,
-      lastActivityAt: "2026-06-01T09:00:00Z",
-      pinned: true,
-      unanswered: false,
-    },
-    {
-      id: "alg-101-t1",
-      title: "Stuck on multi-step equations — when do I flip the sign?",
-      author: "Jordan M.",
-      replies: 4,
-      lastActivityAt: "2026-06-15T07:45:00Z",
-      pinned: false,
-      unanswered: false,
-    },
-    {
-      id: "alg-101-t2",
-      title: "Is the quiz cumulative or just module 2?",
-      author: "Sam R.",
-      replies: 0,
-      lastActivityAt: "2026-06-14T18:20:00Z",
-      pinned: false,
-      unanswered: true,
-    },
-    {
-      id: "alg-101-t3",
-      title: "Study group for the linear equations quiz?",
-      author: "Avery T.",
-      replies: 7,
-      lastActivityAt: "2026-06-13T21:10:00Z",
-      pinned: false,
-      unanswered: false,
-    },
-  ],
-  "bio-110": [
-    {
-      id: "bio-110-t1",
-      title: "Field trip logistics — carpool thread",
-      author: "Mr. Osei",
-      replies: 9,
-      lastActivityAt: "2026-06-15T06:30:00Z",
-      pinned: true,
-      unanswered: false,
-    },
-    {
-      id: "bio-110-t2",
-      title: "Difference between mitosis and meiosis?",
-      author: "Riley P.",
-      replies: 2,
-      lastActivityAt: "2026-06-12T15:00:00Z",
-      pinned: false,
-      unanswered: false,
-    },
-    {
-      id: "bio-110-t3",
-      title: "Lab report formatting question",
-      author: "Casey L.",
-      replies: 0,
-      lastActivityAt: "2026-06-11T11:25:00Z",
-      pinned: false,
-      unanswered: true,
-    },
-  ],
-};
-
 function compareThreads(a: DiscussionThread, b: DiscussionThread): number {
   if (a.pinned !== b.pinned) {
     return a.pinned ? -1 : 1;
@@ -107,18 +37,58 @@ function compareThreads(a: DiscussionThread, b: DiscussionThread): number {
 }
 
 /**
- * Resolve the discussion threads for a course, pinned first then by most recent
- * activity. Returns an empty list for unknown courses or non-demo tenants.
+ * Resolve the discussion threads for a course (keyed by the course id), pinned
+ * first then by most recent activity. Author display names are resolved from
+ * user-org. Returns `[]` for courses with no discussion or when a service is
+ * unreachable.
  */
-export function getCourseDiscussions(
+export async function getCourseDiscussions(
   courseId: string,
   tenantId: string = TENANT_ID,
-): DiscussionThread[] {
-  if (tenantId !== DEMO_TENANT_ID) {
-    return [];
-  }
-  const threads = DEMO_THREADS_BY_COURSE[courseId];
-  return threads ? [...threads].sort(compareThreads) : [];
+): Promise<DiscussionThread[]> {
+  const forumsResult = await listForums(courseId, tenantId);
+  if (!forumsResult.ok || !forumsResult.forums.length) return [];
+
+  const topicLists = await Promise.all(
+    forumsResult.forums.map(async (forum) => {
+      const topicsResult = await listTopics(forum.id, tenantId);
+      return topicsResult.ok ? topicsResult.topics : [];
+    }),
+  );
+  const topics = topicLists.flat();
+  if (!topics.length) return [];
+
+  const threads = await Promise.all(
+    topics.map(async (topic): Promise<DiscussionThread | null> => {
+      const postsResult = await listPosts(topic.id, tenantId);
+      const posts = postsResult.ok ? postsResult.posts : [];
+      const roots = posts.filter((p) => p.parentId === null);
+      const replies = posts.length - roots.length;
+      const root = roots[0];
+      const lastActivityAt = posts.reduce(
+        (latest, p) => (p.createdAt > latest ? p.createdAt : latest),
+        root?.createdAt ?? "",
+      );
+      const authorId = root?.authorId;
+      const author = authorId
+        ? (await getUser(authorId, tenantId))?.displayName ?? "Member"
+        : "Member";
+      return {
+        id: topic.id,
+        title: topic.title,
+        excerpt: root?.body ?? topic.description ?? "",
+        author,
+        replies,
+        lastActivityAt,
+        pinned: roots.some((p) => p.isPinned),
+        unanswered: replies === 0,
+      };
+    }),
+  );
+
+  return threads
+    .filter((t): t is DiscussionThread => t !== null)
+    .sort(compareThreads);
 }
 
 /** Summarise total and unanswered thread counts. */

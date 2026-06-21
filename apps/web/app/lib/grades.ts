@@ -1,86 +1,89 @@
 import { TENANT_ID } from "./auth";
+import { getEnrolledCourses } from "./enrolled";
+import { getStudentGrades, getGradebook } from "./grading-api";
 
 /**
- * Gradebook data for the learner grades screen.
- *
- * In production this comes from the grading/gradebook microservices (EPIC #44),
- * tenant-scoped via the gateway. Until that read path is wired in, we resolve a
- * small, deterministic set of demo grades for the seeded demo tenant and an
- * empty collection for everyone else, so the screen renders a real happy path
- * and a real empty state with no backend dependency.
+ * Gradebook data for the learner grades screen, sourced live from the grading
+ * microservice via the BFF server-fetch pattern (tenant-scoped with
+ * `x-tenant-id`). For each enrolled course we read the learner's released
+ * grades + projected final, and the gradebook metadata (item names/weights) to
+ * label the breakdown. Courses with no released grades are omitted, driving a
+ * real empty state with no demo fallback.
  */
 
 export interface GradeCategory {
   name: string;
-  /** Weight of this category toward the final grade, 0-100. */
+  /** Weight of this item toward the final grade, 0-100. */
   weight: number;
-  /** The learner's score in this category, 0-100. */
+  /** The learner's score on this item, 0-100. */
   score: number;
 }
 
 export interface CourseGrade {
   courseId: string;
   title: string;
-  code: string;
+  /** Course code — not modelled by the course service yet, hence nullable. */
+  code: string | null;
   /** Overall course percentage, 0-100. */
   percent: number;
   letter: string;
   categories: GradeCategory[];
 }
 
-const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
+/**
+ * Resolve the learner's released grades per enrolled course. Returns `[]`
+ * (driving the empty state) when no course has a released grade or a service is
+ * unreachable.
+ */
+export async function getCourseGrades(
+  userId: string,
+  tenantId: string = TENANT_ID,
+): Promise<CourseGrade[]> {
+  const enrolled = await getEnrolledCourses(userId, tenantId);
+  const results = await Promise.all(
+    enrolled.map(async (course): Promise<CourseGrade | null> => {
+      const [student, gradebook] = await Promise.all([
+        getStudentGrades(course.courseId, userId, tenantId),
+        getGradebook(course.courseId, tenantId),
+      ]);
+      if (!student) return null;
 
-const DEMO_GRADES: CourseGrade[] = [
-  {
-    courseId: "alg-101",
-    title: "Algebra I",
-    code: "ALG-101",
-    percent: 88,
-    letter: "B+",
-    categories: [
-      { name: "Homework", weight: 30, score: 92 },
-      { name: "Quizzes", weight: 30, score: 84 },
-      { name: "Exams", weight: 40, score: 88 },
-    ],
-  },
-  {
-    courseId: "bio-110",
-    title: "Introduction to Biology",
-    code: "BIO-110",
-    percent: 76,
-    letter: "C+",
-    categories: [
-      { name: "Labs", weight: 40, score: 80 },
-      { name: "Quizzes", weight: 25, score: 70 },
-      { name: "Exams", weight: 35, score: 74 },
-    ],
-  },
-  {
-    courseId: "eng-205",
-    title: "World Literature",
-    code: "ENG-205",
-    percent: 94,
-    letter: "A",
-    categories: [
-      { name: "Essays", weight: 50, score: 95 },
-      { name: "Participation", weight: 20, score: 96 },
-      { name: "Exams", weight: 30, score: 91 },
-    ],
-  },
-];
+      const itemsById = new Map(
+        (gradebook?.items ?? []).map((item) => [item.id, item]),
+      );
+      const categories: GradeCategory[] = student.grades
+        .filter((g) => g.points !== null)
+        .map((g) => {
+          const item = itemsById.get(g.gradeItemId);
+          const max = item?.maxPoints ?? 100;
+          const score = max > 0 ? Math.round(((g.points ?? 0) / max) * 100) : 0;
+          return {
+            name: item?.name ?? "Grade",
+            weight: item?.weight != null ? Math.round(item.weight * 100) : 0,
+            score,
+          };
+        });
+
+      // Only surface a course once at least one grade has been released.
+      if (!categories.length) return null;
+
+      return {
+        courseId: course.courseId,
+        title: course.title,
+        code: null,
+        percent: Math.round(student.projected.percent),
+        letter: student.projected.symbol ?? "—",
+        categories,
+      };
+    }),
+  );
+  return results.filter((g): g is CourseGrade => g !== null);
+}
 
 export interface GradesSummary {
   courseCount: number;
   /** Mean course percentage across graded courses, rounded; null when none. */
   average: number | null;
-}
-
-/**
- * Resolve the graded courses to show for the given tenant. Returns an empty
- * array (driving the empty state) for tenants without seeded demo data.
- */
-export function getCourseGrades(tenantId: string = TENANT_ID): CourseGrade[] {
-  return tenantId === DEMO_TENANT_ID ? DEMO_GRADES : [];
 }
 
 /** Derive the headline summary shown above the grades list. */

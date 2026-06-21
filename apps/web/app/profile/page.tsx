@@ -144,7 +144,7 @@ export default async function ProfilePage() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
-  const profile = getProfile(session);
+  const profile = await getProfile(session);
 
   return (
     <AppShell brand={brand} actions={<SignOutButton />}>

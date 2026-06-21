@@ -169,7 +169,7 @@ export default async function AssignmentsPage() {
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
 
-  const assignments = getAssignments(session.tenantId);
+  const assignments = await getAssignments(session.userId, session.tenantId);
   const summary = summarizeAssignments(assignments);
 
   return (
@@ -244,7 +244,8 @@ export default async function AssignmentsPage() {
                           </div>
                           <h2 className="asg-title">{assignment.title}</h2>
                           <p className="asg-meta">
-                            {assignment.course} ({assignment.code}) ·{" "}
+                            {assignment.course}
+                            {assignment.code ? ` (${assignment.code})` : ""} ·{" "}
                             <span className="asg-type">{assignment.type}</span>{" "}
                             · {assignment.points} pts
                           </p>

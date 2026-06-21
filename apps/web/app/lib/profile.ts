@@ -1,18 +1,14 @@
 import type { Session } from "./auth";
+import { getUser } from "./user-org-api";
 
 /**
- * Display profile for the learner profile & preferences screen.
- *
- * The session from the identity service carries identifiers, roles and scopes
- * but not yet a rich profile (display name, email, preferences). In production
- * these come from the identity/profile service. Until that read/write path is
- * wired in, we derive a presentable profile from the session: a humanised
- * display name and a demo email for the seeded demo tenant, with sensible
- * defaults for preferences that are clearly marked as not yet configurable.
+ * Display profile for the learner profile & preferences screen, sourced live
+ * from the user-org microservice via the BFF server-fetch pattern (tenant-scoped
+ * with `x-tenant-id`). The service supplies the display name, email and locale;
+ * identifiers, tier, roles and scopes come from the session. When the service is
+ * unreachable we fall back to session-derived values rather than crashing — but
+ * we never invent demo values for fields the service owns.
  */
-
-const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
-const DEMO_EMAIL_DOMAIN = "northwind.example.edu";
 
 export interface Preference {
   label: string;
@@ -47,34 +43,29 @@ function humaniseName(userId: string): string {
     .join(" ");
 }
 
-function deriveEmail(userId: string, tenantId: string): string {
-  if (userId.includes("@")) {
-    return userId;
-  }
-  if (tenantId === DEMO_TENANT_ID) {
-    const local = userId.replace(/\s+/g, ".").toLowerCase();
-    return `${local}@${DEMO_EMAIL_DOMAIN}`;
-  }
-  return "Not provided";
-}
+/** Build a display profile from the user-org record + the current session. */
+export async function getProfile(session: Session): Promise<Profile> {
+  const user = await getUser(session.userId, session.tenantId);
 
-/** Build a display profile from the current session. */
-export function getProfile(session: Session): Profile {
-  const displayName = humaniseName(session.userId);
+  const displayName = user?.displayName ?? humaniseName(session.userId);
+  const email =
+    user?.email ??
+    (session.userId.includes("@") ? session.userId : "Not provided");
+
+  const preferences: Preference[] = [];
+  if (user?.locale) {
+    preferences.push({ label: "Language", value: user.locale });
+  }
 
   return {
     displayName,
-    email: deriveEmail(session.userId, session.tenantId),
+    email,
     initialsSource: displayName,
     userId: session.userId,
     tenantId: session.tenantId,
     tier: session.tier,
     roles: session.roles,
     scopes: session.scopes,
-    preferences: [
-      { label: "Language", value: "English (US)" },
-      { label: "Time zone", value: "America/Toronto" },
-      { label: "Email notifications", value: "Announcements & due dates" },
-    ],
+    preferences,
   };
 }

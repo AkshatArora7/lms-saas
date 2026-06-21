@@ -23,7 +23,7 @@ User profiles and the org-unit hierarchy (district/school/department/section) pe
 | `GET` | `/org-units/{id}/ancestors` | Ancestors, root-first. |
 | `PATCH` | `/org-units/{id}` | Rename / set active state. |
 | `POST` | `/users` | Invite/create a user (emits user.created). |
-| `GET` | `/users` | List users (filter by status, orgUnitId). |
+| `GET` | `/users` | List users (filter by status, orgUnitId); each item is the enriched UserProfile with `memberships: [{assignmentId, roleId, roleName, orgUnitId, cascade}]`, the same shape as GET /users/{id}. |
 | `GET` | `/users/{id}` | Profile + org-unit role memberships. |
 | `PATCH` | `/users/{id}` | Update profile/status (emits user.updated/deactivated). |
 | `POST` | `/users/{id}/roles` | Assign a per-tenant role at an org unit. |

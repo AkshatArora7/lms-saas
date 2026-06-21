@@ -29,9 +29,9 @@
 | Data & RLS | schema-agent | ☑ done | NO schema change — §4.4 |
 | Backend | service-builder | ☑ done | §4 Implementation below; user-org typecheck/lint/test green (43 tests) |
 | Frontend | frontend-dev | ☑ done | §4.10 below; admin typecheck/lint green |
-| QA / tests | qa-agent | ☐ | |
-| Security & DoD | security-agent | ☐ | |
-| Docs | docs-agent | ☐ | |
+| QA / tests | qa-agent | ☑ done | §5 QA below — local gate GREEN; live functional + N+1 proven; RLS live-proof deferred (demo superuser bypass) |
+| Security & DoD | security-agent | ☑ done | §5 Security below — **APPROVE**; RLS/authz/secrets clean; superuser-bypass is pre-existing platform gap (separate tracked issue, not a #278 blocker) |
+| Docs | docs-agent | ☑ done | Regenerated `docs/services/user-org.md` via `scripts/docs/gen-service-specs.py` (edited data source line 94, never hand-edited output) — `GET /users` row now documents the enriched `memberships:[{assignmentId,roleId,roleName,orgUnitId,cascade}]` list shape (= detail parity). No ADR (additive non-breaking; embed choice in §4). §7 log below. |
 
 ## 4. Decisions & contracts  (append; never rewrite history)
 - **Data shapes (schema-agent):** NO schema change — see §4.4.
@@ -222,7 +222,113 @@ not required.
 
 ## 5. Verification  (real output only — paste, don't summarize away errors)
 - **QA (qa-agent):** typecheck / lint / test / build counts; per-AC test mapping; root-cause notes for any failure.
+
+  **QA verdict (2026-06-21) — LOCAL CI GATE GREEN; live functional + N+1 PROVEN; RLS live-proof DEFERRED (pre-existing demo superuser bypass, not a #278 regression).**
+
+  **Pipeline (replicated ci.yml, Windows host + Docker):**
+  | Step | Result |
+  | ---- | ------ |
+  | `git diff main...HEAD -- database/` | EMPTY — no schema change ✓ |
+  | scope (`git diff --name-only`) | 8 files, only `apps/admin` + `services/user-org` (+ handshake) ✓ |
+  | pglast schema.sql / rls.sql | `schema OK` / `rls OK` ✓ |
+  | `pnpm install --frozen-lockfile` | lockfile up to date ✓ |
+  | `pnpm db:generate` | Prisma Client v5.22.0 ✓ |
+  | `pnpm lint` | **53/53 tasks** ✓ |
+  | `pnpm typecheck` | **53/53 tasks** ✓ |
+  | `pnpm test` | **45/45 tasks · 452 tests passed · 0 failed** (20 live-DB integration skipped) ✓ |
+  | user-org vitest | 3 files / **43 tests** (main.test.ts 17, incl. new suites) ✓ |
+  | Docker build FROM SOURCE | `admin` ✓ built, `seed` ✓ built; **`user-org` built directly from `services/user-org/Dockerfile`** ✓ (compose `build:` for user-org is commented → `docker compose build` SKIPS it & would run STALE GHCR :latest; I built+tagged `:latest` from source so the live stack ran the NEW code) |
+
+  **Live stack (docker compose up -d, all 30 containers healthy, `seed` exit 0, 3 role_assignments seeded):**
+  - `GET http://localhost:4003/users` + `x-tenant-id: 1111…` → **200**, `{ users: UserProfile[] }`. Each user has a `memberships[]` with EXACTLY `{assignmentId, roleId, roleName, orgUnitId, cascade}`. `admin@demo.school` → `instructor` + `org_admin` (orgUnit ROOT); `student@demo.school` → `learner` (orgUnit OFFERING). All roles inline in the SINGLE response — no per-user follow-up.
+  - **N+1 killed:** service issues a fixed **2 SQL round-trips** (DISTINCT users + one batched `ANY($1::uuid[])` membership read); BFF `directory.ts` reads `record.memberships` directly + one `listOrgUnits` map → 0 per-user fan-out.
+  - List ↔ detail parity: `GET /users/:id` returns the identical membership shape ✓.
+
+  **Per-AC mapping:**
+  | AC (§2) | Verdict | Evidence |
+  | ------- | ------- | -------- |
+  | 1. `GET /users` returns roles + org-unit membership in one tenant-scoped response | **PASS** | Live curl 200 with memberships inline (above); unit `GET /users enriched shape` (main.test.ts:424) |
+  | 2. Admin `/users` drops the per-user N+1 | **PASS** | `directory.ts:79-97` Promise.all/getUser-per-user DELETED → `list.users.map(record => record.memberships)`; live = 1 list call, 2 SQL round-trips, 0 fan-out |
+  | 3. Response is RLS-enforced | **PASS (impl) / live-proof DEFERRED** | Impl correct: read relies on RLS via `withTenant` GUC (`packages/db/src/index.ts:61`) + FORCE-RLS `tenant_isolation` on app_user/role/role_assignment (rls.sql), no manual tenant filter — same posture as existing detail endpoint; memory-store isolation test passes (main.test.ts:486, asserts other tenant sees 0 users AND no membership leak). **Live demo stack CANNOT prove runtime RLS: the compose DB role `lms` is a SUPERUSER that BYPASSES RLS by design (documented `seed.demo.ts:14-15`) — so `x-tenant-id: 2222…` returns 1111…'s rows. Pre-existing, platform-wide (every service), NOT a #278 regression.** True live proof needs a NOSUPERUSER/NOBYPASSRLS app role. → security-agent to adjudicate. |
+  | 4. Tests cover the expanded response shape | **PASS** | `groupMembershipsByUser` pure tests (multi-role/multi-org pairing + empty→[], main.test.ts:368); `GET /users enriched shape` (main.test.ts:424); tenant-isolation extended for memberships (main.test.ts:486) |
+
+  **Root-cause (RLS live-bypass) — NOT a code fix for #278:** `lms` (compose `POSTGRES_USER`) runs with `usesuper=t, usebypassrls=t`; Postgres exempts BYPASSRLS roles from ALL policies, so FORCE-RLS + `withTenant` GUC are correctly set but never enforced at runtime in the demo stack. Owner = **schema-agent / infra** (provision a dedicated non-superuser app role for the runtime `DATABASE_URL`); pre-existing & out of #278 scope. No service-builder/frontend-dev fix required — the #278 code is correct.
+
+  **Routing:** local gate GREEN + #278 ACs met at code level + single-call-not-N+1 proven live. → **security-agent** for the DoD/RLS gate (adjudicate the documented demo superuser RLS-bypass; confirm RLS via a non-superuser path). No regressions elsewhere (452/452 tests green; admin has no unit tests but typecheck/lint green under the widened `UserProfile[]` shape).
 - **Security & DoD (security-agent):** isolation/authz/secrets findings; APPROVE / CHANGES REQUESTED.
+
+  **Security verdict (2026-06-21) — APPROVE. Safe to PR + admin-merge.**
+  Grounded in `git diff main...HEAD` (2 commits e359e2b, 372d703; 8 files, scope confirmed).
+
+  **1. Tenant isolation (sacred) — PASS.**
+  - The new batched membership read runs INSIDE the existing `withTenant(ctx, …)` tx
+    (`services/user-org/src/store.prisma.ts:325` opens the tx; the `role_assignment JOIN role`
+    query is at `:357-365`, before the tx closes at `:371`). So `app.tenant_id` GUC is set for it.
+  - `app_user`, `role`, `role_assignment` all carry `ENABLE`+`FORCE ROW LEVEL SECURITY` +
+    `tenant_isolation` policy (`database/policies/rls.sql:18-23` — `app_user`, `role`,
+    `role_assignment` are all in the `tenant_tables` loop). No RLS change in this branch
+    (`git diff … -- database/` EMPTY, qa-confirmed). Control-plane `tenant` table is correctly
+    ABSENT from the loop.
+  - Param is BOUND + cast, no interpolation: `WHERE ra.user_id = ANY($1::uuid[])` with
+    `userIds` passed as one bound arg (`store.prisma.ts:362-364`). No string concatenation of
+    ids; no SQLi surface. NO manual `tenant_id` filter substituting for RLS — isolation relies
+    solely on the GUC+policy, identical posture to the pre-existing `/users/:id` detail read
+    (`store.prisma.ts:302-321`).
+  - A user in tenant A cannot surface tenant B memberships: the users query (`app_user`, RLS)
+    only returns tenant-A ids, and the membership query (`role_assignment`, RLS) only returns
+    tenant-A assignments — both scoped by the same GUC. Memory store mirrors this with explicit
+    `tenantId` filters (`store.memory.ts:212-216`) and the isolation test asserts the second
+    tenant sees 0 users AND that tenant A's user still shows its 1 membership (proving the
+    batched read is scoped, not globally joined) — `main.test.ts:486+`.
+
+  **2. QA-flagged demo superuser RLS bypass — ADJUDICATED: NOT a #278 blocker.**
+  - (a) **Not a #278 regression.** This branch adds NO schema/RLS change and uses the SAME
+    `withTenant`/FORCE-RLS reliance as the merged `/users/:id` detail and `/reports/org-units`.
+    The runtime bypass exists identically on `main` for every service.
+  - (b) **It IS a real platform-wide posture gap.** The demo compose Postgres role `lms` is
+    `usesuper=t / usebypassrls=t`, and Postgres exempts BYPASSRLS roles from ALL policies, so
+    FORCE-RLS + a correctly-set GUC are never enforced at runtime in the demo stack
+    (default `docker-compose.yml:47` → `postgresql://lms:lms@postgres…`; same `lms` user in
+    `docker-compose.infra.yml:19`).
+  - **Prod risk — cannot be confirmed from the repo.** The repo *documents and tests* the
+    requirement (app must connect as NOSUPERUSER/NOBYPASSRLS — `SETUP.md:146-148`,
+    `docs/MULTI_TENANCY.md:26`, `database/policies/rls.sql:11-12`; integration tests provision
+    exactly such a role — `tests/integration/src/helpers/db.ts:90`), but the actual runtime
+    `DATABASE_URL` role privileges for real (non-demo) Supabase deploys are NOT verifiable from
+    source (the `.env` runtime user is `postgres.<ref>`, a Supabase pooled role whose BYPASSRLS
+    bit I cannot determine here). → **Recommend a tracked verification + remediation** owned by
+    **schema-agent / infra**: provision and bind a dedicated NOSUPERUSER NOBYPASSRLS app role
+    for the runtime `DATABASE_URL` across all deploy targets, and add an integration assertion
+    that RLS actually blocks cross-tenant reads at runtime. This is pre-existing & platform-wide
+    → the **orchestrator** should file it as a SEPARATE issue. It does **NOT** block #278.
+
+  **3. Authz — PASS.** Admin `/users` is gated: `getSession()` → `redirect("/login")` if no
+  session (`apps/admin/app/users/page.tsx:78-79`); non-admins get the permission-denied state
+  (`isAdmin(session)` guard `:82-96`). The tenant forwarded to the BFF is the VERIFIED session
+  value `getDirectory(session.tenantId)` (`:98`) — resolved server-side from the introspected
+  access-token cookie (`auth.ts:53-66`), never a request param/body. BFF forwards it as the
+  trusted `x-tenant-id` header (`user-org-api.ts:80-94`); the token stays server-side (httpOnly
+  cookie, `auth.ts:54` + `cookieBase.httpOnly`). Enriched payload is within-tenant,
+  admin-appropriate (role/org-unit assignments) — no over-exposure.
+
+  **4. Secrets — clean in the #278 diff.** No credentials/tokens/DSNs in the 8 changed files.
+  (Out-of-band, NOT in scope/diff: `.env` on disk holds a live Supabase DB password
+  `.env:12` — flag to confirm `.env` is git-ignored / not committed and rotate if it ever was.
+  Pre-existing, unrelated to #278; for orchestrator/infra to verify separately.)
+
+  **5. Definition of Done — MET.** Story linkage: both commits carry `Refs #278`
+  (e359e2b, 372d703); Conventional Commit prefixes (`feat(user-org)`, `feat(admin)`); **no
+  `Co-authored-by` trailer**. Store-abstraction honored (store.ts/prisma/memory + tests; pure
+  helper `groupMembershipsByUser` is unit-tested; `buildApp`/`routes.ts` untouched, no
+  side-effect change). No RLS weakened. Tests cover the expanded shape + tenant-isolation
+  (incl. membership-leak). qa-agent GREEN folded in (lint 53/53, typecheck 53/53, test 452/452;
+  user-org 43). Deferred Playwright UI check is **acceptable** — no runner in repo; admin
+  typecheck/lint green under the widened `UserProfile[]`; live curl proved the single-call
+  enriched render. Docs specs are generated; no hand-edited `docs/services/*` in the diff.
+
+  **VERDICT: APPROVE** — proceed to PR + admin-merge. Single follow-up (non-blocking): the
+  superuser/BYPASSRLS runtime-bypass must be filed as a separate tracked issue owned by
+  **schema-agent / infra** (orchestrator to file).
 
 ## 6. Open questions / blockers
 - <question needing product or human input — list rather than guess>
@@ -232,3 +338,6 @@ not required.
 - 2026-06-21 11:25 · architect · Recorded technical design (§4): enrich GET /users to `{ users: UserProfile[] }` via a fixed 2-query batched read (users page → `role_assignment` JOIN `role` WHERE user_id = ANY($1::uuid[])); reuse existing MembershipRecord/UserProfile shapes; NO schema change; delete the BFF N+1 in directory.ts:79-97. · **next owner → service-builder**
 - 2026-06-21 11:28 · service-builder · Implemented backend (§4.9): widened `listUsers` → `UserProfile[]` across store.ts/prisma/memory; prisma now 2 round-trips (users + one `ANY($1::uuid[])` membership batch, no per-user loop); added pure helper `groupMembershipsByUser` + tests; user-org typecheck/lint/test green (43 tests). NO schema change. · **next owner → frontend-dev** (widen admin BFF `listUsers` type + delete directory.ts:79-97 N+1)
 - 2026-06-21 11:31 · frontend-dev · Implemented admin step (§4.10): widened BFF `listUsers` return → `UserProfile[]` (user-org-api.ts); DELETED the per-user N+1 `Promise.all(... getUser ...)` in directory.ts (was :79-97) → plain `.map` reading `record.memberships`, org-unit names via the single `listOrgUnits` id→name map; added "No roles" empty state in users/page.tsx (memberships:[]); UI/columns + responsive grid unchanged. admin typecheck ✓ + lint ✓ (host build EPERM = known Windows non-issue). Scoped to apps/admin; service untouched. · **next owner → qa-agent** (run suite + live-DB pglast; map tests to 4 ACs)
+- 2026-06-21 11:53 · security-agent · **APPROVE** (safe to PR + admin-merge). Verified vs `git diff main...HEAD`: batched membership read runs INSIDE `withTenant` (store.prisma.ts:325→357-371), bound+cast `ANY($1::uuid[])` (no SQLi), `app_user`/`role`/`role_assignment` all FORCE-RLS in rls.sql loop (tenant table correctly excluded), memory isolation test asserts no membership leak. Authz: admin page gates `getSession`+`isAdmin`, forwards VERIFIED `session.tenantId` (never client param), token stays httpOnly server-side. Secrets clean in diff. DoD met: both commits `Refs #278`, Conventional Commits, NO Co-authored-by, store-abstraction honored, qa GREEN (452/452). Adjudicated qa's demo superuser RLS-bypass = PRE-EXISTING/platform-wide, NOT a #278 regression → does not block; MUST be filed as a separate tracked issue (schema-agent/infra; orchestrator to file). Out-of-band non-blocker: `.env:12` live DB password — verify git-ignored/rotate. · **next owner → orchestrator** (open PR + admin-merge; file the RLS-bypass tracked issue) then **docs-agent**
+- 2026-06-21 11:40 · qa-agent · LOCAL CI GATE GREEN: pglast schema/rls OK; lint 53/53; typecheck 53/53; test 45/45 tasks = 452 tests passed (user-org 43); Docker images built FROM SOURCE (user-org built directly from its Dockerfile — compose `build:` is commented so `compose build` would run STALE GHCR; admin+seed built). Live stack (30 healthy, seed exit 0): `GET /users` returns each user enriched with `memberships{assignmentId,roleId,roleName,orgUnitId,cascade}` in ONE call — admin=instructor+org_admin, student=learner; 2 SQL round-trips, 0 per-user fan-out (N+1 killed); list↔detail parity ✓. AC1/AC2/AC4 PASS. **AC3 (RLS): impl correct (withTenant GUC + FORCE-RLS, memory isolation test passes) but live runtime RLS NOT provable — demo DB role `lms` is SUPERUSER/BYPASSRLS by design (seed.demo.ts:14-15), platform-wide & pre-existing, NOT a #278 regression.** Root cause owned by schema-agent/infra (non-superuser app role); no #278 code fix needed. · **next owner → security-agent** (DoD + adjudicate demo RLS-bypass / confirm RLS via non-superuser path)
+- 2026-06-21 11:58 · docs-agent · Docs stage DONE. Per-service specs ARE generated by `scripts/docs/gen-service-specs.py` (no pnpm script — invoked via `python`). Edited the SOURCE entry (user-org `GET /users` description, py:94) — NOT the output — then regenerated; `git diff` shows ONLY the one `GET /users` row in `docs/services/user-org.md` changed (README index unchanged, no other service touched), now documenting the enriched `memberships:[{assignmentId,roleId,roleName,orgUnitId,cascade}]` list shape at detail parity. Verified vs code: `listUsers→UserProfile[]` (store.ts:186), `groupMembershipsByUser` (store.ts:97-108), prisma batch (store.prisma.ts:357-371). NO ADR (additive, non-breaking; embed-vs-expand minor & captured in §4). Committed generator + regenerated spec + handshake only (explicit add), `docs(user-org): regenerate spec for enriched GET /users`, Refs #278, no Co-authored-by. · **next owner → orchestrator** (PR/merge per security APPROVE)

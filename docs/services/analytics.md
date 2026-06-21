@@ -44,7 +44,7 @@ Learning Record Store (Caliper/xAPI), engagement metrics, at-risk/predictive rea
 
 ## Notes
 
-Event-sourced; builds materialised read models. Pure consumer of domain events; emits derived signals.
+Event-sourced; builds materialised read models. Pure consumer of domain events; emits derived signals. `GET /reports/engagement` layers defence-in-depth course authorization ON TOP of tenant RLS (#284, refined #294): an instructor who teaches the course, a tenant-wide `super_admin`, or an `org_admin` whose administered org-unit subtree (`org_unit.path` + `role_assignment.cascade`) contains the course's org unit may read it; a missing trusted caller -> 401, an unauthorized caller -> 403. See [ADR-0027](../ADR-0027-trusted-identity-headers.md).
 
 ## Cross-cutting
 

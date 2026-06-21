@@ -5,7 +5,15 @@ import type { FastifyRequest } from "fastify";
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "./main.js";
-import { DEMO_TENANT_ID, MemoryAnalyticsStore } from "./store.memory.js";
+import {
+  DEMO_COURSE_OUT,
+  DEMO_TENANT_ID,
+  MemoryAnalyticsStore,
+  ORG_ADMIN_AND_TEACHER,
+  ORG_ADMIN_ANCESTOR_NOCASCADE,
+  ORG_ADMIN_EXACT,
+  ORG_ADMIN_IN_SUBTREE,
+} from "./store.memory.js";
 import {
   aggregateEvents,
   buildCourseEngagement,
@@ -275,12 +283,38 @@ const TEACHER_H = {
 };
 const ADMIN_H = {
   "x-tenant-id": TENANT,
-  "x-user-id": "a0000000-0000-0000-0000-000000000001",
+  "x-user-id": ORG_ADMIN_IN_SUBTREE,
   "x-user-roles": "org_admin",
 };
-const OTHER_ADMIN_H = {
+// A tenant-wide super_admin in a DIFFERENT tenant — stays allowed (200) but RLS
+// still isolates the data to an empty engagement.
+const OTHER_SUPER_ADMIN_H = {
   "x-tenant-id": OTHER,
   "x-user-id": "a0000000-0000-0000-0000-000000000002",
+  "x-user-roles": "super_admin",
+};
+// A tenant-wide super_admin in the demo tenant (no teaching, any course → 200).
+const SUPER_ADMIN_H = {
+  "x-tenant-id": TENANT,
+  "x-user-id": "a0000000-0000-0000-0000-00000000000f",
+  "x-user-roles": "super_admin",
+};
+// org_admin @ DEMO_OFF_IN, cascade=false → scopes DEMO_COURSE by exact match.
+const EXACT_ADMIN_H = {
+  "x-tenant-id": TENANT,
+  "x-user-id": ORG_ADMIN_EXACT,
+  "x-user-roles": "org_admin",
+};
+// org_admin @ SCHOOL_A, cascade=false → ancestor-only, does NOT scope DEMO_COURSE.
+const ANCESTOR_ADMIN_H = {
+  "x-tenant-id": TENANT,
+  "x-user-id": ORG_ADMIN_ANCESTOR_NOCASCADE,
+  "x-user-roles": "org_admin",
+};
+// org_admin out of the DEMO_COURSE subtree BUT who teaches it (OR semantics).
+const ADMIN_TEACHER_H = {
+  "x-tenant-id": TENANT,
+  "x-user-id": ORG_ADMIN_AND_TEACHER,
   "x-user-roles": "org_admin",
 };
 
@@ -459,19 +493,39 @@ describe("course engagement + at-risk (#277, pure builder)", () => {
   });
 });
 
-describe("isCourseReadAuthorized (#284, pure)", () => {
+describe("isCourseReadAuthorized (#284, refined #294, pure)", () => {
   it("allows a teacher of the course", () => {
-    expect(isCourseReadAuthorized({ roles: ["instructor"], teaches: true })).toBe(true);
+    expect(
+      isCourseReadAuthorized({ roles: ["instructor"], teaches: true, adminScopesCourse: false }),
+    ).toBe(true);
   });
   it("denies a teacher who does not teach the course", () => {
-    expect(isCourseReadAuthorized({ roles: ["instructor"], teaches: false })).toBe(false);
+    expect(
+      isCourseReadAuthorized({ roles: ["instructor"], teaches: false, adminScopesCourse: false }),
+    ).toBe(false);
   });
-  it("allows an admin even when they do not teach", () => {
-    expect(isCourseReadAuthorized({ roles: ["org_admin"], teaches: false })).toBe(true);
-    expect(isCourseReadAuthorized({ roles: ["super_admin"], teaches: false })).toBe(true);
+  it("allows a super_admin tenant-wide even when not teaching or scoping", () => {
+    expect(
+      isCourseReadAuthorized({ roles: ["super_admin"], teaches: false, adminScopesCourse: false }),
+    ).toBe(true);
+  });
+  it("allows an org_admin only when the course is in their scope (#294)", () => {
+    expect(
+      isCourseReadAuthorized({ roles: ["org_admin"], teaches: false, adminScopesCourse: true }),
+    ).toBe(true);
+    expect(
+      isCourseReadAuthorized({ roles: ["org_admin"], teaches: false, adminScopesCourse: false }),
+    ).toBe(false);
+  });
+  it("allows an out-of-scope org_admin who nonetheless teaches the course (OR)", () => {
+    expect(
+      isCourseReadAuthorized({ roles: ["org_admin"], teaches: true, adminScopesCourse: false }),
+    ).toBe(true);
   });
   it("denies an unrelated role", () => {
-    expect(isCourseReadAuthorized({ roles: ["learner"], teaches: false })).toBe(false);
+    expect(
+      isCourseReadAuthorized({ roles: ["learner"], teaches: false, adminScopesCourse: false }),
+    ).toBe(false);
   });
 });
 
@@ -549,7 +603,7 @@ describe("GET /reports/engagement (#277)", () => {
     expect(res.json().engagement.courseId).toBe(DEMO_COURSE);
   });
 
-  it("200 for an admin even when they do not teach the course", async () => {
+  it("200 for an in-subtree org_admin even when they do not teach the course (#294)", async () => {
     const res = await build().app.inject({
       method: "GET",
       url: `/reports/engagement?courseId=${DEMO_COURSE}`,
@@ -559,11 +613,61 @@ describe("GET /reports/engagement (#277)", () => {
     expect(res.json().engagement.courseId).toBe(DEMO_COURSE);
   });
 
-  it("isolates tenants: an admin in another tenant sees an empty engagement", async () => {
+  it("403 for an org_admin OUTSIDE the course's org-unit subtree (#294)", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${DEMO_COURSE_OUT}`,
+      headers: ADMIN_H,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe("forbidden");
+  });
+
+  it("200 for a tenant-wide super_admin who neither teaches nor scopes (#294)", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${DEMO_COURSE_OUT}`,
+      headers: SUPER_ADMIN_H,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().engagement.courseId).toBe(DEMO_COURSE_OUT);
+  });
+
+  it("200 for a cascade=false org_admin on the EXACT course org-unit (#294)", async () => {
     const res = await build().app.inject({
       method: "GET",
       url: `/reports/engagement?courseId=${DEMO_COURSE}`,
-      headers: OTHER_ADMIN_H,
+      headers: EXACT_ADMIN_H,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().engagement.courseId).toBe(DEMO_COURSE);
+  });
+
+  it("403 for a cascade=false org_admin on an ANCESTOR unit only (#294)", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${DEMO_COURSE}`,
+      headers: ANCESTOR_ADMIN_H,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe("forbidden");
+  });
+
+  it("200 for an out-of-subtree org_admin who teaches the course (OR semantics, #294)", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${DEMO_COURSE}`,
+      headers: ADMIN_TEACHER_H,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().engagement.courseId).toBe(DEMO_COURSE);
+  });
+
+  it("isolates tenants: a super_admin in another tenant sees an empty engagement", async () => {
+    const res = await build().app.inject({
+      method: "GET",
+      url: `/reports/engagement?courseId=${DEMO_COURSE}`,
+      headers: OTHER_SUPER_ADMIN_H,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();

@@ -505,18 +505,41 @@ export interface AnalyticsStore {
     userId: string,
     courseId: string,
   ): Promise<boolean>;
+
+  /**
+   * Defence-in-depth org-scope signal for `GET /reports/engagement` (#294):
+   * does `userId` hold an `org_admin` role_assignment whose org unit contains
+   * the course's org unit — the unit itself, or (when the assignment cascades)
+   * any ancestor of it via `org_unit.path`? RLS-scoped via withTenant. Layered
+   * ON TOP of RLS; never a client claim. `super_admin` does NOT use this — it
+   * stays tenant-wide.
+   */
+  adminScopesCourse(
+    ctx: TenantContext,
+    userId: string,
+    courseId: string,
+  ): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
-// Course-read authorization (#284) — defence-in-depth on top of RLS for
-// `GET /reports/engagement`. Pure + unit-testable (mirrors @lms/auth checkAccess
-// purity): the caller is allowed when they hold an admin role OR they teach the
-// course. The "teaches" fact is derived from a trusted source (an enrollment row
-// resolved under RLS), not from a client-supplied claim.
+// Course-read authorization (#284, refined #294) — defence-in-depth on top of
+// RLS for `GET /reports/engagement`. Pure + unit-testable (mirrors @lms/auth
+// checkAccess purity): the caller is allowed when they are a tenant-wide
+// `super_admin`, an `org_admin` whose org-unit scope contains the course
+// (#294), OR they teach the course. The "teaches"/"adminScopesCourse" facts are
+// derived from trusted sources resolved under RLS, never client-supplied claims.
 // ---------------------------------------------------------------------------
 
-/** Tenant-wide admin personas that may read any course's engagement. */
-export const ADMIN_ROLES = ["super_admin", "org_admin"] as const;
+/** Tenant-wide admin persona that may read any course's engagement. */
+export const SUPER_ADMIN_ROLE = "super_admin";
+/** Org-scoped admin persona — limited to the org-unit subtree it administers. */
+export const ORG_ADMIN_ROLE = "org_admin";
+
+/**
+ * Tenant admin personas (kept for backwards reference; no longer the sole gate
+ * — `org_admin` is now org-scoped, see `isCourseReadAuthorized`).
+ */
+export const ADMIN_ROLES = [SUPER_ADMIN_ROLE, ORG_ADMIN_ROLE] as const;
 
 /** Enrollment roles that count as "teaches the course" for authorization. */
 export const TEACHING_ENROLLMENT_ROLES = [
@@ -526,15 +549,22 @@ export const TEACHING_ENROLLMENT_ROLES = [
 ] as const;
 
 /**
- * Pure authorization decision for a course-engagement read: allowed when the
- * caller has an admin role, or the (trusted) `teaches` signal is true.
+ * Pure authorization decision for a course-engagement read. Allowed iff the
+ * caller is a tenant-wide `super_admin`, OR an `org_admin` whose scope contains
+ * the course (`adminScopesCourse`), OR the (trusted) `teaches` signal is true.
+ * The OR with `teaches` means an org_admin outside the course's subtree is
+ * still allowed when they personally teach it.
  */
 export function isCourseReadAuthorized(input: {
   roles: string[];
   teaches: boolean;
+  adminScopesCourse: boolean;
 }): boolean {
+  const isSuperAdmin = input.roles.includes(SUPER_ADMIN_ROLE);
+  const isOrgAdmin = input.roles.includes(ORG_ADMIN_ROLE);
   return (
-    input.roles.some((r) => (ADMIN_ROLES as readonly string[]).includes(r)) ||
-    input.teaches
+    isSuperAdmin || // tenant-wide
+    (isOrgAdmin && input.adminScopesCourse) || // org-scoped (#294)
+    input.teaches // teacher path (unchanged)
   );
 }

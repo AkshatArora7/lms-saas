@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 /**
  * Server-only auth helpers for the learner web app. The browser never sees the
@@ -15,6 +15,14 @@ export const IDENTITY_URL =
  */
 export const TENANT_ID =
   process.env.DEMO_TENANT_ID ?? "11111111-1111-1111-1111-111111111111";
+
+/**
+ * Header the edge middleware sets when it resolves the request Host to a tenant
+ * via the tenant service's by-domain lookup (custom-domain landing/login). MUST
+ * stay in sync with the constant in middleware.ts, which cannot import this
+ * module (it uses `next/headers`, illegal in Edge middleware).
+ */
+export const TENANT_HEADER = "x-lms-tenant";
 
 export const ACCESS_COOKIE = "lms_at";
 export const REFRESH_COOKIE = "lms_rt";
@@ -47,6 +55,24 @@ export interface Session {
    * `resolveRequestLocale()` as the user-preference layer.
    */
   locale: string;
+}
+
+/**
+ * Resolve which tenant this request should be themed for, in precedence order:
+ *  1. the `x-lms-tenant` header the edge middleware set from a custom-domain
+ *     Host match (so a pre-auth custom-domain login already carries the brand),
+ *  2. the authenticated session's tenant (`/auth/me`), once signed in,
+ *  3. the pinned demo tenant for local dev.
+ * Resolution is request-scoped and never throws.
+ */
+export async function resolveCurrentTenantId(): Promise<string> {
+  const fromDomain = headers().get(TENANT_HEADER)?.trim();
+  if (fromDomain) return fromDomain;
+
+  const session = await getSession();
+  if (session?.tenantId) return session.tenantId;
+
+  return TENANT_ID;
 }
 
 /**

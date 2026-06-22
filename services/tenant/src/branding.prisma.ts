@@ -4,6 +4,7 @@ import type { TenantContext } from "@lms/types";
 
 import {
   emptyBranding,
+  normalizeHost,
   type BrandingPatch,
   type BrandingRecord,
   type BrandingStore,
@@ -134,6 +135,21 @@ export function createPrismaBrandingStore(): BrandingStore {
         tenantId,
       );
       return rows[0] ? toRecord(rows[0]) : emptyBranding(tenantId);
+    },
+
+    async resolveTenantByDomain(host: string): Promise<string | null> {
+      // Pre-auth control-plane lookup: no tenant context exists yet, so an
+      // RLS-scoped read would see nothing. custom_domain is globally UNIQUE
+      // (citext), so this returns at most one tenant id and nothing else.
+      const normalized = normalizeHost(host);
+      if (!normalized) return null;
+      const cp = controlPlane() as unknown as Db;
+      const rows = await cp.$queryRawUnsafe<{ tenant_id: string }[]>(
+        `SELECT tenant_id FROM tenant_branding
+           WHERE custom_domain = $1::citext LIMIT 1`,
+        normalized,
+      );
+      return rows[0]?.tenant_id ?? null;
     },
   };
 }

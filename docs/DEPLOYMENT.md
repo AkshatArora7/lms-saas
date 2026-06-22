@@ -50,6 +50,52 @@ deploy.
 Set runtime env (DATABASE_URL, JWT_SECRET, BLOB_READ_WRITE_TOKEN, UPSTASH_*,
 GROQ_API_KEY, CIAM_*) in each Vercel project's Environment Variables.
 
+## Custom domains: white-label at the edge
+
+A school can serve the learner web app from its **own domain** — a platform
+subdomain (`school.lms.app`) or its own apex/subdomain (`learn.school.edu`). The
+domain attachment is a **Vercel dashboard / DNS action** (there is no committed
+`vercel.json` — domain binding is configured in Vercel, not in the repo). The app
+then resolves the tenant from the request `Host` **at the edge** and renders that
+tenant's **effective (inheritance-resolved) branding**.
+
+**1. Attach the domain in Vercel** (web project → Settings → Domains → **Add**):
+
+- **Platform subdomains** (`*.lms.app`): add a **wildcard domain** `*.lms.app` to
+  the web project and point a wildcard DNS `CNAME` (`*.lms.app` →
+  `cname.vercel-dns.com`) so every school subdomain hits this deployment.
+- **A school's own domain** (`learn.school.edu`): add it as a domain on the web
+  project; Vercel shows the exact `CNAME`/`A` record the school must create at its
+  DNS provider, then issues the TLS certificate once the record resolves.
+
+**2. Set the web project's environment variables** (Vercel → web project →
+Environment Variables):
+
+| Env | Purpose | Default |
+| --- | --- | --- |
+| `APP_DOMAIN` | The platform's **first-party** domain. Requests on this host (or any subdomain of it) skip the by-domain lookup and use the session/pinned tenant; only genuinely custom hosts trigger resolution. | `localhost` |
+| `TENANT_SERVICE_URL` | Base URL the edge middleware calls for the host→tenant lookup. | `http://localhost:4002` |
+
+**3. How resolution works at runtime** (no extra config):
+
+1. Edge middleware (`apps/web/middleware.ts`) reads the request `Host`. A
+   first-party host (`APP_DOMAIN` or its subdomains, plus localhost) is skipped.
+2. For a custom host it calls the tenant service
+   `GET /tenants/by-domain/:host` (pre-auth, control-plane) at `TENANT_SERVICE_URL`,
+   which resolves `tenant_branding.custom_domain` → an opaque `tenantId` (404 if
+   no tenant claims the host).
+3. The resolved id is forwarded to the server layer on the `x-lms-tenant` request
+   header (any inbound copy of that header is **stripped first** — anti-spoof).
+4. The root layout resolves that tenant's **effective branding** and applies it,
+   so the custom-domain landing/login screen already carries the school's brand
+   **before any session exists**.
+
+Effective branding follows the precedence **sub-tenant override → parent
+(district) default → platform default** (`tenant_effective_branding()` walks the
+parent chain). If the lookup fails or the service is unreachable, the app falls
+back to the default brand and never blocks navigation. See the
+[tenant service spec](services/tenant.md) for the endpoint contract.
+
 ## Services on a container host
 
 `deploy-services.yml` publishes `ghcr.io/<owner>/<repo>/<service>:{sha,latest}`.

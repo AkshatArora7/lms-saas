@@ -303,6 +303,36 @@ export function registerTenantRoutes(
       return reply.code(200).send({ branding: effective, overrides });
     },
   );
+
+  // Host -> tenant resolution for custom domains (#12). PRE-AUTH and
+  // control-plane: it runs before any tenant context exists (e.g. the
+  // custom-domain login screen must already be branded), so it does NOT build a
+  // TenantContext or call resolveTenant — it queries `tenant_branding`
+  // control-plane. Returns ONLY the opaque tenant id (custom_domain is globally
+  // unique; no tenant-owned data is exposed). 404 when no tenant claims the host.
+  app.get<{ Params: { host: string } }>(
+    "/tenants/by-domain/:host",
+    async (req, reply) => {
+      // The :host segment is URL-encoded by callers; decode defensively.
+      let host = req.params.host;
+      try {
+        host = decodeURIComponent(host);
+      } catch {
+        return badRequest(reply, "host is malformed.");
+      }
+      if (!isNonEmptyString(host)) {
+        return badRequest(reply, "host is required.");
+      }
+      const tenantId = await deps.brandingStore.resolveTenantByDomain(host);
+      if (!tenantId) {
+        return reply.code(404).send({
+          error: "not_found",
+          message: "No tenant is bound to this domain.",
+        });
+      }
+      return reply.code(200).send({ tenantId });
+    },
+  );
 }
 
 function isBrandingTheme(value: unknown): value is BrandingTheme {

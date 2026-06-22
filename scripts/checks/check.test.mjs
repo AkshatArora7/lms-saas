@@ -28,7 +28,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..", "..");
 
 // Mirror the documented EXCEPTIONS from check-rls.mjs (kept in sync deliberately).
-const REAL_EXCEPTIONS = ["tenant", "plan", "permission", "role_permission", "tenant_admin_delegation"];
+const REAL_EXCEPTIONS = ["tenant", "plan", "permission", "role_permission", "tenant_admin_delegation", "tenant_silo_migration"];
 
 // ----------------------------------------------------------------------------
 // RLS invariant — RED paths

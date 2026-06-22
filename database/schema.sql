@@ -772,13 +772,40 @@ CREATE TABLE IF NOT EXISTS sis_sync (
 CREATE INDEX IF NOT EXISTS ix_sis_sync_tenant_run ON sis_sync(tenant_id, source, last_run_at DESC);
 
 CREATE TABLE IF NOT EXISTS scorm_package (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id   uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
-  topic_id    uuid REFERENCES content_topic(id) ON DELETE CASCADE,
-  version     text NOT NULL DEFAULT '2004' CHECK (version IN ('1.2','2004')),
-  manifest    jsonb NOT NULL DEFAULT '{}'::jsonb,
-  blob_url    text NOT NULL
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  topic_id      uuid REFERENCES content_topic(id) ON DELETE CASCADE,
+  version       text NOT NULL DEFAULT '2004' CHECK (version IN ('1.2','2004')),
+  title         text,
+  launch_href   text NOT NULL DEFAULT '',  -- resolved default SCO launch href (relative)
+  mastery_score numeric,                   -- 0..1 normalized passing score, nullable
+  manifest      jsonb NOT NULL DEFAULT '{}'::jsonb,
+  blob_url      text NOT NULL
 );
+
+-- SCORM runtime tracking: one upserted attempt per (tenant, package, learner).
+-- Mirrors content_completion's one-row-per learner+target shape; raw cmi strings
+-- retained alongside the normalized completion/success/score model.
+CREATE TABLE IF NOT EXISTS scorm_attempt (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id         uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  package_id        uuid NOT NULL REFERENCES scorm_package(id) ON DELETE CASCADE,
+  learner_id        uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  completion_status text NOT NULL DEFAULT 'unknown'
+                      CHECK (completion_status IN ('completed','incomplete','not_attempted','unknown')),
+  success_status    text NOT NULL DEFAULT 'unknown'
+                      CHECK (success_status IN ('passed','failed','unknown')),
+  score_scaled      numeric,            -- 0..1 normalized (cmi.score.scaled / raw÷max)
+  score_raw         numeric,            -- cmi.core.score.raw / cmi.score.raw (as reported)
+  lesson_status     text,               -- raw SCORM 1.2 cmi.core.lesson_status (verbatim)
+  session_time      text,               -- raw cmi.session_time / cmi.core.session_time
+  total_time        text,               -- optional accumulated cmi.total_time
+  attempted_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, package_id, learner_id)
+);
+CREATE INDEX IF NOT EXISTS ix_scorm_attempt_pkg ON scorm_attempt(tenant_id, package_id);
+CREATE INDEX IF NOT EXISTS ix_scorm_attempt_learner ON scorm_attempt(tenant_id, learner_id);
 
 -- xAPI / SCORM runtime tracking (learner state).
 CREATE TABLE IF NOT EXISTS xapi_statement (

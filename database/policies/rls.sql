@@ -26,7 +26,7 @@ DECLARE
     'rubric_criterion','rubric_level','competency','learning_objective',
     'objective_alignment','discussion_forum','discussion_topic',
     'discussion_post','lti_registration','lti_deployment','sis_sync',
-    'scorm_package','xapi_statement','release_condition','intelligent_agent',
+    'scorm_package','scorm_attempt','xapi_statement','release_condition','intelligent_agent',
     'audit_log','event_outbox','event_inbox','idempotency_key','subscription',
     'academic_session','announcement','calendar_event','notification',
     'notification_preference','video_asset','ai_embedding','ai_chat',

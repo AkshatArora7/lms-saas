@@ -1,5 +1,7 @@
 import { withTenant } from "@lms/db";
+import { EVENT_TYPES } from "@lms/events";
 
+import { isPassing } from "./scorm/runtime.js";
 import {
   slugify,
   type ContentStore,
@@ -9,6 +11,7 @@ import {
   type NewModuleInput,
   type NewPageInput,
   type NewReleaseConditionInput,
+  type NewScormPackageInput,
   type NewTopicInput,
   type PageDetail,
   type PageRecord,
@@ -16,12 +19,19 @@ import {
   type PageVersionRecord,
   type PageVersionState,
   type ReleaseConditionRecord,
+  type SaveScormAttemptInput,
+  type SaveScormAttemptResult,
+  type ScormAttemptRecord,
+  type ScormCompletionStatus,
+  type ScormPackageRecord,
+  type ScormSuccessStatus,
   type TopicKind,
   type TopicRecord,
   type UpdateModuleInput,
   type UpdatePageInput,
   type UpdateTopicInput,
 } from "./store.js";
+import type { ScormVersion } from "./scorm/manifest.js";
 
 interface ModuleRow {
   id: string;
@@ -77,9 +87,42 @@ interface PageVersionRow {
   created_at: Date | string;
 }
 
+interface ScormPackageRow {
+  id: string;
+  tenant_id: string;
+  topic_id: string | null;
+  version: ScormVersion;
+  title: string | null;
+  launch_href: string;
+  mastery_score: number | string | null;
+  manifest: unknown;
+  blob_url: string;
+}
+interface ScormAttemptRow {
+  id: string;
+  tenant_id: string;
+  package_id: string;
+  learner_id: string;
+  completion_status: ScormCompletionStatus;
+  success_status: ScormSuccessStatus;
+  score_scaled: number | string | null;
+  score_raw: number | string | null;
+  lesson_status: string | null;
+  session_time: string | null;
+  total_time: string | null;
+  attempted_at: Date | string;
+  updated_at: Date | string;
+}
+
 interface Db {
   $queryRawUnsafe<T>(sql: string, ...args: unknown[]): Promise<T>;
   $executeRawUnsafe(sql: string, ...args: unknown[]): Promise<number>;
+}
+
+function numOrNull(v: number | string | null): number | null {
+  if (v === null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 function iso(v: Date | string): string {
@@ -163,11 +206,44 @@ function toPageVersion(r: PageVersionRow): PageVersionRecord {
   };
 }
 
+function toScormPackage(r: ScormPackageRow): ScormPackageRecord {
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    topicId: r.topic_id,
+    version: r.version,
+    title: r.title,
+    launchHref: r.launch_href,
+    masteryScore: numOrNull(r.mastery_score),
+    blobUrl: r.blob_url,
+    manifest: asObject(r.manifest),
+  };
+}
+function toScormAttempt(r: ScormAttemptRow): ScormAttemptRecord {
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    packageId: r.package_id,
+    learnerId: r.learner_id,
+    completionStatus: r.completion_status,
+    successStatus: r.success_status,
+    scoreScaled: numOrNull(r.score_scaled),
+    scoreRaw: numOrNull(r.score_raw),
+    lessonStatus: r.lesson_status,
+    sessionTime: r.session_time,
+    totalTime: r.total_time,
+    attemptedAt: iso(r.attempted_at),
+    updatedAt: iso(r.updated_at),
+  };
+}
+
 const MODULE_COLS = `id, tenant_id, course_id, parent_id, title, position, created_at`;
 const TOPIC_COLS = `id, tenant_id, module_id, title, kind, body, blob_url, position, is_required, created_at`;
 const RELEASE_COLS = `id, tenant_id, course_id, target_type, target_id, expression, created_at`;
 const PAGE_COLS = `id, tenant_id, course_id, title, slug, status, published_version_id, created_by, created_at, updated_at`;
 const PAGE_VERSION_COLS = `id, tenant_id, page_id, version_number, body, state, created_by, created_at`;
+const SCORM_PACKAGE_COLS = `id, tenant_id, topic_id, version, title, launch_href, mastery_score, manifest, blob_url`;
+const SCORM_ATTEMPT_COLS = `id, tenant_id, package_id, learner_id, completion_status, success_status, score_scaled, score_raw, lesson_status, session_time, total_time, attempted_at, updated_at`;
 
 /**
  * Postgres-backed content store. Every call runs through `withTenant`, so all
@@ -540,6 +616,133 @@ export function createPrismaStore(): ContentStore {
           pageId,
         );
         return rows[0] ? toPageVersion(rows[0]) : null;
+      });
+    },
+
+    // --- SCORM (#31) -------------------------------------------------------
+    async createScormPackage(ctx, input: NewScormPackageInput) {
+      return withTenant(ctx, async (db: Db) => {
+        const rows = await db.$queryRawUnsafe<ScormPackageRow[]>(
+          `INSERT INTO scorm_package
+             (tenant_id, topic_id, version, title, launch_href, mastery_score, manifest, blob_url)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8)
+           RETURNING ${SCORM_PACKAGE_COLS}`,
+          ctx.tenantId,
+          input.topicId ?? null,
+          input.version,
+          input.title,
+          input.launchHref,
+          input.masteryScore,
+          JSON.stringify(input.manifest),
+          input.blobUrl,
+        );
+        return toScormPackage(rows[0]!);
+      });
+    },
+
+    async getScormPackage(ctx, id) {
+      return withTenant(ctx, async (db: Db) => {
+        const rows = await db.$queryRawUnsafe<ScormPackageRow[]>(
+          `SELECT ${SCORM_PACKAGE_COLS} FROM scorm_package WHERE id = $1::uuid LIMIT 1`,
+          id,
+        );
+        return rows[0] ? toScormPackage(rows[0]) : null;
+      });
+    },
+
+    async saveScormAttempt(
+      ctx,
+      packageId,
+      input: SaveScormAttemptInput,
+    ): Promise<SaveScormAttemptResult> {
+      return withTenant<SaveScormAttemptResult>(ctx, async (db: Db) => {
+        // Guard: the package must exist in this tenant (also gives us the
+        // mastery score for the pass determination on the gradebook event).
+        const pkgRows = await db.$queryRawUnsafe<
+          { id: string; mastery_score: number | string | null }[]
+        >(
+          `SELECT id, mastery_score FROM scorm_package WHERE id = $1::uuid LIMIT 1`,
+          packageId,
+        );
+        if (pkgRows.length === 0) {
+          return { ok: false, reason: "package_not_found" };
+        }
+        const masteryScore = numOrNull(pkgRows[0]!.mastery_score);
+
+        const rows = await db.$queryRawUnsafe<ScormAttemptRow[]>(
+          `INSERT INTO scorm_attempt
+             (tenant_id, package_id, learner_id, completion_status, success_status,
+              score_scaled, score_raw, lesson_status, session_time, total_time)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10)
+           ON CONFLICT (tenant_id, package_id, learner_id) DO UPDATE SET
+             completion_status = EXCLUDED.completion_status,
+             success_status    = EXCLUDED.success_status,
+             score_scaled      = EXCLUDED.score_scaled,
+             score_raw         = EXCLUDED.score_raw,
+             lesson_status     = EXCLUDED.lesson_status,
+             session_time      = EXCLUDED.session_time,
+             total_time        = EXCLUDED.total_time,
+             updated_at        = now()
+           RETURNING ${SCORM_ATTEMPT_COLS}`,
+          ctx.tenantId,
+          packageId,
+          input.learnerId,
+          input.completionStatus ?? "unknown",
+          input.successStatus ?? "unknown",
+          input.scoreScaled ?? null,
+          input.scoreRaw ?? null,
+          input.lessonStatus ?? null,
+          input.sessionTime ?? null,
+          input.totalTime ?? null,
+        );
+        const attempt = toScormAttempt(rows[0]!);
+
+        // Surface results to the gradebook/analytics path: emit a learning
+        // event in the SAME transaction (outbox pattern, attendance §) when the
+        // attempt reaches a terminal/passing state.
+        const passed = isPassing(
+          {
+            successStatus: attempt.successStatus,
+            scoreScaled: attempt.scoreScaled,
+          },
+          masteryScore,
+        );
+        const terminal =
+          attempt.completionStatus === "completed" ||
+          attempt.successStatus === "passed" ||
+          attempt.successStatus === "failed";
+        if (terminal) {
+          await db.$executeRawUnsafe(
+            `INSERT INTO event_outbox (tenant_id, type, actor_id, payload)
+             VALUES ($1::uuid, $2, $3::uuid, $4::jsonb)`,
+            ctx.tenantId,
+            EVENT_TYPES.LEARNING_EVENT_CAPTURED,
+            attempt.learnerId,
+            JSON.stringify({
+              source: "scorm",
+              packageId: attempt.packageId,
+              learnerId: attempt.learnerId,
+              completionStatus: attempt.completionStatus,
+              successStatus: attempt.successStatus,
+              scoreScaled: attempt.scoreScaled,
+              scoreRaw: attempt.scoreRaw,
+              passed,
+            }),
+          );
+        }
+        return { ok: true, attempt };
+      });
+    },
+
+    async getScormAttempt(ctx, packageId, learnerId) {
+      return withTenant(ctx, async (db: Db) => {
+        const rows = await db.$queryRawUnsafe<ScormAttemptRow[]>(
+          `SELECT ${SCORM_ATTEMPT_COLS} FROM scorm_attempt
+            WHERE package_id = $1::uuid AND learner_id = $2::uuid LIMIT 1`,
+          packageId,
+          learnerId,
+        );
+        return rows[0] ? toScormAttempt(rows[0]) : null;
       });
     },
   };

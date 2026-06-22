@@ -104,6 +104,17 @@ const loginCss = `
   text-align: center;
   overflow-wrap: anywhere;
 }
+.login-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 @media (min-width: 641px) {
   .login-split {
@@ -329,7 +340,7 @@ export default function LoginForm({ brand }: { brand: Brand }) {
 
       {/* Compact brand header — phone only */}
       <div className="login-brand-compact">
-        <BrandMark brand={brand} size={48} />
+        <BrandMark brand={brand} decorative size={48} />
         <p className="login-brand-compact__name">{brand.name}</p>
         <p className="login-brand-compact__tagline">{brand.tagline}</p>
       </div>
@@ -337,7 +348,7 @@ export default function LoginForm({ brand }: { brand: Brand }) {
       {/* Showcase panel — tablet/desktop only */}
       <div className="login-showcase">
         <div className="login-showcase__brand">
-          <BrandMark brand={brand} size={44} />
+          <BrandMark brand={brand} decorative size={44} />
           <p className="login-showcase__name">{brand.name}</p>
         </div>
 
@@ -371,11 +382,19 @@ export default function LoginForm({ brand }: { brand: Brand }) {
 
               <Stack gap={3}>
                 <Field htmlFor="email" label={t("auth.email")} required>
-                  <Input autoComplete="email" name="email" type="email" />
+                  <Input
+                    aria-describedby={error ? "login-error" : undefined}
+                    aria-invalid={error ? true : undefined}
+                    autoComplete="email"
+                    name="email"
+                    type="email"
+                  />
                 </Field>
 
                 <Field htmlFor="password" label={t("auth.password")} required>
                   <Input
+                    aria-describedby={error ? "login-error" : undefined}
+                    aria-invalid={error ? true : undefined}
                     autoComplete="current-password"
                     name="password"
                     type="password"
@@ -383,11 +402,19 @@ export default function LoginForm({ brand }: { brand: Brand }) {
                 </Field>
               </Stack>
 
-              {error ? <Alert tone="danger">{error}</Alert> : null}
+              {error ? (
+                <div id="login-error">
+                  <Alert tone="danger">{error}</Alert>
+                </div>
+              ) : null}
 
               <Button disabled={busy} fullWidth type="submit">
                 {busy ? t("auth.signingIn") : t("auth.signIn")}
               </Button>
+
+              <p aria-live="polite" className="login-sr-only" role="status">
+                {busy ? "Signing in…" : ""}
+              </p>
 
               <Divider />
 

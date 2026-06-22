@@ -130,7 +130,7 @@ export default async function TenantSettings() {
                 <Stack gap={3}>
                   <h2 className="set-section-title">Organisation</h2>
                   <Inline gap={3}>
-                    <BrandMark brand={brand} size={44} />
+                    <BrandMark brand={brand} decorative size={44} />
                     <Stack gap={1}>
                       <p className="set-brand-name">{overview.name}</p>
                       <p className="set-detail">

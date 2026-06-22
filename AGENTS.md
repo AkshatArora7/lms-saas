@@ -73,7 +73,7 @@ automated).
 
 ### 3.1 Automated checks
 
-Two repo-policy guards live in [`scripts/checks/`](scripts/checks) (Node ESM,
+Repo-policy guards live in [`scripts/checks/`](scripts/checks) (Node ESM,
 zero extra dependencies). They run in CI in the required **"Lint · Typecheck ·
 Build · Test"** job (step *Repo rules (RLS + commits)*, before Lint) and you can
 run them locally:
@@ -82,7 +82,8 @@ run them locally:
 | ------- | ----- | -------------- |
 | `pnpm check:rls` | [`check-rls.mjs`](scripts/checks/check-rls.mjs) | Every table in `database/schema.sql` that declares its own `tenant_id uuid` column is listed in the `tenant_tables` array in `database/policies/rls.sql` (and the list has no stale entries). Documented control-plane / join-based tables (`tenant`, `plan`, `permission`, `role_permission`, `tenant_admin_delegation`) are an explicit allowlist (`EXCEPTIONS`); extending it must be a conscious reviewer decision. Read-only over the SQL — never edits schema or RLS. |
 | `pnpm check:commits` | [`check-commits.mjs`](scripts/checks/check-commits.mjs) | Each non-merge commit in `origin/main..HEAD` has a Conventional Commit subject prefix, references an issue (`#<n>`), and carries **no** `Co-authored-by:` trailer and **no** "Generated with/by" footer. Inspects commit-message content only — never the assignee. |
-| `pnpm check:rules` | both of the above | `check:rls && check:commits` — the combined gate CI runs. |
+| `pnpm check:rules` | all of the above | `check:rls && check:commits && check:handshake` — the combined gate CI runs. |
+| `pnpm check:handshake` | [`check-handshake.mjs`](scripts/checks/check-handshake.mjs) | Validates the multi-agent delegation protocol's machine-readable surfaces (see [`docs/AGENT_DELEGATION_PROTOCOL.md`](docs/AGENT_DELEGATION_PROTOCOL.md) §7): the handshake template (`.claude/agents/handshake.template.md`) has all seven required sections (§1 Task … §7 Handshake log), in order; and the agent roles named in `docs/AGENT_DELEGATION_PROTOCOL.md` and `.claude/agents/README.md` match the actual `.claude/agents/*.md` files (no undocumented agent file, no documented role without a file). Folded into `check:rules`. Live handshakes are git-ignored, so their lint is local-only and non-fatal in CI. |
 | `pnpm test:checks` | guard unit tests | `node --test` over the guards' own red/green unit tests (`scripts/checks/**/*.test.mjs`). |
 
 ---
@@ -106,6 +107,10 @@ Work is decomposed across **specialised agent roles**. A fresh agent may be spun
 up per task, but every agent operates under one of these roles and follows the
 **hand-off protocol**. **No agent denies a task** — it either does it or delegates
 it to the role that can.
+
+> Full protocol reference: [`docs/AGENT_DELEGATION_PROTOCOL.md`](docs/AGENT_DELEGATION_PROTOCOL.md)
+> — the detailed operating manual for the rules below (this section stays
+> normative; the reference elaborates, it does not redefine).
 
 ### Roles (the 10-agent SDLC team — full specs in [`.claude/agents/`](.claude/agents/README.md))
 
@@ -153,6 +158,7 @@ human maintainer. The chain always terminates in a decision, never in silence.
 - Backlog source of truth → [`docs/backlog/`](docs/backlog)
 - Issue/label/milestone/board seeder → [`scripts/github/seed-backlog.ps1`](scripts/github/seed-backlog.ps1)
 - Canonical schema + RLS → [`database/schema.sql`](database/schema.sql), [`database/policies/rls.sql`](database/policies/rls.sql)
-- Repo-policy guards (RLS + commit hygiene) → [`scripts/checks/`](scripts/checks) — `pnpm check:rules` (`check:rls` + `check:commits`) and `pnpm test:checks`; CI runs them in the required job. See [§3.1](#31-automated-checks).
+- Repo-policy guards (RLS + commit hygiene + delegation protocol) → [`scripts/checks/`](scripts/checks) — `pnpm check:rules` (`check:rls` + `check:commits` + `check:handshake`) and `pnpm test:checks`; CI runs them in the required job. See [§3.1](#31-automated-checks).
+- Agent delegation protocol (detailed reference) → [`docs/AGENT_DELEGATION_PROTOCOL.md`](docs/AGENT_DELEGATION_PROTOCOL.md); roles + hand-off + escalation are normative in [§5](#5-multi-agent-delegation-model).
 - Per-service specs (generated) → [`docs/services/`](docs/services) via [`scripts/docs/gen-service-specs.py`](scripts/docs/gen-service-specs.py)
 - Architecture / tenancy / standards → [`docs/`](docs)

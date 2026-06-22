@@ -22,6 +22,11 @@ import Fastify, {
 } from "fastify";
 
 import { DevBlobSigner, type BlobSigner } from "./blob.js";
+import {
+  DbCourseAccessPolicy,
+  FakeCourseAccessPolicy,
+  type CourseAccessPolicy,
+} from "./access.js";
 import { StubCaptioner, type Captioner } from "./captioner.js";
 import { InlinePipelineRunner, type PipelineRunner } from "./pipeline.js";
 import {
@@ -43,6 +48,8 @@ export interface BuildAppOptions {
   resolveTenant?: VideoRouteDeps["resolveTenant"];
   resolveCaller?: VideoRouteDeps["resolveCaller"];
   blobSigner?: BlobSigner;
+  /** Course-scoped read gate (#319); defaults to the RLS-backed Db policy. */
+  courseAccessPolicy?: CourseAccessPolicy;
   transcoder?: Transcoder;
   captioner?: Captioner;
   /** Inject a synchronous runner in tests; defaults to fire-and-forget. */
@@ -125,6 +132,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
     resolveCaller: options.resolveCaller ?? headerCallerResolver(),
     blobSigner: options.blobSigner ?? new DevBlobSigner(),
+    courseAccessPolicy:
+      options.courseAccessPolicy ?? new DbCourseAccessPolicy(),
     transcoder,
     captioner,
     pipeline,
@@ -150,8 +159,19 @@ async function start(): Promise<void> {
       process.env.DATABASE_URL ??= "postgres://demo:demo@localhost:5432/demo";
       process.env.JWT_SECRET ??= "local-dev-secret-not-for-production";
     }
-    const store = useMemoryStore ? new MemoryVideoStore() : undefined;
-    const app = buildApp(store ? { store } : {});
+    // Memory dev mode: share one Fake policy between the store's list filter and
+    // the route detail gate so they agree (#319).
+    const courseAccessPolicy = useMemoryStore
+      ? new FakeCourseAccessPolicy()
+      : undefined;
+    const store = useMemoryStore
+      ? new MemoryVideoStore(undefined, undefined, courseAccessPolicy)
+      : undefined;
+    const app = buildApp(
+      store
+        ? { store, ...(courseAccessPolicy ? { courseAccessPolicy } : {}) }
+        : {},
+    );
     await app.listen({ port, host: "0.0.0.0" });
     log.info(
       { port, store: useMemoryStore ? "memory" : "prisma" },

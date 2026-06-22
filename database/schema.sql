@@ -1107,9 +1107,13 @@ CREATE TABLE IF NOT EXISTS video_asset (
   renditions   jsonb NOT NULL DEFAULT '[]'::jsonb,
   captions     jsonb NOT NULL DEFAULT '[]'::jsonb,
   duration_seconds integer,
+  -- Optional course association: when set, streaming is restricted to enrolled
+  -- students / course teachers / admins (app-authz filter, not an RLS axis).
+  course_id    uuid REFERENCES course(id) ON DELETE SET NULL,
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS ix_video_tenant ON video_asset(tenant_id);
+CREATE INDEX IF NOT EXISTS ix_video_course ON video_asset(course_id);
 
 -- ============================================================================
 -- AI / LUMI  (RAG chat history + content embeddings)

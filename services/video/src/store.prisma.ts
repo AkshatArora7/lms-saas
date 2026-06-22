@@ -1,5 +1,7 @@
 import { withTenant } from "@lms/db";
 
+import type { Principal } from "./access.js";
+import { ADMIN_ROLES } from "./routes.js";
 import type { CaptionTrack, Rendition } from "./transcoder.js";
 import type {
   NewVideoInput,
@@ -18,6 +20,7 @@ interface VideoRow {
   renditions: unknown;
   captions: unknown;
   duration_seconds: number | string | null;
+  course_id: string | null;
   created_at: Date | string;
 }
 
@@ -56,11 +59,22 @@ function toVideo(r: VideoRow): VideoRecord {
     captions: asArray<CaptionTrack>(r.captions),
     durationSeconds:
       r.duration_seconds === null ? null : Number(r.duration_seconds),
+    courseId: r.course_id,
     createdAt: iso(r.created_at),
   };
 }
 
-const VIDEO_COLS = `id, tenant_id, owner_id, title, source_blob_url, status, renditions, captions, duration_seconds, created_at`;
+const VIDEO_COLS = `id, tenant_id, owner_id, title, source_blob_url, status, renditions, captions, duration_seconds, course_id, created_at`;
+
+/**
+ * Does this principal hold a tenant-wide admin role? Admins short-circuit the
+ * course-scoped list filter (same set as the routes `isAdmin`).
+ */
+function isAdminPrincipal(viewer: Principal): boolean {
+  return viewer.roles.some((r) =>
+    (ADMIN_ROLES as readonly string[]).includes(r),
+  );
+}
 
 /**
  * Postgres-backed video store. Every call runs through `withTenant`, so all
@@ -72,22 +86,43 @@ export function createPrismaStore(): VideoStore {
     async createVideo(ctx, input: NewVideoInput) {
       return withTenant(ctx, async (db: Db) => {
         const rows = await db.$queryRawUnsafe<VideoRow[]>(
-          `INSERT INTO video_asset (tenant_id, owner_id, title, source_blob_url, status)
-           VALUES ($1::uuid, $2::uuid, $3, $4, 'uploaded')
+          `INSERT INTO video_asset (tenant_id, owner_id, title, source_blob_url, status, course_id)
+           VALUES ($1::uuid, $2::uuid, $3, $4, 'uploaded', $5::uuid)
            RETURNING ${VIDEO_COLS}`,
           ctx.tenantId,
           input.ownerId,
           input.title,
           input.sourceBlobUrl,
+          input.courseId ?? null,
         );
         return toVideo(rows[0]!);
       });
     },
 
-    async listVideos(ctx) {
+    async listVideos(ctx, viewer) {
       return withTenant(ctx, async (db: Db) => {
+        // Admins see everything; non-admins see null-course videos plus the
+        // course-scoped ones they are enrolled in / teach (DB-side WHERE, so
+        // detail and list never disagree — ADR-0031 §D).
+        if (isAdminPrincipal(viewer)) {
+          const rows = await db.$queryRawUnsafe<VideoRow[]>(
+            `SELECT ${VIDEO_COLS} FROM video_asset ORDER BY created_at DESC`,
+          );
+          return rows.map(toVideo);
+        }
         const rows = await db.$queryRawUnsafe<VideoRow[]>(
-          `SELECT ${VIDEO_COLS} FROM video_asset ORDER BY created_at DESC`,
+          `SELECT ${VIDEO_COLS} FROM video_asset v
+            WHERE v.course_id IS NULL
+               OR EXISTS (
+                    SELECT 1
+                      FROM enrollment e
+                      JOIN course c ON c.org_unit_id = e.org_unit_id
+                     WHERE c.id = v.course_id
+                       AND e.user_id = $1::uuid
+                       AND e.status IN ('active','completed')
+                  )
+            ORDER BY v.created_at DESC`,
+          viewer.userId,
         );
         return rows.map(toVideo);
       });

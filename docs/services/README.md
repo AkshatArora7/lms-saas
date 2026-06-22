@@ -137,7 +137,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | ai | content |
 | lti | identity |
 | sis | course, enrollment, user-org |
-| video | - |
+| video | enrollment |
 | search | content, course, discussion |
 | billing | tenant |
 | audit | - |

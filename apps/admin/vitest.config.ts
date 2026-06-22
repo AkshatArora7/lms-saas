@@ -1,9 +1,10 @@
 import { defineConfig } from "vitest/config";
 
-// Pure unit tests for the stored-XSS HTML sanitizer (#32, architect D3). The
-// server-side sanitizer (`sanitizeHtmlString`) and the isomorphic entry point
-// run without a DOM, so the Node environment is sufficient — no Next runtime, no
-// Postgres, no network. Mirrors apps/web's vitest setup.
+// Pure unit tests for the admin app: the BFF auth flow (#104 — route handlers,
+// getSession/isAdmin, the Edge middleware) and the stored-XSS HTML sanitizer
+// (#32 — `sanitizeHtmlString` and its isomorphic entry point). All mock
+// `next/headers` cookies()/global fetch or run without a DOM — no Next runtime,
+// no Postgres, no network — so the Node environment is sufficient.
 export default defineConfig({
   test: {
     environment: "node",

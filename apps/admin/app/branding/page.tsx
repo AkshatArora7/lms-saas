@@ -133,7 +133,7 @@ export default async function BrandingShowcase() {
 
                 <div className="brand-preview">
                   <Inline gap={3}>
-                    <BrandMark brand={brand} size={44} />
+                    <BrandMark brand={brand} decorative size={44} />
                     <Stack gap={1}>
                       <p className="brand-preview__name">{displayName}</p>
                       <p className="brand-preview__tagline">

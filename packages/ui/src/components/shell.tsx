@@ -8,6 +8,13 @@ export interface BrandMarkProps {
   brand: Brand;
   size?: number;
   className?: string;
+  /**
+   * When the brand name is also rendered as adjacent visible text (topbar,
+   * login), the mark is purely decorative. Setting `decorative` hides it from
+   * assistive tech (`aria-hidden` on the wrapper + `alt=""` on the logo image)
+   * so the accessible name is not duplicated (WCAG 1.1.1 / 2.4.6).
+   */
+  decorative?: boolean;
 }
 
 export interface AppShellProps {
@@ -18,12 +25,26 @@ export interface AppShellProps {
   className?: string;
 }
 
-export function BrandMark({ brand, size = 36, className }: BrandMarkProps): ReactElement {
+export function BrandMark({
+  brand,
+  size = 36,
+  className,
+  decorative = false,
+}: BrandMarkProps): ReactElement {
   const style: CSSProperties = { width: `${size}px`, height: `${size}px` };
 
   return (
-    <span aria-label={brand.name} className={joinClassNames("lms-brandmark", className)} style={style}>
-      {brand.logoUrl ? <img alt={brand.name} src={brand.logoUrl} /> : getInitials(brand.name)}
+    <span
+      aria-hidden={decorative ? "true" : undefined}
+      aria-label={decorative ? undefined : brand.name}
+      className={joinClassNames("lms-brandmark", className)}
+      style={style}
+    >
+      {brand.logoUrl ? (
+        <img alt={decorative ? "" : brand.name} src={brand.logoUrl} />
+      ) : (
+        getInitials(brand.name)
+      )}
     </span>
   );
 }
@@ -40,14 +61,17 @@ export function AppShell({
       <UIStyles />
       <ThemeStyle brand={brand} tone={tone} />
       <div className={joinClassNames("lms-theme", "lms-shell", className)} data-tone={tone}>
+        <a className="lms-skip-link" href="#main">
+          Skip to main content
+        </a>
         <header className="lms-topbar">
           <div className="lms-topbar__brand">
-            <BrandMark brand={brand} />
+            <BrandMark brand={brand} decorative />
             <span className="lms-topbar__name">{brand.name}</span>
           </div>
           {actions ? <div className="lms-topbar__actions">{actions}</div> : null}
         </header>
-        <main className="lms-shell__main">
+        <main className="lms-shell__main" id="main">
           <Container>{children}</Container>
         </main>
       </div>

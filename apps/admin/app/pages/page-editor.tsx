@@ -89,6 +89,7 @@ const BUTTONS: ToolbarButton[] = [
 
 const css = `
 .ed-back { align-self: flex-start; }
+.ed-page-title { margin: 0; font-size: clamp(1.4rem, 4vw, 1.9rem); line-height: 1.2; overflow-wrap: anywhere; }
 .ed-grid { display: grid; gap: var(--lms-space-4); grid-template-columns: 1fr; align-items: start; }
 @media (min-width: 1025px) {
   .ed-grid { grid-template-columns: minmax(0, 1fr) 320px; }
@@ -163,6 +164,9 @@ const css = `
 .ed-dialog { background: var(--lms-surface); border-radius: var(--lms-radius-md); box-shadow: var(--lms-shadow-lg); width: 100%; max-width: 480px; max-height: 90vh; overflow: auto; padding: var(--lms-space-5); display: flex; flex-direction: column; gap: var(--lms-space-4); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .ed-banner { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lms-space-3); }
+@media (prefers-reduced-motion: reduce) {
+  .ed-tb-btn { transition: none; }
+}
 `;
 
 interface EditorProps {
@@ -587,6 +591,8 @@ export default function PageEditor({ courseId, page }: EditorProps): ReactElemen
             {statusLabel}
           </span>
         </div>
+
+        <h1 className="ed-page-title">{page ? "Edit page" : "New page"}</h1>
 
         {error ? (
           <div className="lms-alert lms-alert--danger" role="alert">

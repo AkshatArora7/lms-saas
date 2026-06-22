@@ -19,9 +19,14 @@
   "devDependencies": {
     "@lms/eslint-config": "workspace:*",
     "@lms/tsconfig": "workspace:*",
+    "@testing-library/react": "^16.0.1",
+    "@types/jest-axe": "^3.5.9",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "jest-axe": "^9.0.0",
+    "jsdom": "^25.0.1",
     "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "vitest": "^2.0.5"
   }
 }

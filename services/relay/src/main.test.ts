@@ -5,6 +5,7 @@ import type { EventEnvelope } from "@lms/events";
 import { describe, expect, it } from "vitest";
 
 import { notificationConsumerHandler } from "./consumer.js";
+import { buildApp } from "./main.js";
 import { DEMO_TENANT_ID, MemoryOutboxRelayStore } from "./store.memory.js";
 import { OutboxRelay } from "./store.js";
 
@@ -218,7 +219,6 @@ describe("notification consumer atomic dedupe (event_inbox)", () => {
 
 describe("buildApp", () => {
   it("serves /health and triggers a relay pass via POST /relay/run", async () => {
-    const { buildApp } = await import("./main.js");
     const store = new MemoryOutboxRelayStore();
     store.seedOutbox({
       tenantId: TENANT_A,

@@ -4,8 +4,10 @@ import { EVENT_TYPES } from "@lms/events";
 import {
   aggregateEvents,
   buildCourseEngagement,
+  ORG_ADMIN_ROLE,
   ratePct,
   round1,
+  TEACHING_ENROLLMENT_ROLES,
   type AggregateDimension,
   type AnalyticsStore,
   type CaliperEventRecord,
@@ -203,6 +205,16 @@ const ENGAGEMENT_GRADES_SQL = `
 // RLS-scoped (withTenant) and fully BOUND — both uuid params are cast per the
 // #267 rule. A teaching enrollment = a row on the course's offering
 // (course.org_unit_id) with a teaching role and an active/completed status.
+//
+// The teaching role names are NOT hand-typed here: they are sourced as bound
+// params from `TEACHING_ENROLLMENT_ROLES` (the SAME `StandardRole` set the
+// in-process `isCourseReadAuthorized` uses) so the SQL and the in-process check
+// share ONE source of truth. The matched column is still `role.name`; only the
+// origin of the values changes. Placeholders start at $3 (after the two uuids);
+// role names are plain text, so no `::uuid` cast applies to them.
+const TEACHING_ROLE_PLACEHOLDERS = TEACHING_ENROLLMENT_ROLES.map(
+  (_, i) => `$${i + 3}`,
+).join(",");
 const TEACHES_COURSE_SQL = `
   SELECT 1
     FROM enrollment e
@@ -210,7 +222,7 @@ const TEACHES_COURSE_SQL = `
     JOIN role   r ON r.id = e.role_id
    WHERE c.id = $1::uuid
      AND e.user_id = $2::uuid
-     AND r.name IN ('instructor','teacher','teaching_assistant')
+     AND r.name IN (${TEACHING_ROLE_PLACEHOLDERS})
      AND e.status IN ('active','completed')
    LIMIT 1`;
 
@@ -218,7 +230,9 @@ const TEACHES_COURSE_SQL = `
 // whose org unit contains the course's org unit — the unit itself, or (when the
 // assignment cascades) any ancestor of it via the materialised `org_unit.path`?
 // RLS (withTenant) scopes every table to the caller's tenant; both uuid params
-// are cast per the #267 rule ($1 = courseId, $2 = userId).
+// are cast per the #267 rule ($1 = courseId, $2 = userId). The `org_admin` role
+// name is the bound `ORG_ADMIN_ROLE` constant ($3) — the same `StandardRole`
+// source of truth as the in-process check; only the value's origin changes.
 const ADMIN_SCOPES_COURSE_SQL = `
   SELECT 1
     FROM role_assignment ra
@@ -226,7 +240,7 @@ const ADMIN_SCOPES_COURSE_SQL = `
     JOIN course   c   ON c.id = $1::uuid
     JOIN org_unit cou ON cou.id = c.org_unit_id
    WHERE ra.user_id = $2::uuid
-     AND r.name = 'org_admin'
+     AND r.name = $3
      AND (
            ra.org_unit_id = cou.id
         OR (ra.cascade AND ra.org_unit_id = ANY(cou.path))
@@ -395,6 +409,7 @@ export function createPrismaStore(): AnalyticsStore {
           TEACHES_COURSE_SQL,
           courseId,
           userId,
+          ...TEACHING_ENROLLMENT_ROLES,
         );
         return rows.length > 0;
       });
@@ -410,6 +425,7 @@ export function createPrismaStore(): AnalyticsStore {
           ADMIN_SCOPES_COURSE_SQL,
           courseId,
           userId,
+          ORG_ADMIN_ROLE,
         );
         return rows.length > 0;
       });

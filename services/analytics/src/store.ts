@@ -1,4 +1,4 @@
-import type { TenantContext } from "@lms/types";
+import type { StandardRole, TenantContext } from "@lms/types";
 
 /**
  * Learning Record Store for the analytics service (issue #60). Captures
@@ -530,23 +530,35 @@ export interface AnalyticsStore {
 // derived from trusted sources resolved under RLS, never client-supplied claims.
 // ---------------------------------------------------------------------------
 
+// The privileged set is pinned to the canonical, stable role keys
+// (`StandardRole` from `@lms/types`) — the same OneRoster/LTI-aligned vocabulary
+// used on the JWT claim, the gateway header, and the demo seed's `role.name`.
+// Typing these against the closed union ties them to that single source of
+// truth at compile time, instead of matching bare, drift-prone string literals.
+
 /** Tenant-wide admin persona that may read any course's engagement. */
-export const SUPER_ADMIN_ROLE = "super_admin";
+export const SUPER_ADMIN_ROLE: StandardRole = "super_admin";
 /** Org-scoped admin persona — limited to the org-unit subtree it administers. */
-export const ORG_ADMIN_ROLE = "org_admin";
+export const ORG_ADMIN_ROLE: StandardRole = "org_admin";
 
 /**
  * Tenant admin personas (kept for backwards reference; no longer the sole gate
  * — `org_admin` is now org-scoped, see `isCourseReadAuthorized`).
  */
-export const ADMIN_ROLES = [SUPER_ADMIN_ROLE, ORG_ADMIN_ROLE] as const;
+export const ADMIN_ROLES: readonly StandardRole[] = [
+  SUPER_ADMIN_ROLE,
+  ORG_ADMIN_ROLE,
+];
 
-/** Enrollment roles that count as "teaches the course" for authorization. */
-export const TEACHING_ENROLLMENT_ROLES = [
+/**
+ * Enrollment roles that count as "teaches the course" for authorization, keyed
+ * off `StandardRole`. (`"teacher"` is intentionally absent — it is NOT a member
+ * of the canonical union and matches no seeded role; it was a dead literal.)
+ */
+export const TEACHING_ENROLLMENT_ROLES: readonly StandardRole[] = [
   "instructor",
-  "teacher",
   "teaching_assistant",
-] as const;
+];
 
 /**
  * Pure authorization decision for a course-engagement read. Allowed iff the

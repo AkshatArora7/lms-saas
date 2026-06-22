@@ -44,6 +44,10 @@ source of truth that agents read and update as work moves through the SDLC.
   section before handing off** (decisions, real command output, stage status, and a
   log line naming the next owner). No agent deletes another's section. When the file
   and the code/schema disagree, **the source wins** — fix the claim, then the file.
+- **Full protocol:** [`docs/AGENT_DELEGATION_PROTOCOL.md`](../../docs/AGENT_DELEGATION_PROTOCOL.md)
+  is the detailed reference for the handshake lifecycle, hand-off/escalation, and the
+  `check:handshake` guard; [`AGENTS.md` §5](../../AGENTS.md#5-multi-agent-delegation-model)
+  is normative.
 
 ### Anti-hallucination rules every agent follows
 1. **Facts come from source, not memory** — read `AGENTS.md`, the issue, the

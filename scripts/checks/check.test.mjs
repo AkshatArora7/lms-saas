@@ -14,6 +14,15 @@ import {
   parseTenantScopedTables,
 } from "./lib/rls-invariant.mjs";
 import { lintCommitMessage, lintRange } from "./lib/commit-rules.mjs";
+import {
+  validateTemplate,
+  findRoleDrift,
+  validateHandshake,
+  roleSlugsFromFilenames,
+  documentedRoles,
+  parseSections,
+} from "./lib/handshake-protocol.mjs";
+import { readdirSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..", "..");
@@ -198,4 +207,191 @@ test("commits: lintRange on all-compliant messages is ok", () => {
   const { ok, violations } = lintRange(["feat(a): one (#92)", "fix(b): two (#92)"]);
   assert.equal(ok, true);
   assert.deepEqual(violations, []);
+});
+
+// ----------------------------------------------------------------------------
+// Handshake protocol — shared constants & helpers
+// ----------------------------------------------------------------------------
+
+// Mirror the documented EXCEPTIONS from check-handshake.mjs (kept in sync).
+const HANDSHAKE_EXCEPTIONS = ["README", "handshake.template"];
+
+// A minimal compliant template body (all 7 sections, in order) for RED-case edits.
+const GOOD_TEMPLATE = `# Handshake
+
+## 1. Task
+content
+## 2. Acceptance criteria
+content
+## 3. Stage status
+content
+## 4. Decisions & contracts
+content
+## 5. Verification
+content
+## 6. Open questions / blockers
+content
+## 7. Handshake log
+- 2026-06-22 · architect · did thing · **next owner → service-builder**
+`;
+
+// ----------------------------------------------------------------------------
+// Handshake protocol — Guard A (template integrity) GREEN
+// ----------------------------------------------------------------------------
+
+test("handshake: real handshake.template.md passes Guard A (GREEN)", () => {
+  const templateMd = readFileSync(
+    resolve(repoRoot, ".claude/agents/handshake.template.md"),
+    "utf8",
+  );
+  const violations = validateTemplate(templateMd);
+  assert.deepEqual(violations, [], `expected no violations, got:\n${violations.join("\n")}`);
+});
+
+test("handshake: a clean crafted template passes Guard A (GREEN)", () => {
+  assert.deepEqual(validateTemplate(GOOD_TEMPLATE), []);
+});
+
+test("handshake: parseSections returns numbered headings in order", () => {
+  const headings = parseSections(GOOD_TEMPLATE);
+  assert.equal(headings.length, 7);
+  assert.match(headings[0], /^1\. Task/);
+  assert.match(headings[6], /^7\. Handshake log/);
+});
+
+// ----------------------------------------------------------------------------
+// Handshake protocol — Guard A (template integrity) RED
+// ----------------------------------------------------------------------------
+
+test("handshake: template missing §5 Verification is reported (Guard A)", () => {
+  const broken = GOOD_TEMPLATE.replace("## 5. Verification\ncontent\n", "");
+  const violations = validateTemplate(broken);
+  assert.ok(violations.some((v) => /§5/.test(v) && /missing/.test(v)), violations.join("; "));
+});
+
+test("handshake: template with sections out of order is reported (Guard A)", () => {
+  // Swap §4 and §5 so §4 appears after §5 -> order violation on §5.
+  const reordered = `# Handshake
+
+## 1. Task
+c
+## 2. Acceptance criteria
+c
+## 3. Stage status
+c
+## 5. Verification
+c
+## 4. Decisions & contracts
+c
+## 6. Open questions / blockers
+c
+## 7. Handshake log
+- x · y · z · next owner → qa-agent
+`;
+  const violations = validateTemplate(reordered);
+  assert.ok(violations.some((v) => /out of order/.test(v)), violations.join("; "));
+});
+
+// ----------------------------------------------------------------------------
+// Handshake protocol — Guard B (role drift) GREEN against the real tree
+// ----------------------------------------------------------------------------
+
+test("handshake: real agent files + protocol doc + README have 0 role drift (GREEN)", () => {
+  const agentFilenames = readdirSync(resolve(repoRoot, ".claude/agents")).filter((f) =>
+    f.endsWith(".md"),
+  );
+  const protocolDocMd = readFileSync(
+    resolve(repoRoot, "docs/AGENT_DELEGATION_PROTOCOL.md"),
+    "utf8",
+  );
+  const readmeMd = readFileSync(resolve(repoRoot, ".claude/agents/README.md"), "utf8");
+  const violations = findRoleDrift(
+    agentFilenames,
+    protocolDocMd,
+    readmeMd,
+    HANDSHAKE_EXCEPTIONS,
+  );
+  assert.deepEqual(violations, [], `expected no role drift, got:\n${violations.join("\n")}`);
+});
+
+test("handshake: roleSlugsFromFilenames excludes README + handshake.template", () => {
+  const slugs = roleSlugsFromFilenames(
+    ["architect.md", "qa-agent.md", "README.md", "handshake.template.md"],
+    HANDSHAKE_EXCEPTIONS,
+  );
+  assert.deepEqual(slugs, ["architect", "qa-agent"]);
+});
+
+test("handshake: documentedRoles only returns backticked tokens", () => {
+  const doc = "The `architect` designs; qa-agent is plain prose here.";
+  const found = documentedRoles(doc, ["architect", "qa-agent"]);
+  assert.deepEqual(found, ["architect"]);
+});
+
+// ----------------------------------------------------------------------------
+// Handshake protocol — Guard B (role drift) RED
+// ----------------------------------------------------------------------------
+
+test("handshake: agent file not backticked in the doc is forward-drift (Guard B)", () => {
+  const agentFilenames = ["architect.md", "qa-agent.md", "README.md", "handshake.template.md"];
+  const protocolDoc = "Roles: `architect`."; // qa-agent missing
+  const readme = "Roles: `architect`, `qa-agent`.";
+  const violations = findRoleDrift(agentFilenames, protocolDoc, readme, HANDSHAKE_EXCEPTIONS);
+  assert.ok(
+    violations.some((v) => /qa-agent\.md/.test(v) && /AGENT_DELEGATION_PROTOCOL/.test(v)),
+    violations.join("; "),
+  );
+});
+
+test("handshake: a backticked fake role with no file is reverse-drift (Guard B)", () => {
+  const agentFilenames = ["architect.md", "README.md", "handshake.template.md"];
+  const protocolDoc = "Roles: `architect`, `ghost-agent`."; // ghost-agent has no file
+  const readme = "Roles: `architect`.";
+  const violations = findRoleDrift(agentFilenames, protocolDoc, readme, HANDSHAKE_EXCEPTIONS);
+  assert.ok(
+    violations.some((v) => /ghost-agent/.test(v) && /stale role reference/.test(v)),
+    violations.join("; "),
+  );
+});
+
+test("handshake: EXCEPTIONS slugs are never flagged (Guard B)", () => {
+  // README/handshake.template appear as files but are exceptions; they must not
+  // appear as missing roles, and their absence from docs is fine.
+  const agentFilenames = ["architect.md", "README.md", "handshake.template.md"];
+  const doc = "Roles: `architect`.";
+  const violations = findRoleDrift(agentFilenames, doc, doc, HANDSHAKE_EXCEPTIONS);
+  assert.deepEqual(violations, []);
+});
+
+// ----------------------------------------------------------------------------
+// Handshake protocol — Guard C (local handshake lint) GREEN + RED
+// ----------------------------------------------------------------------------
+
+test("handshake: a complete handshake passes Guard C (GREEN)", () => {
+  const canonical = ["architect", "service-builder", "qa-agent"];
+  const violations = validateHandshake("feat-x.md", GOOD_TEMPLATE, canonical);
+  assert.deepEqual(violations, [], violations.join("; "));
+});
+
+test("handshake: §7 last line naming an unknown next owner is reported (Guard C)", () => {
+  const canonical = ["architect", "service-builder", "qa-agent"];
+  const md = GOOD_TEMPLATE.replace(
+    "**next owner → service-builder**",
+    "**next owner → nonexistent-agent**",
+  );
+  const violations = validateHandshake("feat-x.md", md, canonical);
+  assert.ok(
+    violations.some((v) => /next owner "nonexistent-agent"/.test(v)),
+    violations.join("; "),
+  );
+});
+
+test("handshake: a handshake with no §7 log line is reported (Guard C)", () => {
+  const canonical = ["architect"];
+  const md = GOOD_TEMPLATE.replace(
+    "- 2026-06-22 · architect · did thing · **next owner → service-builder**\n",
+    "",
+  );
+  const violations = validateHandshake("feat-x.md", md, canonical);
+  assert.ok(violations.some((v) => /no log line/.test(v)), violations.join("; "));
 });

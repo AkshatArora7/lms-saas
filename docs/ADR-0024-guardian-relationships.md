@@ -72,3 +72,26 @@ target read surfaces (grades, announcements) live in other services.
 - Consent revocation is honoured in real time (no reconciliation job needed).
 - Grading/announcement integration is a documented contract, filed as follow-up
   issues; this slice is independently shippable and testable in `user-org`.
+
+## Follow-up: first cross-service consumer (#190 — attendance)
+
+The guardian-scoped attendance view (`#190`, `services/attendance`) is the first
+realized cross-service read built on this ADR. It preserves every property above:
+
+- **Consent re-derived live** (Decision §3). user-org grew a consent-filtered
+  batch read, `GET /guardians/{guardianId}/children/authorized`
+  (`services/user-org/src/guardian.routes.ts`), which filters the guardian's links
+  to `status='active'` then re-checks each child's gating consent
+  (`directory_information`) per request — so a consent revoke drops the child
+  immediately, with no relationship-row mutation. This complements the per-pair
+  `GET /guardians/authorize` predicate with a batch shape for "list my children".
+- **Consent stays owned by user-org** (Options §C / boundaries). attendance does
+  NOT re-derive consent or read `parental_consent`; it consumes the
+  relationship + consent decision through an injectable `GuardianChildrenResolver`
+  port (`services/attendance/src/guardian-resolver.ts`; prod HTTP impl calls the
+  authorized-children endpoint above). Attendance remains the sole reader of its
+  own `attendance_record` data and treats "not in the resolver's returned set" as
+  deny-by-default (404, not 403, so a guardian cannot probe other families).
+- **Read-only by construction** (Decision §4). The guardian endpoints are reads
+  only; the guardian is the server-authoritative `x-user-id` caller (ADR-0027),
+  never a client-supplied id, so there is no guardian-facing write path.

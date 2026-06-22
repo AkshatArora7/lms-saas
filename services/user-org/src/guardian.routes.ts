@@ -197,6 +197,49 @@ export function registerGuardianRoutes(
     },
   );
 
+  // 3b. List a guardian's *authorized* children: active links whose gating
+  //     consent (directory_information) is currently satisfied. This is the
+  //     consent-filtered read other services (e.g. attendance's guardian-scoped
+  //     view, #190) depend on — it never returns pending/revoked links nor
+  //     non-consented minors. Consent is re-derived live per request via
+  //     gateFor, so a consent revoke drops the child immediately.
+  app.get<{ Params: { guardianId: string } }>(
+    "/guardians/:guardianId/children/authorized",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      if (!UUID_RE.test(req.params.guardianId)) {
+        return badRequest(reply, "guardianId must be a uuid.");
+      }
+      const relationships = await deps.store.listStudentsForGuardian(
+        ctx,
+        req.params.guardianId,
+      );
+      const active = relationships.filter((r) => r.status === "active");
+      const gated = await Promise.all(
+        active.map(async (r) => {
+          const { consentSatisfied } = await gateFor(
+            deps,
+            ctx,
+            r.studentUserId,
+            GUARDIAN_CONSENT_CATEGORY,
+          );
+          return consentSatisfied
+            ? {
+                studentUserId: r.studentUserId,
+                relationship: r.relationship,
+              }
+            : null;
+        }),
+      );
+      const children = gated.filter(
+        (c): c is { studentUserId: string; relationship: GuardianKind } =>
+          c !== null,
+      );
+      return reply.code(200).send({ children });
+    },
+  );
+
   // 4. Activate a pending link (admin/staff). Server re-checks the consent gate.
   app.post<{ Params: { id: string } }>(
     "/guardians/:id/activate",

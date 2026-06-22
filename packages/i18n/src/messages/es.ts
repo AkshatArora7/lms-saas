@@ -233,6 +233,38 @@ export const esMessages: Messages = {
     emptyTitle: "Aún no hay asistencia registrada",
     emptyBody: "Cuando se registren tus sesiones, tu historial de asistencia aparecerá aquí.",
   },
+  guardianAttendance: {
+    title: "Asistencia de tus hijos",
+    subtitle:
+      "Asistencia de tus estudiantes vinculados, de la más reciente a la más antigua.",
+    selectChild: "Selecciona un estudiante",
+    viewChild: "Ver la asistencia de {name}",
+    childFallbackName: "Estudiante",
+    childMeta: "{name} · {relationship}",
+    relationshipParent: "Padre o madre",
+    relationshipGuardian: "Tutor",
+    relationshipChild: "Hijo o hija",
+    relationshipOther: "Otro",
+    noChildrenTitle: "No hay estudiantes vinculados",
+    noChildrenBody:
+      "Aún no hay estudiantes vinculados a tu cuenta. Si esperabas ver a tu hijo aquí, comunícate con la escuela para configurar el acceso.",
+    emptyHistoryTitle: "Aún no hay asistencia registrada",
+    emptyHistoryBody:
+      "Cuando se registren las sesiones de {name}, la asistencia aparecerá aquí.",
+    emptyHistoryBodyFallback:
+      "Cuando se registren las sesiones de este estudiante, la asistencia aparecerá aquí.",
+    childrenError:
+      "No pudimos cargar tus estudiantes vinculados en este momento. Inténtalo de nuevo en unos minutos.",
+    historyError:
+      "No pudimos cargar la asistencia de {name} en este momento. Inténtalo de nuevo en unos minutos.",
+    historyErrorFallback:
+      "No pudimos cargar la asistencia de este estudiante en este momento. Inténtalo de nuevo en unos minutos.",
+    statusPresent: "Presente",
+    statusAbsent: "Ausente",
+    statusTardy: "Tarde",
+    statusExcused: "Justificado",
+    sessionFallback: "Sesión",
+  },
   roster: {
     backToTeaching: "← Volver a enseñanza",
     notAuthorizedTitle: "No autorizado",

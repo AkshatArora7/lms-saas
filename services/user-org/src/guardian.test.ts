@@ -416,6 +416,158 @@ describe("guardian relationships (#24)", () => {
     expect(theirs.json().guardians).toHaveLength(0);
   });
 
+  // #190: consent-filtered authorized-children read — only active + consented.
+  describe("authorized children (#190)", () => {
+    async function activeConsentedLink(app: ReturnType<typeof build>) {
+      const link = (await createLink(app)).json().relationship;
+      await app.inject({
+        method: "POST",
+        url: "/compliance/consents",
+        headers: H,
+        payload: grantDirectory(STUDENT),
+      });
+      await app.inject({
+        method: "POST",
+        url: `/guardians/${link.id}/activate`,
+        headers: H,
+      });
+      return link;
+    }
+
+    it("returns an active, consented child", async () => {
+      const app = build();
+      await activeConsentedLink(app);
+      const res = await app.inject({
+        method: "GET",
+        url: `/guardians/${GUARDIAN}/children/authorized`,
+        headers: H,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().children).toEqual([
+        { studentUserId: STUDENT, relationship: "guardian" },
+      ]);
+    });
+
+    it("excludes a pending link", async () => {
+      const app = build();
+      await createLink(app); // pending, never activated
+      const res = await app.inject({
+        method: "GET",
+        url: `/guardians/${GUARDIAN}/children/authorized`,
+        headers: H,
+      });
+      expect(res.json().children).toEqual([]);
+    });
+
+    it("excludes a revoked link", async () => {
+      const app = build();
+      const link = await activeConsentedLink(app);
+      await app.inject({
+        method: "POST",
+        url: `/guardians/${link.id}/revoke`,
+        headers: H,
+      });
+      const res = await app.inject({
+        method: "GET",
+        url: `/guardians/${GUARDIAN}/children/authorized`,
+        headers: H,
+      });
+      expect(res.json().children).toEqual([]);
+    });
+
+    it("excludes a minor whose consent is no longer satisfied", async () => {
+      const app = build();
+      const link = (await createLink(app)).json().relationship;
+      // Grant consent + activate the link (so status='active')...
+      const granted = await app.inject({
+        method: "POST",
+        url: "/compliance/consents",
+        headers: H,
+        payload: grantDirectory(STUDENT),
+      });
+      await app.inject({
+        method: "POST",
+        url: `/guardians/${link.id}/activate`,
+        headers: H,
+      });
+      // ...then revoke the underlying consent: the link stays active but the
+      // gating consent is no longer satisfied, so the child drops from the set.
+      await app.inject({
+        method: "POST",
+        url: `/compliance/consents/${granted.json().consent.id}/revoke`,
+        headers: H,
+      });
+      const res = await app.inject({
+        method: "GET",
+        url: `/guardians/${GUARDIAN}/children/authorized`,
+        headers: H,
+      });
+      expect(res.json().children).toEqual([]);
+    });
+
+    it("returns an adult student without a granted consent row", async () => {
+      const app = build();
+      const link = (await createLink(app)).json().relationship;
+      await app.inject({
+        method: "POST",
+        url: "/compliance/consents",
+        headers: H,
+        payload: {
+          subjectUserId: STUDENT,
+          ageBand: "adult",
+          consentType: "directory_information",
+          status: "pending",
+        },
+      });
+      await app.inject({
+        method: "POST",
+        url: `/guardians/${link.id}/activate`,
+        headers: H,
+      });
+      const res = await app.inject({
+        method: "GET",
+        url: `/guardians/${GUARDIAN}/children/authorized`,
+        headers: H,
+      });
+      expect(res.json().children).toEqual([
+        { studentUserId: STUDENT, relationship: "guardian" },
+      ]);
+    });
+
+    it("isolates by tenant", async () => {
+      const app = build();
+      await activeConsentedLink(app);
+      const theirs = await app.inject({
+        method: "GET",
+        url: `/guardians/${GUARDIAN}/children/authorized`,
+        headers: OTHER_H,
+      });
+      expect(theirs.statusCode).toBe(200);
+      expect(theirs.json().children).toEqual([]);
+    });
+
+    it("requires a tenant (400) and a uuid guardianId (400)", async () => {
+      const app = build();
+      expect(
+        (
+          await app.inject({
+            method: "GET",
+            url: `/guardians/${GUARDIAN}/children/authorized`,
+          })
+        ).statusCode,
+      ).toBe(400);
+      expect(
+        (
+          await app.inject({
+            method: "GET",
+            url: `/guardians/nope/children/authorized`,
+            headers: H,
+          })
+        ).statusCode,
+      ).toBe(400);
+    });
+  });
+
   it("exposes no guardian write path to child data (only the read predicate)", async () => {
     const app = build();
     // The guardian-facing surface is read-only: there is no route to mutate a

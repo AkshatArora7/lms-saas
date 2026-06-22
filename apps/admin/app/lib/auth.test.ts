@@ -34,6 +34,7 @@ function makeSession(roles: string[]): Session {
     tier: "pro",
     roles,
     scopes: [],
+    locale: "en",
   };
 }
 
@@ -72,6 +73,19 @@ describe("getSession", () => {
     const headers = opts.headers as Record<string, string>;
     expect(headers.authorization).toBe("Bearer acc-token");
     expect(session).toEqual(payload);
+  });
+
+  it("#88: surfaces locale from /auth/me into the Session", async () => {
+    jarGet.mockImplementation((name: string) =>
+      name === ACCESS_COOKIE ? { value: "acc-token" } : undefined,
+    );
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ...makeSession(["org_admin"]), locale: "es" }),
+    } as unknown as Response);
+
+    const session = await getSession();
+    expect(session?.locale).toBe("es");
   });
 
   it("returns null when /auth/me responds non-OK", async () => {

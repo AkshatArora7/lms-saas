@@ -139,6 +139,31 @@ export class MemoryStore implements IdentityStore {
     this.identities.set(linkKey, user.id);
     return user;
   }
+
+  async getUserLocale(
+    ctx: TenantContext,
+    userId: string,
+  ): Promise<string | null> {
+    // Mirror RLS: only a row owned by this tenant is ever visible.
+    const user = [...this.usersByEmail.values()].find(
+      (u) => u.id === userId && u.tenantId === ctx.tenantId,
+    );
+    if (!user) return null;
+    return user.locale ?? "en";
+  }
+
+  async updateUserLocale(
+    ctx: TenantContext,
+    userId: string,
+    locale: string,
+  ): Promise<boolean> {
+    const user = [...this.usersByEmail.values()].find(
+      (u) => u.id === userId && u.tenantId === ctx.tenantId,
+    );
+    if (!user) return false;
+    user.locale = locale;
+    return true;
+  }
 }
 
 /** The demo tenant the local dev seed and the web BFFs agree on. */

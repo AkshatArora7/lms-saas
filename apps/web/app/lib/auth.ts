@@ -41,6 +41,12 @@ export interface Session {
   tier: string;
   roles: string[];
   scopes: string[];
+  /**
+   * The user's preferred locale (`app_user.locale`), surfaced by identity
+   * `/auth/me` (#88). Defaults to `'en'` server-side; consumed by
+   * `resolveRequestLocale()` as the user-preference layer.
+   */
+  locale: string;
 }
 
 /**
@@ -57,7 +63,17 @@ export async function getSession(): Promise<Session | null> {
       cache: "no-store",
     });
     if (!res.ok) return null;
-    return (await res.json()) as Session;
+    const me = (await res.json()) as Partial<Session>;
+    return {
+      userId: me.userId ?? "",
+      tenantId: me.tenantId ?? "",
+      tier: me.tier ?? "",
+      roles: me.roles ?? [],
+      scopes: me.scopes ?? [],
+      // identity surfaces `locale` (#88); default defensively so the type is
+      // satisfied even against an older identity build.
+      locale: me.locale ?? "en",
+    };
   } catch {
     return null;
   }

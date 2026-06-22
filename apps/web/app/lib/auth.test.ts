@@ -33,6 +33,7 @@ const ME = {
   tier: "pro",
   roles: ["learner"],
   scopes: ["course:read"],
+  locale: "es",
 };
 
 describe("getSession()", () => {
@@ -60,12 +61,28 @@ describe("getSession()", () => {
     const session = await getSession();
 
     expect(session).toEqual(ME);
+    // #88: locale from /auth/me flows into the Session.
+    expect(session?.locale).toBe("es");
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${IDENTITY_URL}/auth/me`);
     expect((init.headers as Record<string, string>).authorization).toBe(
       "Bearer AT-valid",
     );
+  });
+
+  it("#88: defaults locale to 'en' when /auth/me omits it (older identity)", async () => {
+    accessValue = "AT-valid";
+    const { locale: _drop, ...withoutLocale } = ME;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(withoutLocale), { status: 200 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const session = await getSession();
+    expect(session?.locale).toBe("en");
   });
 
   it("AC4: returns null on a non-OK /auth/me (e.g. expired token => 401)", async () => {

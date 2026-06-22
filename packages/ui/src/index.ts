@@ -24,3 +24,7 @@ export { Badge, Chip, Avatar, ProgressBar, Alert, Spinner, Skeleton } from "./co
 // Shell
 export type { BrandMarkProps, AppShellProps } from "./components/shell.js";
 export { BrandMark, AppShell } from "./components/shell.js";
+
+// Locale switcher (presentational; persistence lives in a per-app wrapper)
+export type { LocaleSwitcherProps } from "./components/locale-switcher.js";
+export { LocaleSwitcher } from "./components/locale-switcher.js";

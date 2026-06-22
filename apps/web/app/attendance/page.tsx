@@ -11,6 +11,8 @@ import {
   Stack,
 } from "@lms/ui";
 
+import { getMessages, t } from "@lms/i18n";
+
 import { getBranding } from "../lib/branding";
 import { getSession } from "../lib/auth";
 import {
@@ -19,6 +21,8 @@ import {
   groupAttendanceByDate,
   summarizeAttendance,
 } from "../lib/attendance";
+import { resolveRequestLocale } from "../lib/i18n";
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
 import { AppShell, ScheduleIcon } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
@@ -141,18 +145,27 @@ export default async function Attendance() {
     ? summarizeAttendance(result.history)
     : { total: 0, present: 0, absent: 0, tardy: 0, excused: 0 };
   const groups = result.ok ? groupAttendanceByDate(result.history) : [];
+  const m = getMessages(await resolveRequestLocale());
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell
+      brand={brand}
+      actions={
+        <>
+          <AppLocaleSwitcher />
+          <SignOutButton />
+        </>
+      }
+    >
       <style>{attendanceCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
-          ← Back to dashboard
+          {t(m, "common.backToDashboard")}
         </Button>
 
         <PageHeader
-          title="My attendance"
-          subtitle="Your recorded attendance across every session, newest first."
+          title={t(m, "attendance.title")}
+          subtitle={t(m, "attendance.subtitle")}
         />
 
         {!result.ok ? (
@@ -168,7 +181,9 @@ export default async function Attendance() {
                   }
                 >
                   <p className="att-stat">{summary.total}</p>
-                  <p className="att-stat-label">Sessions recorded</p>
+                  <p className="att-stat-label">
+                    {t(m, "attendance.sessionsRecorded")}
+                  </p>
                 </div>
               </Card>
               <Card>
@@ -179,7 +194,7 @@ export default async function Attendance() {
                   }
                 >
                   <p className="att-stat">{summary.absent}</p>
-                  <p className="att-stat-label">Absences</p>
+                  <p className="att-stat-label">{t(m, "attendance.absences")}</p>
                 </div>
               </Card>
               <Card>
@@ -192,13 +207,13 @@ export default async function Attendance() {
                   }
                 >
                   <p className="att-stat">{summary.tardy}</p>
-                  <p className="att-stat-label">Tardies</p>
+                  <p className="att-stat-label">{t(m, "attendance.tardies")}</p>
                 </div>
               </Card>
               <Card>
                 <div className="att-stat-card">
                   <p className="att-stat">{summary.excused}</p>
-                  <p className="att-stat-label">Excused</p>
+                  <p className="att-stat-label">{t(m, "attendance.excused")}</p>
                 </div>
               </Card>
             </Grid>
@@ -206,7 +221,7 @@ export default async function Attendance() {
             {groups.length ? (
               <section aria-labelledby="att-history-heading">
                 <h2 className="att-section-heading" id="att-history-heading">
-                  History
+                  {t(m, "attendance.history")}
                 </h2>
                 <Stack gap={4}>
                   {groups.map((group) => (
@@ -240,7 +255,8 @@ export default async function Attendance() {
                                   {record.category === "tardy" &&
                                   record.minutesLate != null ? (
                                     <span className="att-row__late">
-                                      {record.minutesLate} min late
+                                      {record.minutesLate}{" "}
+                                      {t(m, "attendance.minLate")}
                                     </span>
                                   ) : null}
                                 </div>
@@ -255,9 +271,9 @@ export default async function Attendance() {
               </section>
             ) : (
               <EmptyState
-                description="Once your sessions are recorded, your attendance history will appear here."
+                description={t(m, "attendance.emptyBody")}
                 icon={<ScheduleIcon />}
-                title="No attendance recorded yet"
+                title={t(m, "attendance.emptyTitle")}
               />
             )}
           </>

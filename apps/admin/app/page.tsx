@@ -9,9 +9,12 @@ import {
   PageHeader,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "./lib/branding";
 import { getSession, isAdmin } from "./lib/auth";
+import { resolveRequestLocale } from "./lib/i18n";
+import { AppLocaleSwitcher } from "./lib/locale-switcher";
 import {
   AppShell,
   BrandingIcon,
@@ -142,20 +145,28 @@ export default async function AdminHome() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
 
   if (!isAdmin(session)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell
+        brand={brand}
+        actions={
+          <>
+            <AppLocaleSwitcher />
+            <SignOutButton />
+          </>
+        }
+      >
         <style>{adminCss}</style>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot access the administration console."
+          title={t(m, "admin.notAuthorizedTitle")}
+          subtitle={t(m, "admin.notAuthorizedSubtitle")}
         />
         <Stack gap={4}>
           <Alert tone="warning">
-            You are signed in as <strong>{session.userId}</strong>, but your
-            account does not hold an administrator role, so the admin console is
-            unavailable.
+            You are signed in as <strong>{session.userId}</strong>.{" "}
+            {t(m, "admin.notAuthorizedBody")}
           </Alert>
           <Card>
             <Stack gap={3}>
@@ -168,7 +179,7 @@ export default async function AdminHome() {
                     </Badge>
                   ))
                 ) : (
-                  <span className="admin-detail">none</span>
+                  <span className="admin-detail">{t(m, "common.none")}</span>
                 )}
               </Inline>
             </Stack>
@@ -179,12 +190,20 @@ export default async function AdminHome() {
   }
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell
+      brand={brand}
+      actions={
+        <>
+          <AppLocaleSwitcher />
+          <SignOutButton />
+        </>
+      }
+    >
       <style>{adminCss}</style>
       <Stack gap={4}>
         <PageHeader
-          title="Administration"
-          subtitle="Org-unit hierarchy, users & roles, enrollment, SIS sync, and tenant settings. Super-admin tooling for pool/silo tenant management lives behind the tenant service."
+          title={t(m, "admin.title")}
+          subtitle={t(m, "admin.subtitle")}
         />
 
         <Grid gap={4} min="180px">
@@ -192,20 +211,22 @@ export default async function AdminHome() {
             <Stack gap={1}>
               <p className="admin-stat">{session.roles.length}</p>
               <p className="admin-stat-label">
-                {session.roles.length === 1 ? "Your role" : "Your roles"}
+                {session.roles.length === 1
+                  ? t(m, "admin.yourRole")
+                  : t(m, "admin.yourRoles")}
               </p>
             </Stack>
           </Card>
           <Card>
             <Stack gap={1}>
               <p className="admin-stat">{session.scopes.length}</p>
-              <p className="admin-stat-label">Access scopes</p>
+              <p className="admin-stat-label">{t(m, "admin.accessScopes")}</p>
             </Stack>
           </Card>
           <Card>
             <Stack gap={1}>
               <p className="admin-stat">{session.tier}</p>
-              <p className="admin-stat-label">Tenant tier</p>
+              <p className="admin-stat-label">{t(m, "admin.tenantTier")}</p>
             </Stack>
           </Card>
         </Grid>
@@ -213,7 +234,7 @@ export default async function AdminHome() {
         <section aria-labelledby="manage-heading">
           <Stack gap={3}>
             <h2 className="admin-section-title" id="manage-heading">
-              Manage
+              {t(m, "admin.manage")}
             </h2>
             <Grid gap={3} min="200px">
               {NAV_ITEMS.map((item) => (
@@ -237,17 +258,18 @@ export default async function AdminHome() {
 
         <Card className="admin-session-card">
           <Stack gap={3}>
-            <h2 className="admin-section-title">Administrator session</h2>
+            <h2 className="admin-section-title">{t(m, "admin.session")}</h2>
             <Stack gap={1}>
               <p className="admin-detail">
-                <strong>User:</strong> {session.userId}
+                <strong>{t(m, "common.user")}:</strong> {session.userId}
               </p>
               <p className="admin-detail">
-                <strong>Tenant:</strong> {session.tenantId} ({session.tier})
+                <strong>{t(m, "common.tenant")}:</strong> {session.tenantId} (
+                {session.tier})
               </p>
             </Stack>
             <Stack gap={2}>
-              <strong>Roles</strong>
+              <strong>{t(m, "common.roles")}</strong>
               <Inline gap={2}>
                 {session.roles.length ? (
                   session.roles.map((role) => (
@@ -256,12 +278,12 @@ export default async function AdminHome() {
                     </Badge>
                   ))
                 ) : (
-                  <span className="admin-detail">none</span>
+                  <span className="admin-detail">{t(m, "common.none")}</span>
                 )}
               </Inline>
             </Stack>
             <Stack gap={2}>
-              <strong>Scopes</strong>
+              <strong>{t(m, "common.scopes")}</strong>
               <Inline gap={2}>
                 {session.scopes.length ? (
                   session.scopes.map((scope) => (
@@ -270,7 +292,7 @@ export default async function AdminHome() {
                     </Badge>
                   ))
                 ) : (
-                  <span className="admin-detail">none</span>
+                  <span className="admin-detail">{t(m, "common.none")}</span>
                 )}
               </Inline>
             </Stack>

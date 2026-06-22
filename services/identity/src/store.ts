@@ -8,6 +8,8 @@ export interface AuthUserRecord {
   status: "invited" | "active" | "inactive";
   /** Null for SSO-only users (no local password). */
   passwordHash: string | null;
+  /** Display-language preference (`app_user.locale`); defaults to 'en'. */
+  locale?: string;
 }
 
 /** A stored refresh token (hash only; the raw token is never persisted). */
@@ -120,4 +122,36 @@ export interface IdentityStore {
     ctx: TenantContext,
     input: SsoProvisionInput,
   ): Promise<AuthUserRecord>;
+
+  /**
+   * The authenticated user's display-language preference (`app_user.locale`)
+   * within their tenant, or null when the user row is not visible to this
+   * tenant. Tenant-scoped: the lookup is keyed by user id AND tenant.
+   */
+  getUserLocale(ctx: TenantContext, userId: string): Promise<string | null>;
+
+  /**
+   * Update the authenticated user's own `app_user.locale` within their tenant.
+   * Returns true when a row was updated (the user is visible to this tenant),
+   * false otherwise. The caller must pass the id derived from the verified
+   * session — never from request input — so this can only touch the caller's
+   * own record (IDOR-safe), and the write stays tenant-scoped.
+   */
+  updateUserLocale(
+    ctx: TenantContext,
+    userId: string,
+    locale: string,
+  ): Promise<boolean>;
+}
+
+/** Locales the platform ships catalogs for; others are rejected with 400. */
+export const SUPPORTED_LOCALES = ["en", "es"] as const;
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
+
+/** Pure guard: is `value` a supported locale code? (unit-testable, no store). */
+export function isSupportedLocale(value: unknown): value is SupportedLocale {
+  return (
+    typeof value === "string" &&
+    (SUPPORTED_LOCALES as readonly string[]).includes(value)
+  );
 }

@@ -376,8 +376,11 @@ Operate 26 services reliably.
 Usable by everyone, in any language.
 
 **What you get**
-- **WCAG 2.2 AA** across core flows.
-- **Internationalization & localization** for multilingual institutions.
+- **WCAG 2.2 AA** across core flows — the standard and how it's enforced are in
+  [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
+- **Internationalization & localization** for multilingual institutions
+  (in-house `@lms/i18n`, en + es today, RTL-ready). See
+  [`docs/INTERNATIONALIZATION.md`](docs/INTERNATIONALIZATION.md).
 
 ### 24. Attendance & participation
 
@@ -636,8 +639,10 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 - **Design docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
   [`docs/MULTI_TENANCY.md`](docs/MULTI_TENANCY.md) ·
   [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) ·
-  [`docs/STANDARDS.md`](docs/STANDARDS.md) · [`docs/services/`](docs/services) ·
-  [`docs/diagrams/`](docs/diagrams).
+  [`docs/STANDARDS.md`](docs/STANDARDS.md) ·
+  [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) ·
+  [`docs/INTERNATIONALIZATION.md`](docs/INTERNATIONALIZATION.md) ·
+  [`docs/services/`](docs/services) · [`docs/diagrams/`](docs/diagrams).
 
 ---
 

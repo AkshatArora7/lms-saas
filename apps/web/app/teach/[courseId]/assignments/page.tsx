@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Badge,
   Button,
   Card,
@@ -11,29 +10,19 @@ import {
   PageHeader,
   Stack,
 } from "@lms/ui";
+import { getMessages, t, type MessageKey, type Messages } from "@lms/i18n";
 
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
+import { resolveRequestLocale } from "../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../lib/locale-switcher";
+import { AppShell, AssignmentsIcon, teachPolishCss } from "../../../lib/ui";
 import { canTeach, getTaughtCourse } from "../../../lib/teaching";
 import { listAssignments, type Assignment } from "../../../lib/assignments-api";
 import SignOutButton from "../../../sign-out-button";
 import { deleteAssignmentAction } from "./actions";
 
 const assignmentsCss = `
-.asg-section-title {
-  font-size: 16px;
-  margin: 0;
-}
-.asg-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.asg-stat-label {
-  color: var(--lms-text-muted);
-  margin: 0;
-}
 .asg-name {
   color: var(--lms-accent);
   font-weight: 600;
@@ -76,19 +65,24 @@ const assignmentsCss = `
 }
 `;
 
-const SUBMISSION_LABEL: Record<string, string> = {
-  file: "File upload",
-  text: "Text entry",
-  url: "URL",
-  none: "No submission",
+const SUBMISSION_LABEL_KEY: Record<string, MessageKey> = {
+  file: "teach.assignments.submissionFile",
+  text: "teach.assignments.submissionText",
+  url: "teach.assignments.submissionUrl",
+  none: "teach.assignments.submissionNone",
 };
 
-function dueLabel(assignment: Assignment): string {
-  if (!assignment.dueAt) return "No due date";
+function submissionLabel(m: Messages, type: string): string {
+  const key = SUBMISSION_LABEL_KEY[type];
+  return key ? t(m, key) : type;
+}
+
+function dueLabel(m: Messages, assignment: Assignment): string {
+  if (!assignment.dueAt) return t(m, "teach.assignments.noDueDate");
   const d = new Date(assignment.dueAt);
   return Number.isNaN(d.getTime())
     ? assignment.dueAt
-    : `Due ${d.toLocaleDateString()}`;
+    : t(m, "teach.assignments.due", { date: d.toLocaleDateString() });
 }
 
 export default async function CourseAssignments({
@@ -101,17 +95,24 @@ export default async function CourseAssignments({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell actions={shellActions} brand={brand}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot manage assignments."
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold a teaching role.
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -130,19 +131,20 @@ export default async function CourseAssignments({
   const totalPoints = assignments.reduce((sum, a) => sum + a.points, 0);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
+      <style>{teachPolishCss}</style>
       <style>{assignmentsCss}</style>
       <Stack gap={4}>
         <Button href="/teach" size="sm" variant="ghost">
-          ← Back to teaching
+          {t(m, "teach.assignments.backToTeaching")}
         </Button>
 
         <PageHeader
-          title={`${course.title} - assignments`}
-          subtitle="Create, edit, and remove assignments. Changes are saved straight to the assignment service for this tenant."
+          title={t(m, "teach.assignments.title", { course: course.title })}
+          subtitle={t(m, "teach.assignments.subtitle")}
           actions={
             <Button href={`/teach/${courseId}/assignments/new`} size="sm">
-              New assignment
+              {t(m, "teach.assignments.new")}
             </Button>
           }
         />
@@ -152,26 +154,30 @@ export default async function CourseAssignments({
 
         <Grid gap={4} min="180px">
           <Card>
-            <Stack gap={1}>
-              <p className="asg-stat">{assignments.length}</p>
-              <p className="asg-stat-label">Assignments</p>
-            </Stack>
+            <div className="tch-stat-card">
+              <p className="tch-stat">{assignments.length}</p>
+              <p className="tch-stat-label">
+                {t(m, "teach.assignments.statCount")}
+              </p>
+            </div>
           </Card>
           <Card>
-            <Stack gap={1}>
-              <p className="asg-stat">{totalPoints}</p>
-              <p className="asg-stat-label">Total points</p>
-            </Stack>
+            <div className="tch-stat-card">
+              <p className="tch-stat">{totalPoints}</p>
+              <p className="tch-stat-label">
+                {t(m, "teach.assignments.statPoints")}
+              </p>
+            </div>
           </Card>
         </Grid>
 
         {assignments.length ? (
           <section aria-labelledby="assignments-heading">
             <Stack gap={3}>
-              <h2 className="asg-section-title" id="assignments-heading">
-                Assignments
+              <h2 className="tch-section-heading" id="assignments-heading">
+                {t(m, "teach.assignments.heading")}
               </h2>
-              <ul className="asg-list">
+              <ul aria-label={t(m, "teach.assignments.listLabel")} className="asg-list">
                 {assignments.map((assignment) => (
                   <li key={assignment.id}>
                     <Card>
@@ -179,13 +185,22 @@ export default async function CourseAssignments({
                         <Stack gap={1}>
                           <p className="asg-name">{assignment.title}</p>
                           <p className="asg-meta">
-                            {dueLabel(assignment)} - {assignment.points} pts -{" "}
-                            {SUBMISSION_LABEL[assignment.submissionType] ??
-                              assignment.submissionType}
+                            {t(m, "teach.assignments.meta", {
+                              due: dueLabel(m, assignment),
+                              points: assignment.points,
+                              submission: submissionLabel(
+                                m,
+                                assignment.submissionType,
+                              ),
+                            })}
                           </p>
                         </Stack>
-                        <Chip tone={assignment.allowLate ? "neutral" : "warning"}>
-                          {assignment.allowLate ? "Late allowed" : "No late"}
+                        <Chip
+                          tone={assignment.allowLate ? "neutral" : "warning"}
+                        >
+                          {assignment.allowLate
+                            ? t(m, "teach.assignments.lateAllowed")
+                            : t(m, "teach.assignments.noLate")}
                         </Chip>
                         <div className="asg-actions">
                           <Button
@@ -193,13 +208,21 @@ export default async function CourseAssignments({
                             size="sm"
                             variant="secondary"
                           >
-                            Edit
+                            {t(m, "teach.assignments.edit")}
                           </Button>
                           <form action={deleteAssignmentAction}>
-                            <input name="courseId" type="hidden" value={courseId} />
-                            <input name="id" type="hidden" value={assignment.id} />
+                            <input
+                              name="courseId"
+                              type="hidden"
+                              value={courseId}
+                            />
+                            <input
+                              name="id"
+                              type="hidden"
+                              value={assignment.id}
+                            />
                             <Button size="sm" type="submit" variant="danger">
-                              Delete
+                              {t(m, "teach.assignments.delete")}
                             </Button>
                           </form>
                         </div>
@@ -212,18 +235,15 @@ export default async function CourseAssignments({
           </section>
         ) : result.ok ? (
           <EmptyState
-            description="Create your first assignment to start building coursework."
-            icon="[ ]"
-            title="No assignments yet"
+            description={t(m, "teach.assignments.emptyBody")}
+            icon={<AssignmentsIcon />}
+            title={t(m, "teach.assignments.emptyTitle")}
           />
         ) : (
           <Card>
             <Stack gap={2}>
-              <Badge tone="warning">Service offline</Badge>
-              <p className="asg-meta">
-                Start the assignment service (ASSIGNMENT_STORE=memory pnpm dev in
-                services/assignment) to manage assignments here.
-              </p>
+              <Badge tone="warning">{t(m, "roster.serviceOffline")}</Badge>
+              <p className="asg-meta">{t(m, "teach.assignments.offlineBody")}</p>
             </Stack>
           </Card>
         )}

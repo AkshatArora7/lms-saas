@@ -1,16 +1,19 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Button,
   Card,
   EmptyState,
   PageHeader,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
+import { resolveRequestLocale } from "../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../lib/locale-switcher";
+import { AppShell, DiscussionsIcon } from "../../../lib/ui";
 import { canTeach, getTaughtCourse } from "../../../lib/teaching";
 import { listForums } from "../../../lib/discussions-api";
 import SignOutButton from "../../../sign-out-button";
@@ -73,23 +76,25 @@ export default async function DiscussionsPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
-        <Stack gap={4}>
-          <Button href="/teach" size="sm" variant="ghost">
-            ← Back to teaching
-          </Button>
-          <PageHeader
-            title="Discussions"
-            subtitle="Manage the forums for your course."
-          />
-          <Alert tone="info">
-            Discussions are available to instructors. Your account does not
-            currently hold a teaching role.
-          </Alert>
-        </Stack>
+      <AppShell actions={shellActions} brand={brand}>
+        <PageHeader
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
+        />
+        <Alert tone="warning">
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
+        </Alert>
       </AppShell>
     );
   }
@@ -106,17 +111,21 @@ export default async function DiscussionsPage({
   const result = await listForums(courseId, session.tenantId);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
       <style>{forumsCss}</style>
       <Stack gap={4}>
         <Button href="/teach" size="sm" variant="ghost">
-          ← Back to teaching
+          {t(m, "teach.discussions.backToTeaching")}
         </Button>
 
         <PageHeader
-          title="Discussions"
-          subtitle={`Forums for ${course.title}.`}
-          actions={<Button href={`${base}/new`}>New forum</Button>}
+          title={t(m, "teach.discussions.title")}
+          subtitle={t(m, "teach.discussions.subtitle", { course: course.title })}
+          actions={
+            <Button href={`${base}/new`}>
+              {t(m, "teach.discussions.newForum")}
+            </Button>
+          }
         />
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
@@ -125,9 +134,9 @@ export default async function DiscussionsPage({
           <Alert tone="warning">{result.error}</Alert>
         ) : result.forums.length === 0 ? (
           <EmptyState
-            icon="💬"
-            title="No forums yet"
-            description="Create a forum to start course discussions."
+            description={t(m, "teach.discussions.emptyBody")}
+            icon={<DiscussionsIcon />}
+            title={t(m, "teach.discussions.emptyTitle")}
           />
         ) : (
           <ul className="fd-list">
@@ -137,21 +146,12 @@ export default async function DiscussionsPage({
                   <div className="fd-row">
                     <div className="fd-main">
                       <span className="fd-icon" aria-hidden="true">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />
-                        </svg>
+                        <DiscussionsIcon />
                       </span>
                       <h2 className="fd-title">{forum.title}</h2>
                     </div>
                     <Button href={`${base}/${forum.id}`} variant="secondary">
-                      Open topics
+                      {t(m, "teach.discussions.openTopics")}
                     </Button>
                   </div>
                 </Card>

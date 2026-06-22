@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Button,
   Card,
   Field,
@@ -10,9 +9,13 @@ import {
   Stack,
   Textarea,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../../../../lib/branding";
 import { getSession } from "../../../../lib/auth";
+import { resolveRequestLocale } from "../../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../../lib/locale-switcher";
+import { AppShell } from "../../../../lib/ui";
 import { canTeach, getTaughtCourse } from "../../../../lib/teaching";
 import SignOutButton from "../../../../sign-out-button";
 import { createAnnouncementAction } from "../actions";
@@ -93,17 +96,24 @@ export default async function NewAnnouncement({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell actions={shellActions} brand={brand}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot manage announcements."
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold a teaching role.
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -120,16 +130,18 @@ export default async function NewAnnouncement({
   const base = `/teach/${courseId}/announcements`;
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
       <style>{formCss}</style>
       <Stack gap={4}>
         <Button className="asg-back" href={base} size="sm" variant="ghost">
-          ← Back to announcements
+          {t(m, "teach.announcementForm.backToAnnouncements")}
         </Button>
 
         <PageHeader
-          title="New announcement"
-          subtitle={`Post an announcement to ${course.title}. Leave the publish time blank to post immediately.`}
+          subtitle={t(m, "teach.announcementForm.newSubtitle", {
+            course: course.title,
+          })}
+          title={t(m, "teach.announcementForm.newTitle")}
         />
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
@@ -141,23 +153,32 @@ export default async function NewAnnouncement({
 
             <section className="asg-section">
               <div className="asg-section-head">
-                <h2 className="asg-section-title">Details</h2>
+                <h2 className="asg-section-title">
+                  {t(m, "teach.announcementForm.detailsSection")}
+                </h2>
                 <p className="asg-section-hint">
-                  Give the announcement a clear title and tell learners what
-                  they need to know.
+                  {t(m, "teach.announcementForm.detailsHint")}
                 </p>
               </div>
-              <Field htmlFor="title" label="Title" required>
+              <Field
+                htmlFor="title"
+                label={t(m, "teach.announcementForm.fieldTitle")}
+                required
+              >
                 <Input
                   name="title"
-                  placeholder="e.g. Unit 1 quiz is live"
+                  placeholder={t(m, "teach.announcementForm.titlePlaceholder")}
                   required
                 />
               </Field>
-              <Field htmlFor="body" label="Message" required>
+              <Field
+                htmlFor="body"
+                label={t(m, "teach.announcementForm.fieldBody")}
+                required
+              >
                 <Textarea
                   name="body"
-                  placeholder="What you want learners to know"
+                  placeholder={t(m, "teach.announcementForm.bodyPlaceholder")}
                   required
                   rows={4}
                 />
@@ -166,21 +187,26 @@ export default async function NewAnnouncement({
 
             <section className="asg-section">
               <div className="asg-section-head">
-                <h2 className="asg-section-title">Scheduling</h2>
+                <h2 className="asg-section-title">
+                  {t(m, "teach.announcementForm.scheduleSection")}
+                </h2>
                 <p className="asg-section-hint">
-                  Choose when this announcement goes live and when it should
-                  stop showing.
+                  {t(m, "teach.announcementForm.scheduleHint")}
                 </p>
               </div>
               <div className="asg-grid-2">
                 <Field
                   htmlFor="publishAt"
-                  label="Publish at"
-                  help="Leave blank to publish now"
+                  label={t(m, "teach.announcementForm.fieldPublishAt")}
+                  help={t(m, "teach.announcementForm.publishAtHelp")}
                 >
                   <Input name="publishAt" type="datetime-local" />
                 </Field>
-                <Field htmlFor="expiresAt" label="Expires at" help="Optional">
+                <Field
+                  htmlFor="expiresAt"
+                  label={t(m, "teach.announcementForm.fieldExpiresAt")}
+                  help={t(m, "teach.announcementForm.expiresAtHelp")}
+                >
                   <Input name="expiresAt" type="datetime-local" />
                 </Field>
               </div>
@@ -188,9 +214,11 @@ export default async function NewAnnouncement({
 
             <div className="asg-actionbar">
               <Button href={base} variant="ghost">
-                Cancel
+                {t(m, "teach.announcementForm.cancel")}
               </Button>
-              <Button type="submit">Post announcement</Button>
+              <Button type="submit">
+                {t(m, "teach.announcementForm.create")}
+              </Button>
             </div>
           </form>
         </Card>

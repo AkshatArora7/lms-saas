@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Button,
   Card,
   Field,
@@ -9,9 +8,13 @@ import {
   Select,
   Stack,
 } from "@lms/ui";
+import { getMessages, t, type MessageKey, type Messages } from "@lms/i18n";
 
 import { getBranding } from "../../../../../lib/branding";
 import { getSession } from "../../../../../lib/auth";
+import { resolveRequestLocale } from "../../../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../../../lib/locale-switcher";
+import { AppShell } from "../../../../../lib/ui";
 import { canTeach } from "../../../../../lib/teaching";
 import {
   ASSIGNABLE_ROLES,
@@ -20,12 +23,17 @@ import {
 import SignOutButton from "../../../../../sign-out-button";
 import { dropEnrollmentAction, updateRoleAction } from "../../actions";
 
-const ROLE_LABEL: Record<string, string> = {
-  learner: "Learner",
-  teaching_assistant: "Teaching assistant",
-  instructor: "Instructor",
-  observer: "Observer",
+const ROLE_LABEL_KEY: Record<string, MessageKey> = {
+  learner: "roster.roleLearner",
+  teaching_assistant: "roster.roleTeachingAssistant",
+  instructor: "roster.roleInstructor",
+  observer: "roster.roleObserver",
 };
+
+function roleLabel(m: Messages, role: string): string {
+  const key = ROLE_LABEL_KEY[role];
+  return key ? t(m, key) : role;
+}
 
 const formCss = `
 .asg-back {
@@ -119,17 +127,24 @@ export default async function EditRosterMember({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell actions={shellActions} brand={brand}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot manage the roster."
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold a teaching role.
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -154,14 +169,17 @@ export default async function EditRosterMember({
     : [enrollment.role, ...ASSIGNABLE_ROLES];
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
       <style>{formCss}</style>
       <Stack gap={4}>
         <Button className="asg-back" href={base} size="sm" variant="ghost">
-          ← Back to roster
+          {t(m, "teach.rosterForm.backToRoster")}
         </Button>
 
-        <PageHeader title="Change role" subtitle={enrollment.userId} />
+        <PageHeader
+          subtitle={enrollment.userId}
+          title={t(m, "teach.rosterForm.editTitle")}
+        />
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
 
@@ -172,16 +190,22 @@ export default async function EditRosterMember({
 
             <section className="asg-section">
               <div className="asg-section-head">
-                <h2 className="asg-section-title">Role</h2>
+                <h2 className="asg-section-title">
+                  {t(m, "teach.rosterForm.roleSection")}
+                </h2>
                 <p className="asg-section-hint">
-                  Choose the role this member should hold in the course.
+                  {t(m, "teach.rosterForm.roleHint")}
                 </p>
               </div>
-              <Field htmlFor="role" label="Role" required>
+              <Field
+                htmlFor="role"
+                label={t(m, "teach.rosterForm.fieldRole")}
+                required
+              >
                 <Select name="role" defaultValue={enrollment.role} required>
                   {roleOptions.map((role) => (
                     <option key={role} value={role}>
-                      {ROLE_LABEL[role] ?? role}
+                      {roleLabel(m, role)}
                     </option>
                   ))}
                 </Select>
@@ -190,9 +214,9 @@ export default async function EditRosterMember({
 
             <div className="asg-actionbar">
               <Button href={base} variant="ghost">
-                Cancel
+                {t(m, "teach.rosterForm.cancel")}
               </Button>
-              <Button type="submit">Save role</Button>
+              <Button type="submit">{t(m, "teach.rosterForm.save")}</Button>
             </div>
           </form>
         </Card>
@@ -200,17 +224,18 @@ export default async function EditRosterMember({
         <Card className="asg-danger">
           <div className="asg-danger-row">
             <div className="asg-danger-copy">
-              <p className="asg-danger-title">Danger zone</p>
+              <p className="asg-danger-title">
+                {t(m, "teach.rosterForm.dangerTitle")}
+              </p>
               <p className="asg-danger-text">
-                Dropping a member withdraws them from this course. This removes
-                them from the active roster.
+                {t(m, "teach.rosterForm.dangerText")}
               </p>
             </div>
             <form action={dropEnrollmentAction}>
               <input name="courseId" type="hidden" value={courseId} />
               <input name="id" type="hidden" value={enrollment.id} />
               <Button type="submit" variant="danger">
-                Drop member
+                {t(m, "teach.rosterForm.drop")}
               </Button>
             </form>
           </div>

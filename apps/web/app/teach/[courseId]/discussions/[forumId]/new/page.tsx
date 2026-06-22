@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Button,
   Card,
   Field,
@@ -10,9 +9,13 @@ import {
   Stack,
   Textarea,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../../../../../lib/branding";
 import { getSession } from "../../../../../lib/auth";
+import { resolveRequestLocale } from "../../../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../../../lib/locale-switcher";
+import { AppShell } from "../../../../../lib/ui";
 import { canTeach, getTaughtCourse } from "../../../../../lib/teaching";
 import { listForums } from "../../../../../lib/discussions-api";
 import SignOutButton from "../../../../../sign-out-button";
@@ -80,17 +83,24 @@ export default async function NewTopicPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell actions={shellActions} brand={brand}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot manage discussions."
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold a teaching role.
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -113,16 +123,20 @@ export default async function NewTopicPage({
   const base = `/teach/${courseId}/discussions/${forumId}`;
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
       <style>{formCss}</style>
       <Stack gap={4}>
         <Button className="asg-back" href={base} size="sm" variant="ghost">
-          ← Back to topics
+          {t(m, "teach.topicForm.backToTopics")}
         </Button>
 
         <PageHeader
-          title="New topic"
-          subtitle={forum ? `In ${forum.title}.` : undefined}
+          subtitle={
+            forum
+              ? t(m, "teach.topicForm.newSubtitleIn", { forum: forum.title })
+              : undefined
+          }
+          title={t(m, "teach.topicForm.newTitle")}
         />
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
@@ -134,23 +148,28 @@ export default async function NewTopicPage({
 
             <section className="asg-section">
               <div className="asg-section-head">
-                <h2 className="asg-section-title">Topic</h2>
+                <h2 className="asg-section-title">
+                  {t(m, "teach.topicForm.section")}
+                </h2>
                 <p className="asg-section-hint">
-                  Start a new thread with a clear title and optional context for
-                  learners.
+                  {t(m, "teach.topicForm.hint")}
                 </p>
               </div>
-              <Field htmlFor="title" label="Topic title" required>
+              <Field
+                htmlFor="title"
+                label={t(m, "teach.topicForm.fieldTitle")}
+                required
+              >
                 <Input
                   name="title"
-                  placeholder="e.g. Week 1: Linear equations"
+                  placeholder={t(m, "teach.topicForm.titlePlaceholder")}
                   required
                 />
               </Field>
               <Field
                 htmlFor="description"
-                label="Description"
-                help="Optional context for the thread"
+                label={t(m, "teach.topicForm.fieldDescription")}
+                help={t(m, "teach.topicForm.descriptionHelp")}
               >
                 <Textarea name="description" rows={3} />
               </Field>
@@ -158,9 +177,9 @@ export default async function NewTopicPage({
 
             <div className="asg-actionbar">
               <Button href={base} variant="ghost">
-                Cancel
+                {t(m, "teach.topicForm.cancel")}
               </Button>
-              <Button type="submit">Create topic</Button>
+              <Button type="submit">{t(m, "teach.topicForm.create")}</Button>
             </div>
           </form>
         </Card>

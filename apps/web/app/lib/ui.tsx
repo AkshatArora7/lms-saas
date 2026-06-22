@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { CSSProperties, ReactElement } from "react";
 import {
   AppShell as BaseAppShell,
   ThemeStyle as BaseThemeStyle,
@@ -159,3 +159,66 @@ export function GenericIcon(): ReactElement {
     />
   );
 }
+
+/**
+ * Set the per-stat accent token used by the shared `.tch-stat` band. Always pass
+ * an existing `var(--lms-*)` token — never a raw colour — so the band stays
+ * tenant-safe and dual-tone. Returns a typed CSS custom property.
+ */
+export const statAccent = (token: string): CSSProperties =>
+  ({ "--lms-stat-accent": token }) as CSSProperties;
+
+/**
+ * The single, byte-identical stat-band + section-heading + card-title stylesheet
+ * shared across every teach-hub screen (HOME is the visual reference). Defined
+ * once here so the `.tch-*` classes never drift between pages. Every value
+ * resolves from a `var(--lms-*)` token; the stat value uses a fluid `clamp()`
+ * scale (replacing the old fixed 28px / 1.75rem inline styles) and tabular
+ * numerals. Status is always carried by adjacent TEXT — the accent is
+ * supplementary. Import this string and render it in a scoped `<style>` tag,
+ * matching the existing per-page RSC pattern.
+ */
+export const teachPolishCss = `
+.tch-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-1);
+  align-items: flex-start;
+}
+.tch-stat {
+  font-size: clamp(1.9rem, 5vw, 2.4rem);
+  font-weight: 700;
+  line-height: 1;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--lms-stat-accent, var(--lms-text));
+}
+.tch-stat-sub {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--lms-text-muted);
+}
+.tch-stat-label {
+  color: var(--lms-stat-accent, var(--lms-text-muted));
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tch-section-heading {
+  font-size: clamp(1.15rem, 3vw, 1.4rem);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0 0 var(--lms-space-3);
+  padding-bottom: var(--lms-space-2);
+  border-bottom: 1px solid var(--lms-border);
+}
+.tch-title {
+  font-size: clamp(1.05rem, 2.5vw, 1.25rem);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+`;

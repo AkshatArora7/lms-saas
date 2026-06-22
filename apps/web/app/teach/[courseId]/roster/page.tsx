@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Badge,
   Button,
   Card,
@@ -11,12 +10,13 @@ import {
   PageHeader,
   Stack,
 } from "@lms/ui";
-import { getMessages, t } from "@lms/i18n";
+import { getMessages, t, type MessageKey, type Messages } from "@lms/i18n";
 
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
 import { resolveRequestLocale } from "../../../lib/i18n";
 import { AppLocaleSwitcher } from "../../../lib/locale-switcher";
+import { AppShell, CoursesIcon, teachPolishCss } from "../../../lib/ui";
 import { canTeach, getTaughtCourse } from "../../../lib/teaching";
 import { getRoster } from "../../../lib/enrollment-api";
 import SignOutButton from "../../../sign-out-button";
@@ -26,20 +26,6 @@ import {
 } from "./actions";
 
 const rosterCss = `
-.ros-section-title {
-  font-size: 16px;
-  margin: 0;
-}
-.ros-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.ros-stat-label {
-  color: var(--lms-text-muted);
-  margin: 0;
-}
 .ros-name {
   color: var(--lms-accent);
   font-weight: 600;
@@ -86,17 +72,18 @@ const rosterCss = `
 }
 `;
 
-const ROLE_LABEL: Record<string, string> = {
-  learner: "Learner",
-  teaching_assistant: "Teaching assistant",
-  instructor: "Instructor",
-  observer: "Observer",
-  course_builder: "Course builder",
-  org_admin: "Org admin",
+const ROLE_LABEL_KEY: Record<string, MessageKey> = {
+  learner: "roster.roleLearner",
+  teaching_assistant: "roster.roleTeachingAssistant",
+  instructor: "roster.roleInstructor",
+  observer: "roster.roleObserver",
+  course_builder: "roster.roleCourseBuilder",
+  org_admin: "roster.roleOrgAdmin",
 };
 
-function roleLabel(role: string): string {
-  return ROLE_LABEL[role] ?? role;
+function roleLabel(m: Messages, role: string): string {
+  const key = ROLE_LABEL_KEY[role];
+  return key ? t(m, key) : role;
 }
 
 export default async function CourseRoster({
@@ -123,12 +110,11 @@ export default async function CourseRoster({
         }
       >
         <PageHeader
-          title={t(m, "roster.notAuthorizedTitle")}
-          subtitle={t(m, "roster.notAuthorizedSubtitle")}
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>.{" "}
-          {t(m, "roster.notAuthorizedBody")}
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -157,6 +143,7 @@ export default async function CourseRoster({
         </>
       }
     >
+      <style>{teachPolishCss}</style>
       <style>{rosterCss}</style>
       <Stack gap={4}>
         <Button href="/teach" size="sm" variant="ghost">
@@ -178,29 +165,29 @@ export default async function CourseRoster({
 
         <Grid gap={4} min="180px">
           <Card>
-            <Stack gap={1}>
-              <p className="ros-stat">{roster.length}</p>
-              <p className="ros-stat-label">{t(m, "roster.activeMembers")}</p>
-            </Stack>
+            <div className="tch-stat-card">
+              <p className="tch-stat">{roster.length}</p>
+              <p className="tch-stat-label">{t(m, "roster.activeMembers")}</p>
+            </div>
           </Card>
           <Card>
-            <Stack gap={1}>
-              <p className="ros-stat">{learners}</p>
-              <p className="ros-stat-label">{t(m, "roster.learners")}</p>
-            </Stack>
+            <div className="tch-stat-card">
+              <p className="tch-stat">{learners}</p>
+              <p className="tch-stat-label">{t(m, "roster.learners")}</p>
+            </div>
           </Card>
           <Card>
-            <Stack gap={1}>
-              <p className="ros-stat">{staff}</p>
-              <p className="ros-stat-label">{t(m, "roster.staff")}</p>
-            </Stack>
+            <div className="tch-stat-card">
+              <p className="tch-stat">{staff}</p>
+              <p className="tch-stat-label">{t(m, "roster.staff")}</p>
+            </div>
           </Card>
         </Grid>
 
         {roster.length ? (
           <section aria-labelledby="roster-heading">
             <Stack gap={3}>
-              <h2 className="ros-section-title" id="roster-heading">
+              <h2 className="tch-section-heading" id="roster-heading">
                 {t(m, "roster.members")}
               </h2>
               <ul className="ros-list">
@@ -217,10 +204,11 @@ export default async function CourseRoster({
                             <span className="ros-id">{enrollment.userId}</span>
                           </p>
                           <p className="ros-meta">
-                            Enrolled{" "}
-                            {new Date(
-                              enrollment.enrolledAt,
-                            ).toLocaleDateString()}
+                            {t(m, "roster.enrolledOn", {
+                              date: new Date(
+                                enrollment.enrolledAt,
+                              ).toLocaleDateString(),
+                            })}
                           </p>
                         </Stack>
                         <Chip
@@ -228,7 +216,7 @@ export default async function CourseRoster({
                             enrollment.role === "learner" ? "neutral" : "accent"
                           }
                         >
-                          {roleLabel(enrollment.role)}
+                          {roleLabel(m, enrollment.role)}
                         </Chip>
                         <div className="ros-actions">
                           <Button
@@ -279,17 +267,14 @@ export default async function CourseRoster({
         ) : result.ok ? (
           <EmptyState
             description={t(m, "roster.emptyBody")}
-            icon="[ ]"
+            icon={<CoursesIcon />}
             title={t(m, "roster.emptyTitle")}
           />
         ) : (
           <Card>
             <Stack gap={2}>
               <Badge tone="warning">{t(m, "roster.serviceOffline")}</Badge>
-              <p className="ros-meta">
-                Start the enrollment service (ENROLLMENT_STORE=memory pnpm dev in
-                services/enrollment) to manage the roster here.
-              </p>
+              <p className="ros-meta">{t(m, "roster.offlineBody")}</p>
             </Stack>
           </Card>
         )}

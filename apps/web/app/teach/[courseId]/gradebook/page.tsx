@@ -2,7 +2,6 @@ import { notFound, redirect } from "next/navigation";
 import type { CSSProperties } from "react";
 import {
   Alert,
-  AppShell,
   Badge,
   Button,
   Card,
@@ -13,9 +12,13 @@ import {
   Stack,
 } from "@lms/ui";
 import type { BadgeTone } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
+import { resolveRequestLocale } from "../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../lib/locale-switcher";
+import { AppShell, teachPolishCss } from "../../../lib/ui";
 import { canTeach } from "../../../lib/teaching";
 import {
   getCourseGradebook,
@@ -30,13 +33,6 @@ const headingStyle: CSSProperties = {
   lineHeight: 1.3,
   margin: 0,
   overflowWrap: "anywhere",
-};
-
-const statValueStyle: CSSProperties = {
-  fontSize: "1.75rem",
-  fontWeight: 700,
-  lineHeight: 1.1,
-  margin: 0,
 };
 
 const mutedStyle: CSSProperties = {
@@ -133,23 +129,25 @@ export default async function GradebookPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
-        <Stack gap={4}>
-          <Button href="/teach" size="sm" variant="ghost">
-            ← Back to teaching
-          </Button>
-          <PageHeader
-            title="Gradebook"
-            subtitle="Scores for the learners in your course."
-          />
-          <Alert tone="info">
-            The gradebook is available to instructors. Your account does not
-            currently hold a teaching role.
-          </Alert>
-        </Stack>
+      <AppShell actions={shellActions} brand={brand}>
+        <PageHeader
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
+        />
+        <Alert tone="warning">
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
+        </Alert>
       </AppShell>
     );
   }
@@ -164,25 +162,28 @@ export default async function GradebookPage({
   }));
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
+      <style>{teachPolishCss}</style>
       <style>{gradebookCss}</style>
       <Stack gap={4}>
         <Button href="/teach" size="sm" variant="ghost">
-          ← Back to teaching
+          {t(m, "teach.gradebook.backToTeaching")}
         </Button>
 
         <PageHeader
-          title={`${gradebook.title} gradebook`}
-          subtitle="Every enrolled learner's score on each assignment, so you can spot missing work and how the class is doing."
+          title={t(m, "teach.gradebook.title", { course: gradebook.title })}
+          subtitle={t(m, "teach.gradebook.subtitle")}
           actions={
             <Inline gap={2}>
-              {gradebook.code ? <Badge tone="neutral">{gradebook.code}</Badge> : null}
+              {gradebook.code ? (
+                <Badge tone="neutral">{gradebook.code}</Badge>
+              ) : null}
               <Button
                 href={`/courses/${gradebook.courseId}`}
                 size="sm"
                 variant="secondary"
               >
-                Open course
+                {t(m, "teach.gradebook.openCourse")}
               </Button>
             </Inline>
           }
@@ -190,63 +191,80 @@ export default async function GradebookPage({
 
         <Grid gap={4} min="160px">
           <Card>
-            <Stack gap={1}>
-              <p style={statValueStyle}>{summary.learnerCount}</p>
-              <p style={mutedStyle}>Learners</p>
-            </Stack>
+            <div className="tch-stat-card">
+              <p className="tch-stat">{summary.learnerCount}</p>
+              <p className="tch-stat-label">
+                {t(m, "teach.gradebook.statLearners")}
+              </p>
+            </div>
           </Card>
           <Card>
-            <Stack gap={1}>
-              <p style={statValueStyle}>{summary.assignmentCount}</p>
-              <p style={mutedStyle}>Assignments</p>
-            </Stack>
+            <div className="tch-stat-card">
+              <p className="tch-stat">{summary.assignmentCount}</p>
+              <p className="tch-stat-label">
+                {t(m, "teach.gradebook.statAssignments")}
+              </p>
+            </div>
           </Card>
           <Card>
-            <Stack gap={1}>
-              <p style={statValueStyle}>
+            <div className="tch-stat-card">
+              <p className="tch-stat">
                 {summary.gradedCells}
-                <span style={{ fontSize: "1rem", fontWeight: 400 }}>
+                <span className="tch-stat-sub">
                   {" "}
                   / {summary.totalCells}
                 </span>
               </p>
-              <p style={mutedStyle}>Graded submissions</p>
-            </Stack>
+              <p className="tch-stat-label">
+                {t(m, "teach.gradebook.statGraded")}
+              </p>
+            </div>
           </Card>
           <Card>
-            <Stack gap={1}>
-              <p style={statValueStyle}>
+            <div className="tch-stat-card">
+              <p className="tch-stat">
                 {summary.classAverage === null
                   ? "—"
                   : `${summary.classAverage}%`}
               </p>
-              <p style={mutedStyle}>Class average</p>
-            </Stack>
+              <p className="tch-stat-label">
+                {t(m, "teach.gradebook.statClassAverage")}
+              </p>
+            </div>
           </Card>
         </Grid>
 
         <section aria-labelledby="gb-heading">
           <Stack gap={3}>
             <h2 id="gb-heading" style={headingStyle}>
-              Scores
+              {t(m, "teach.gradebook.scores")}
             </h2>
-            <div className="gb-scroll">
+            <div
+              aria-label={t(m, "teach.gradebook.tableRegionLabel", {
+                course: gradebook.title,
+              })}
+              className="gb-scroll"
+              role="region"
+              tabIndex={0}
+            >
               <table className="gb-table">
                 <caption style={visuallyHidden}>
-                  {gradebook.title} scores by learner and assignment
+                  {t(m, "teach.gradebook.caption", { course: gradebook.title })}
                 </caption>
                 <thead>
                   <tr>
                     <th className="gb-corner" scope="col">
-                      Learner
+                      {t(m, "teach.gradebook.colLearner")}
                     </th>
                     {gradebook.assignments.map((a) => (
                       <th key={a.id} scope="col">
                         {a.title}
-                        <span className="gb-points">/ {a.points} pts</span>
+                        <span className="gb-points">
+                          {t(m, "teach.gradebook.points", { points: a.points })}
+                        </span>
                       </th>
                     ))}
-                    <th scope="col">Course</th>
+                    <th scope="col">{t(m, "teach.gradebook.colCourse")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -271,7 +289,11 @@ export default async function GradebookPage({
                           return (
                             <td key={a.id}>
                               {entry.score}
-                              <span className="gb-points">/ {a.points}</span>
+                              <span className="gb-points">
+                                {t(m, "teach.gradebook.pointsShort", {
+                                  points: a.points,
+                                })}
+                              </span>
                             </td>
                           );
                         })}
@@ -285,7 +307,7 @@ export default async function GradebookPage({
                 <tfoot>
                   <tr>
                     <th className="gb-learner" scope="row">
-                      Class average
+                      {t(m, "teach.gradebook.classAverageRow")}
                     </th>
                     {assignmentSummaries.map(({ assignment, summary: as }) => (
                       <td key={assignment.id}>
@@ -309,7 +331,7 @@ export default async function GradebookPage({
         <section aria-labelledby="gb-missing-heading">
           <Stack gap={3}>
             <h2 id="gb-missing-heading" style={headingStyle}>
-              Needs attention
+              {t(m, "teach.gradebook.needsAttention")}
             </h2>
             <Grid min="240px">
               {gradebook.learners.map((learner) => {
@@ -320,19 +342,31 @@ export default async function GradebookPage({
                       <Inline align="center" gap={2} justify="space-between">
                         <h3 style={headingStyle}>{learner.name}</h3>
                         <Chip tone={avgTone(ls.percent)}>
-                          {ls.percent === null ? "No grades" : `${ls.percent}%`}
+                          {ls.percent === null
+                            ? t(m, "teach.gradebook.noGrades")
+                            : `${ls.percent}%`}
                         </Chip>
                       </Inline>
                       {ls.missing > 0 ? (
                         <p style={mutedStyle}>
-                          {ls.missing} missing{" "}
-                          {ls.missing === 1 ? "assignment" : "assignments"} ·{" "}
-                          {ls.earned}/{ls.possible} pts graded
+                          {t(
+                            m,
+                            ls.missing === 1
+                              ? "teach.gradebook.missingOne"
+                              : "teach.gradebook.missingOther",
+                            {
+                              count: ls.missing,
+                              earned: ls.earned,
+                              possible: ls.possible,
+                            },
+                          )}
                         </p>
                       ) : (
                         <p style={mutedStyle}>
-                          All assignments submitted · {ls.earned}/{ls.possible}{" "}
-                          pts
+                          {t(m, "teach.gradebook.allSubmitted", {
+                            earned: ls.earned,
+                            possible: ls.possible,
+                          })}
                         </p>
                       )}
                     </Stack>

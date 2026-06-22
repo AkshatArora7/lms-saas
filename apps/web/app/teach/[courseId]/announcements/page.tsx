@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Badge,
   Button,
   Card,
@@ -12,9 +11,13 @@ import {
   Stack,
 } from "@lms/ui";
 import type { BadgeTone } from "@lms/ui";
+import { getMessages, t, type MessageKey, type Messages } from "@lms/i18n";
 
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
+import { resolveRequestLocale } from "../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../lib/locale-switcher";
+import { AppShell, AnnouncementsIcon, teachPolishCss } from "../../../lib/ui";
 import { canTeach, getTaughtCourse } from "../../../lib/teaching";
 import {
   listCourseAnnouncements,
@@ -28,20 +31,6 @@ import {
 } from "./actions";
 
 const announcementsCss = `
-.ann-section-title {
-  font-size: 16px;
-  margin: 0;
-}
-.ann-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.ann-stat-label {
-  color: var(--lms-text-muted);
-  margin: 0;
-}
 .ann-name {
   color: var(--lms-accent);
   font-weight: 600;
@@ -90,24 +79,30 @@ const STATUS_TONE: Record<AnnouncementStatus, BadgeTone> = {
   expired: "neutral",
 };
 
-const STATUS_LABEL: Record<AnnouncementStatus, string> = {
-  scheduled: "Scheduled",
-  published: "Published",
-  expired: "Expired",
+const STATUS_LABEL_KEY: Record<AnnouncementStatus, MessageKey> = {
+  scheduled: "teach.announcements.statusScheduled",
+  published: "teach.announcements.statusPublished",
+  expired: "teach.announcements.statusExpired",
 };
 
-function whenLabel(announcement: Announcement): string {
+function whenLabel(m: Messages, announcement: Announcement): string {
   const fmt = (value: string): string => {
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
   };
   if (announcement.status === "scheduled") {
-    return `Publishes ${fmt(announcement.publishAt)}`;
+    return t(m, "teach.announcements.publishes", {
+      when: fmt(announcement.publishAt),
+    });
   }
   if (announcement.status === "expired" && announcement.expiresAt) {
-    return `Expired ${fmt(announcement.expiresAt)}`;
+    return t(m, "teach.announcements.expired", {
+      when: fmt(announcement.expiresAt),
+    });
   }
-  return `Published ${fmt(announcement.publishAt)}`;
+  return t(m, "teach.announcements.published", {
+    when: fmt(announcement.publishAt),
+  });
 }
 
 export default async function CourseAnnouncements({
@@ -120,17 +115,24 @@ export default async function CourseAnnouncements({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell actions={shellActions} brand={brand}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot manage announcements."
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold a teaching role.
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -150,19 +152,20 @@ export default async function CourseAnnouncements({
   const scheduled = announcements.filter((a) => a.status === "scheduled").length;
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
+      <style>{teachPolishCss}</style>
       <style>{announcementsCss}</style>
       <Stack gap={4}>
         <Button href="/teach" size="sm" variant="ghost">
-          ← Back to teaching
+          {t(m, "teach.announcements.backToTeaching")}
         </Button>
 
         <PageHeader
-          title={`${course.title} - announcements`}
-          subtitle="Compose, schedule, publish, and remove announcements. Changes are saved straight to the announcement service for this tenant."
+          title={t(m, "teach.announcements.title", { course: course.title })}
+          subtitle={t(m, "teach.announcements.subtitle")}
           actions={
             <Button href={`/teach/${courseId}/announcements/new`} size="sm">
-              New announcement
+              {t(m, "teach.announcements.new")}
             </Button>
           }
         />
@@ -172,42 +175,53 @@ export default async function CourseAnnouncements({
 
         <Grid gap={4} min="180px">
           <Card>
-            <Stack gap={1}>
-              <p className="ann-stat">{announcements.length}</p>
-              <p className="ann-stat-label">Total</p>
-            </Stack>
+            <div className="tch-stat-card">
+              <p className="tch-stat">{announcements.length}</p>
+              <p className="tch-stat-label">
+                {t(m, "teach.announcements.statTotal")}
+              </p>
+            </div>
           </Card>
           <Card>
-            <Stack gap={1}>
-              <p className="ann-stat">{published}</p>
-              <p className="ann-stat-label">Published</p>
-            </Stack>
+            <div className="tch-stat-card">
+              <p className="tch-stat">{published}</p>
+              <p className="tch-stat-label">
+                {t(m, "teach.announcements.statPublished")}
+              </p>
+            </div>
           </Card>
           <Card>
-            <Stack gap={1}>
-              <p className="ann-stat">{scheduled}</p>
-              <p className="ann-stat-label">Scheduled</p>
-            </Stack>
+            <div className="tch-stat-card">
+              <p className="tch-stat">{scheduled}</p>
+              <p className="tch-stat-label">
+                {t(m, "teach.announcements.statScheduled")}
+              </p>
+            </div>
           </Card>
         </Grid>
 
         {announcements.length ? (
           <section aria-labelledby="announcements-heading">
             <Stack gap={3}>
-              <h2 className="ann-section-title" id="announcements-heading">
-                Announcements
+              <h2 className="tch-section-heading" id="announcements-heading">
+                {t(m, "teach.announcements.heading")}
               </h2>
-              <ul className="ann-list">
+              <ul
+                aria-label={t(m, "teach.announcements.listLabel")}
+                className="ann-list"
+              >
                 {announcements.map((announcement) => (
                   <li key={announcement.id}>
                     <Card>
                       <div className="ann-row">
                         <Stack gap={1}>
                           <p className="ann-name">{announcement.title}</p>
-                          <p className="ann-meta">{whenLabel(announcement)}</p>
+                          <p className="ann-meta">
+                            {whenLabel(m, announcement)}
+                          </p>
                         </Stack>
                         <Chip tone={STATUS_TONE[announcement.status]}>
-                          {STATUS_LABEL[announcement.status]}
+                          {t(m, STATUS_LABEL_KEY[announcement.status])}
                         </Chip>
                         <div className="ann-actions">
                           <Button
@@ -215,7 +229,7 @@ export default async function CourseAnnouncements({
                             size="sm"
                             variant="secondary"
                           >
-                            Edit
+                            {t(m, "teach.announcements.edit")}
                           </Button>
                           {announcement.status !== "published" ? (
                             <form action={publishAnnouncementAction}>
@@ -230,7 +244,7 @@ export default async function CourseAnnouncements({
                                 value={announcement.id}
                               />
                               <Button size="sm" type="submit">
-                                Publish now
+                                {t(m, "teach.announcements.publishNow")}
                               </Button>
                             </form>
                           ) : null}
@@ -246,7 +260,7 @@ export default async function CourseAnnouncements({
                               value={announcement.id}
                             />
                             <Button size="sm" type="submit" variant="danger">
-                              Delete
+                              {t(m, "teach.announcements.delete")}
                             </Button>
                           </form>
                         </div>
@@ -259,17 +273,16 @@ export default async function CourseAnnouncements({
           </section>
         ) : result.ok ? (
           <EmptyState
-            description="Compose your first announcement to keep learners informed."
-            icon="[ ]"
-            title="No announcements yet"
+            description={t(m, "teach.announcements.emptyBody")}
+            icon={<AnnouncementsIcon />}
+            title={t(m, "teach.announcements.emptyTitle")}
           />
         ) : (
           <Card>
             <Stack gap={2}>
-              <Badge tone="warning">Service offline</Badge>
+              <Badge tone="warning">{t(m, "roster.serviceOffline")}</Badge>
               <p className="ann-meta">
-                Start the announcement service (ANNOUNCEMENT_STORE=memory pnpm
-                dev in services/announcement) to manage announcements here.
+                {t(m, "teach.announcements.offlineBody")}
               </p>
             </Stack>
           </Card>

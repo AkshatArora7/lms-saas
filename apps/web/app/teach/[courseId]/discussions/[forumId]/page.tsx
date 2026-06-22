@@ -1,16 +1,19 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Button,
   Card,
   EmptyState,
   PageHeader,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../../../../lib/branding";
 import { getSession } from "../../../../lib/auth";
+import { resolveRequestLocale } from "../../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../../lib/locale-switcher";
+import { AppShell, DiscussionsIcon } from "../../../../lib/ui";
 import { canTeach, getTaughtCourse } from "../../../../lib/teaching";
 import { listForums, listTopics } from "../../../../lib/discussions-api";
 import SignOutButton from "../../../../sign-out-button";
@@ -58,23 +61,25 @@ export default async function ForumTopicsPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
-        <Stack gap={4}>
-          <Button href="/teach" size="sm" variant="ghost">
-            ← Back to teaching
-          </Button>
-          <PageHeader
-            title="Discussions"
-            subtitle="Manage the topics in this forum."
-          />
-          <Alert tone="info">
-            Discussions are available to instructors. Your account does not
-            currently hold a teaching role.
-          </Alert>
-        </Stack>
+      <AppShell actions={shellActions} brand={brand}>
+        <PageHeader
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
+        />
+        <Alert tone="warning">
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
+        </Alert>
       </AppShell>
     );
   }
@@ -100,17 +105,19 @@ export default async function ForumTopicsPage({
   const topicsResult = await listTopics(forumId, session.tenantId);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
       <style>{topicsCss}</style>
       <Stack gap={4}>
         <Button href={discussionsBase} size="sm" variant="ghost">
-          ← Back to forums
+          {t(m, "teach.forum.backToForums")}
         </Button>
 
         <PageHeader
-          title={forum ? forum.title : "Forum"}
-          subtitle={`Topics in ${course.title}.`}
-          actions={<Button href={`${base}/new`}>New topic</Button>}
+          title={forum ? forum.title : t(m, "teach.forum.fallbackTitle")}
+          subtitle={t(m, "teach.forum.subtitle", { course: course.title })}
+          actions={
+            <Button href={`${base}/new`}>{t(m, "teach.forum.newTopic")}</Button>
+          }
         />
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
@@ -121,9 +128,9 @@ export default async function ForumTopicsPage({
           <Alert tone="warning">{topicsResult.error}</Alert>
         ) : topicsResult.topics.length === 0 ? (
           <EmptyState
-            icon="💬"
-            title="No topics yet"
-            description="Create a topic to start a thread."
+            description={t(m, "teach.forum.emptyBody")}
+            icon={<DiscussionsIcon />}
+            title={t(m, "teach.forum.emptyTitle")}
           />
         ) : (
           <ul className="td-list">
@@ -138,7 +145,7 @@ export default async function ForumTopicsPage({
                       ) : null}
                     </div>
                     <Button href={`${base}/${topic.id}`} variant="secondary">
-                      Open thread
+                      {t(m, "teach.forum.openThread")}
                     </Button>
                   </div>
                 </Card>

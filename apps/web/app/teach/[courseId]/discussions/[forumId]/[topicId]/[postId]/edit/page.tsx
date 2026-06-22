@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Button,
   Card,
   Field,
@@ -9,9 +8,13 @@ import {
   Stack,
   Textarea,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../../../../../../../lib/branding";
 import { getSession } from "../../../../../../../lib/auth";
+import { resolveRequestLocale } from "../../../../../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../../../../../lib/locale-switcher";
+import { AppShell } from "../../../../../../../lib/ui";
 import { canTeach, getTaughtCourse } from "../../../../../../../lib/teaching";
 import { listPosts } from "../../../../../../../lib/discussions-api";
 import SignOutButton from "../../../../../../../sign-out-button";
@@ -84,17 +87,24 @@ export default async function EditPostPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell actions={shellActions} brand={brand}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot manage discussions."
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold a teaching role.
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -109,13 +119,13 @@ export default async function EditPostPage({
   const postsResult = await listPosts(topicId, session.tenantId);
   if (!postsResult.ok) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell actions={shellActions} brand={brand}>
         <style>{formCss}</style>
         <Stack gap={4}>
           <Button className="asg-back" href={base} size="sm" variant="ghost">
-            ← Back to thread
+            {t(m, "teach.postForm.backToThread")}
           </Button>
-          <PageHeader title="Edit post" />
+          <PageHeader title={t(m, "teach.postForm.title")} />
           <Alert tone="warning">{postsResult.error}</Alert>
         </Stack>
       </AppShell>
@@ -130,14 +140,19 @@ export default async function EditPostPage({
     : searchParams.error;
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
       <style>{formCss}</style>
       <Stack gap={4}>
         <Button className="asg-back" href={base} size="sm" variant="ghost">
-          ← Back to thread
+          {t(m, "teach.postForm.backToThread")}
         </Button>
 
-        <PageHeader title="Edit post" subtitle={`By ${post.authorId}`} />
+        <PageHeader
+          subtitle={t(m, "teach.postForm.subtitleBy", {
+            author: post.authorId,
+          })}
+          title={t(m, "teach.postForm.title")}
+        />
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
 
@@ -150,13 +165,16 @@ export default async function EditPostPage({
 
             <section className="asg-section">
               <div className="asg-section-head">
-                <h2 className="asg-section-title">Post</h2>
-                <p className="asg-section-hint">
-                  Update the contents of this post. Changes are visible to
-                  learners right away.
-                </p>
+                <h2 className="asg-section-title">
+                  {t(m, "teach.postForm.section")}
+                </h2>
+                <p className="asg-section-hint">{t(m, "teach.postForm.hint")}</p>
               </div>
-              <Field htmlFor="body" label="Post body" required>
+              <Field
+                htmlFor="body"
+                label={t(m, "teach.postForm.fieldBody")}
+                required
+              >
                 <Textarea
                   name="body"
                   rows={5}
@@ -168,9 +186,9 @@ export default async function EditPostPage({
 
             <div className="asg-actionbar">
               <Button href={base} variant="ghost">
-                Cancel
+                {t(m, "teach.postForm.cancel")}
               </Button>
-              <Button type="submit">Save</Button>
+              <Button type="submit">{t(m, "teach.postForm.save")}</Button>
             </div>
           </form>
         </Card>

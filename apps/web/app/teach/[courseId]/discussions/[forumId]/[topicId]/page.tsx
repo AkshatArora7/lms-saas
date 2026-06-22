@@ -2,7 +2,6 @@ import { notFound, redirect } from "next/navigation";
 import type { CSSProperties } from "react";
 import {
   Alert,
-  AppShell,
   Avatar,
   Badge,
   Button,
@@ -13,9 +12,13 @@ import {
   Stack,
   Textarea,
 } from "@lms/ui";
+import { getMessages, t, type Messages } from "@lms/i18n";
 
 import { getBranding } from "../../../../../lib/branding";
 import { getSession } from "../../../../../lib/auth";
+import { resolveRequestLocale } from "../../../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../../../lib/locale-switcher";
+import { AppShell, DiscussionsIcon } from "../../../../../lib/ui";
 import { canTeach, getTaughtCourse } from "../../../../../lib/teaching";
 import {
   listForums,
@@ -124,17 +127,17 @@ const threadCss = `
 `;
 
 /** Honest relative time derived from the post's real createdAt timestamp. */
-function relativeTime(iso: string): string {
+function relativeTime(m: Messages, iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
   const diffMs = Date.now() - then;
   const mins = Math.round(diffMs / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t(m, "teach.thread.justNow");
+  if (mins < 60) return t(m, "teach.thread.minsAgo", { count: mins });
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return t(m, "teach.thread.hoursAgo", { count: hrs });
   const days = Math.round(hrs / 24);
-  if (days < 7) return `${days}d ago`;
+  if (days < 7) return t(m, "teach.thread.daysAgo", { count: days });
   return new Date(iso).toLocaleDateString();
 }
 
@@ -171,23 +174,25 @@ export default async function TopicThreadPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
-        <Stack gap={4}>
-          <Button href="/teach" size="sm" variant="ghost">
-            ← Back to teaching
-          </Button>
-          <PageHeader
-            title="Thread"
-            subtitle="View and moderate this discussion thread."
-          />
-          <Alert tone="info">
-            Discussions are available to instructors. Your account does not
-            currently hold a teaching role.
-          </Alert>
-        </Stack>
+      <AppShell actions={shellActions} brand={brand}>
+        <PageHeader
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
+        />
+        <Alert tone="warning">
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
+        </Alert>
       </AppShell>
     );
   }
@@ -235,20 +240,26 @@ export default async function TopicThreadPage({
   );
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
       <style>{threadCss}</style>
       <Stack gap={4}>
         <Button href={forumBase} size="sm" variant="ghost">
-          ← Back to topics
+          {t(m, "teach.thread.backToTopics")}
         </Button>
 
         <PageHeader
-          title={topic ? topic.title : "Thread"}
+          title={topic ? topic.title : t(m, "teach.thread.fallbackTitle")}
           subtitle={topic?.description ?? course.title}
           actions={
             postsResult.ok ? (
               <Badge tone="neutral">
-                {totalPosts} {totalPosts === 1 ? "post" : "posts"}
+                {t(
+                  m,
+                  totalPosts === 1
+                    ? "teach.thread.postOne"
+                    : "teach.thread.postOther",
+                  { count: totalPosts },
+                )}
               </Badge>
             ) : undefined
           }
@@ -260,9 +271,9 @@ export default async function TopicThreadPage({
           <Alert tone="warning">{postsResult.error}</Alert>
         ) : threaded.length === 0 ? (
           <EmptyState
-            icon="💬"
-            title="No posts yet"
-            description="Start the conversation below."
+            description={t(m, "teach.thread.emptyBody")}
+            icon={<DiscussionsIcon />}
+            title={t(m, "teach.thread.emptyTitle")}
           />
         ) : (
           <ul className="tp-thread">
@@ -284,14 +295,18 @@ export default async function TopicThreadPage({
                           <Avatar name={post.authorId} size="sm" />
                           <span className="tp-author">{post.authorId}</span>
                           {post.isPinned ? (
-                            <Badge tone="accent">Pinned</Badge>
+                            <Badge tone="accent">
+                              {t(m, "teach.thread.pinned")}
+                            </Badge>
                           ) : null}
                           {post.parentId ? (
-                            <Badge tone="neutral">Reply</Badge>
+                            <Badge tone="neutral">
+                              {t(m, "teach.thread.reply")}
+                            </Badge>
                           ) : null}
                         </div>
                         <span className="tp-time">
-                          {relativeTime(post.createdAt)}
+                          {relativeTime(m, post.createdAt)}
                         </span>
                       </div>
 
@@ -299,8 +314,13 @@ export default async function TopicThreadPage({
 
                       {replyCount > 0 ? (
                         <p className="tp-meta">
-                          {replyCount}{" "}
-                          {replyCount === 1 ? "reply" : "replies"}
+                          {t(
+                            m,
+                            replyCount === 1
+                              ? "teach.thread.replyOne"
+                              : "teach.thread.replyOther",
+                            { count: replyCount },
+                          )}
                         </p>
                       ) : null}
 
@@ -310,7 +330,7 @@ export default async function TopicThreadPage({
                           size="sm"
                           variant="ghost"
                         >
-                          Edit
+                          {t(m, "teach.thread.edit")}
                         </Button>
                         <form action={pinPostAction}>
                           {hidden}
@@ -321,20 +341,22 @@ export default async function TopicThreadPage({
                             value={post.isPinned ? "false" : "true"}
                           />
                           <Button type="submit" size="sm" variant="ghost">
-                            {post.isPinned ? "Unpin" : "Pin"}
+                            {post.isPinned
+                              ? t(m, "teach.thread.unpin")
+                              : t(m, "teach.thread.pin")}
                           </Button>
                         </form>
                         <form action={deletePostAction}>
                           {hidden}
                           <input name="id" type="hidden" value={post.id} />
                           <Button type="submit" size="sm" variant="danger">
-                            Delete
+                            {t(m, "teach.thread.delete")}
                           </Button>
                         </form>
                       </div>
 
                       <details className="tp-reply">
-                        <summary>Reply</summary>
+                        <summary>{t(m, "teach.thread.replyAction")}</summary>
                         <form action={createPostAction}>
                           {hidden}
                           <input
@@ -343,7 +365,10 @@ export default async function TopicThreadPage({
                             value={post.id}
                           />
                           <Stack gap={2}>
-                            <Field htmlFor={`reply-${post.id}`} label="Reply">
+                            <Field
+                              htmlFor={`reply-${post.id}`}
+                              label={t(m, "teach.thread.replyFieldLabel")}
+                            >
                               <Textarea
                                 name="body"
                                 id={`reply-${post.id}`}
@@ -352,7 +377,7 @@ export default async function TopicThreadPage({
                               />
                             </Field>
                             <Button type="submit" size="sm">
-                              Post reply
+                              {t(m, "teach.thread.postReply")}
                             </Button>
                           </Stack>
                         </form>
@@ -369,10 +394,14 @@ export default async function TopicThreadPage({
           <form action={createPostAction}>
             {hidden}
             <Stack gap={3}>
-              <Field htmlFor="new-post" label="Add a post" required>
+              <Field
+                htmlFor="new-post"
+                label={t(m, "teach.thread.addPostLabel")}
+                required
+              >
                 <Textarea name="body" id="new-post" rows={3} required />
               </Field>
-              <Button type="submit">Post</Button>
+              <Button type="submit">{t(m, "teach.thread.post")}</Button>
             </Stack>
           </form>
         </Card>

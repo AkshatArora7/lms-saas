@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Button,
   Card,
   Field,
@@ -9,9 +8,13 @@ import {
   PageHeader,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../../../../lib/branding";
 import { getSession } from "../../../../lib/auth";
+import { resolveRequestLocale } from "../../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../../lib/locale-switcher";
+import { AppShell } from "../../../../lib/ui";
 import { canTeach, getTaughtCourse } from "../../../../lib/teaching";
 import SignOutButton from "../../../../sign-out-button";
 import { createForumAction } from "../actions";
@@ -78,17 +81,24 @@ export default async function NewForumPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell actions={shellActions} brand={brand}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot manage discussions."
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold a teaching role.
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -105,16 +115,18 @@ export default async function NewForumPage({
   const base = `/teach/${courseId}/discussions`;
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
       <style>{formCss}</style>
       <Stack gap={4}>
         <Button className="asg-back" href={base} size="sm" variant="ghost">
-          ← Back to discussions
+          {t(m, "teach.forumForm.backToDiscussions")}
         </Button>
 
         <PageHeader
-          title="New forum"
-          subtitle={`Add a discussion forum to ${course.title}.`}
+          subtitle={t(m, "teach.forumForm.newSubtitle", {
+            course: course.title,
+          })}
+          title={t(m, "teach.forumForm.newTitle")}
         />
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
@@ -125,22 +137,31 @@ export default async function NewForumPage({
 
             <section className="asg-section">
               <div className="asg-section-head">
-                <h2 className="asg-section-title">Forum</h2>
+                <h2 className="asg-section-title">
+                  {t(m, "teach.forumForm.section")}
+                </h2>
                 <p className="asg-section-hint">
-                  Give the discussion forum a clear name learners will
-                  recognize.
+                  {t(m, "teach.forumForm.hint")}
                 </p>
               </div>
-              <Field htmlFor="title" label="Forum title" required>
-                <Input name="title" placeholder="e.g. Q&A" required />
+              <Field
+                htmlFor="title"
+                label={t(m, "teach.forumForm.fieldTitle")}
+                required
+              >
+                <Input
+                  name="title"
+                  placeholder={t(m, "teach.forumForm.titlePlaceholder")}
+                  required
+                />
               </Field>
             </section>
 
             <div className="asg-actionbar">
               <Button href={base} variant="ghost">
-                Cancel
+                {t(m, "teach.forumForm.cancel")}
               </Button>
-              <Button type="submit">Create forum</Button>
+              <Button type="submit">{t(m, "teach.forumForm.create")}</Button>
             </div>
           </form>
         </Card>

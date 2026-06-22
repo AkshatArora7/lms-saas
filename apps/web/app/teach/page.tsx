@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
-import type { CSSProperties } from "react";
 import {
   Alert,
-  AppShell,
   Badge,
   Button,
   Card,
@@ -13,10 +11,13 @@ import {
   ProgressBar,
   Stack,
 } from "@lms/ui";
+import { getMessages, t, type Messages, type MessageKey } from "@lms/i18n";
 
 import {
   type CourseEngagementResult,
   type EngagementComponents,
+  type RiskLevel,
+  type RiskReasonCode,
   getCourseEngagement,
   learnerLabel,
   RISK_LEVEL_DISPLAY,
@@ -24,6 +25,9 @@ import {
 } from "../lib/analytics-api";
 import { getBranding } from "../lib/branding";
 import { getSession } from "../lib/auth";
+import { resolveRequestLocale } from "../lib/i18n";
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
+import { AppShell, CoursesIcon, statAccent, teachPolishCss } from "../lib/ui";
 import {
   canTeach,
   getTaughtCourses,
@@ -61,36 +65,6 @@ function countAtRisk(items: CourseWithEngagement[]): number {
  * phones to a two-up grid on desktop with no horizontal overflow at 360px.
  */
 const teachCss = `
-.tch-stat-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--lms-space-1);
-  align-items: flex-start;
-}
-.tch-stat {
-  font-size: clamp(1.9rem, 5vw, 2.4rem);
-  font-weight: 700;
-  line-height: 1;
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--lms-stat-accent, var(--lms-text));
-}
-.tch-stat-label {
-  color: var(--lms-stat-accent, var(--lms-text-muted));
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.tch-section-heading {
-  font-size: clamp(1.15rem, 3vw, 1.4rem);
-  font-weight: 700;
-  line-height: 1.25;
-  margin: 0 0 var(--lms-space-3);
-  padding-bottom: var(--lms-space-2);
-  border-bottom: 1px solid var(--lms-border);
-}
 .tch-card {
   display: flex;
   flex-direction: column;
@@ -102,13 +76,6 @@ const teachCss = `
   flex-direction: column;
   gap: var(--lms-space-2);
   min-width: 0;
-}
-.tch-title {
-  font-size: clamp(1.05rem, 2.5vw, 1.25rem);
-  font-weight: 700;
-  line-height: 1.25;
-  margin: 0;
-  overflow-wrap: anywhere;
 }
 .tch-chips {
   display: flex;
@@ -229,36 +196,41 @@ const teachCss = `
 }
 `;
 
-const statAccent = (color: string): CSSProperties =>
-  ({ "--lms-stat-accent": color }) as CSSProperties;
-
 const QUICK_ACTIONS: {
   key: string;
-  label: string;
+  labelKey: MessageKey;
   href: (id: string) => string;
 }[] = [
   {
     key: "discussions",
-    label: "Discussions",
+    labelKey: "teach.home.actionDiscussions",
     href: (id) => `/teach/${id}/discussions`,
   },
-  { key: "roster", label: "Roster", href: (id) => `/teach/${id}/roster` },
+  {
+    key: "roster",
+    labelKey: "teach.home.actionRoster",
+    href: (id) => `/teach/${id}/roster`,
+  },
   {
     key: "announcements",
-    label: "Announcements",
+    labelKey: "teach.home.actionAnnouncements",
     href: (id) => `/teach/${id}/announcements`,
   },
   {
     key: "assignments",
-    label: "Assignments",
+    labelKey: "teach.home.actionAssignments",
     href: (id) => `/teach/${id}/assignments`,
   },
   {
     key: "gradebook",
-    label: "Gradebook",
+    labelKey: "teach.home.actionGradebook",
     href: (id) => `/teach/${id}/gradebook`,
   },
-  { key: "open", label: "Open →", href: (id) => `/courses/${id}` },
+  {
+    key: "open",
+    labelKey: "teach.home.actionOpen",
+    href: (id) => `/courses/${id}`,
+  },
 ];
 
 /** Format a 0-100 metric as a whole-percent string, or an em dash when null. */
@@ -266,11 +238,28 @@ function pct(value: number | null): string {
   return value === null ? "—" : `${Math.round(value)}%`;
 }
 
-const COMPONENT_LABELS: { key: keyof EngagementComponents; label: string }[] = [
-  { key: "attendanceRate", label: "Attendance" },
-  { key: "submissionRate", label: "Submissions" },
-  { key: "gradeAverage", label: "Grade avg" },
+const COMPONENT_LABELS: {
+  key: keyof EngagementComponents;
+  labelKey: MessageKey;
+}[] = [
+  { key: "attendanceRate", labelKey: "teach.home.componentAttendance" },
+  { key: "submissionRate", labelKey: "teach.home.componentSubmissions" },
+  { key: "gradeAverage", labelKey: "teach.home.componentGradeAvg" },
 ];
+
+/** Map a stable risk-level code → its keyed, translated label (option a from the
+ * UX spec: key the shared display map's label in-page, no analytics-lib change).
+ * The supplementary tone still comes from the analytics display map. */
+const RISK_LEVEL_LABEL_KEY: Record<RiskLevel, MessageKey> = {
+  high: "teach.home.riskHigh",
+  medium: "teach.home.riskMedium",
+};
+
+const RISK_REASON_LABEL_KEY: Record<RiskReasonCode, MessageKey> = {
+  low_attendance: "teach.home.reasonLowAttendance",
+  missing_submissions: "teach.home.reasonMissingSubmissions",
+  low_grades: "teach.home.reasonLowGrades",
+};
 
 /**
  * Per-course engagement score (element 1 of 3). Renders the live `score` 0-100
@@ -281,14 +270,18 @@ const COMPONENT_LABELS: { key: keyof EngagementComponents; label: string }[] = [
  */
 function CourseEngagementPanel({
   engagement,
+  m,
 }: {
   engagement: CourseEngagementResult;
+  m: Messages;
 }) {
   if (!engagement.ok) {
     return (
       <div className="tch-engagement">
-        <p className="tch-block-label">Engagement</p>
-        <p className="tch-eng-empty">Engagement insights are unavailable.</p>
+        <p className="tch-block-label">{t(m, "teach.home.engagement")}</p>
+        <p className="tch-eng-empty">
+          {t(m, "teach.home.engagementUnavailable")}
+        </p>
       </div>
     );
   }
@@ -298,8 +291,8 @@ function CourseEngagementPanel({
   if (score === null) {
     return (
       <div className="tch-engagement">
-        <p className="tch-block-label">Engagement</p>
-        <p className="tch-eng-empty">Not enough data yet</p>
+        <p className="tch-block-label">{t(m, "teach.home.engagement")}</p>
+        <p className="tch-eng-empty">{t(m, "teach.home.notEnoughData")}</p>
       </div>
     );
   }
@@ -307,17 +300,19 @@ function CourseEngagementPanel({
   return (
     <div className="tch-engagement">
       <div className="tch-eng-head">
-        <p className="tch-block-label">Engagement</p>
+        <p className="tch-block-label">{t(m, "teach.home.engagement")}</p>
         <p className="tch-eng-score">{pct(score)}</p>
       </div>
       <ProgressBar
-        label={`Engagement score ${Math.round(score)} percent`}
+        label={t(m, "teach.home.engagementScoreLabel", {
+          percent: Math.round(score),
+        })}
         value={score}
       />
       <ul className="tch-components">
-        {COMPONENT_LABELS.map(({ key, label }) => (
+        {COMPONENT_LABELS.map(({ key, labelKey }) => (
           <li className="tch-component" key={key}>
-            <span className="tch-component-label">{label}</span>
+            <span className="tch-component-label">{t(m, labelKey)}</span>
             <span className="tch-component-value">{pct(components[key])}</span>
           </li>
         ))}
@@ -335,14 +330,16 @@ function CourseEngagementPanel({
  */
 function CourseAtRiskPanel({
   engagement,
+  m,
 }: {
   engagement: CourseEngagementResult;
+  m: Messages;
 }) {
   if (!engagement.ok) {
     return (
       <div className="tch-risk">
-        <p className="tch-block-label">At-risk learners</p>
-        <p className="tch-muted">At-risk insights are unavailable.</p>
+        <p className="tch-block-label">{t(m, "teach.home.atRiskTitle")}</p>
+        <p className="tch-muted">{t(m, "teach.home.atRiskUnavailable")}</p>
       </div>
     );
   }
@@ -352,10 +349,12 @@ function CourseAtRiskPanel({
   return (
     <div className="tch-risk">
       <p className="tch-block-label">
-        At-risk learners{atRisk.length ? ` (${atRisk.length})` : ""}
+        {atRisk.length
+          ? t(m, "teach.home.atRiskTitleCount", { count: atRisk.length })
+          : t(m, "teach.home.atRiskTitle")}
       </p>
       {atRisk.length === 0 ? (
-        <p className="tch-muted">No at-risk learners 🎉</p>
+        <p className="tch-muted">{t(m, "teach.home.noAtRisk")}</p>
       ) : (
         <ul className="tch-risk-list">
           {atRisk.map((learner) => {
@@ -366,14 +365,16 @@ function CourseAtRiskPanel({
                   <p className="tch-risk-name">
                     {learner.displayName ?? learnerLabel(learner.learnerId)}
                   </p>
-                  <Badge tone={level.tone}>{level.label}</Badge>
+                  <Badge tone={level.tone}>
+                    {t(m, RISK_LEVEL_LABEL_KEY[learner.riskLevel])}
+                  </Badge>
                 </div>
                 <div className="tch-risk-reasons">
                   {learner.reasons.map((reason) => {
                     const r = RISK_REASON_DISPLAY[reason.code];
                     return (
                       <Chip key={reason.code} tone={r.tone}>
-                        {r.label}
+                        {t(m, RISK_REASON_LABEL_KEY[reason.code])}
                       </Chip>
                     );
                   })}
@@ -391,17 +392,24 @@ export default async function Teach() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const shellActions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell actions={shellActions} brand={brand}>
         <PageHeader
-          title="Teaching"
-          subtitle="Engagement insights for the courses you teach."
+          subtitle={t(m, "teach.notAuthorizedSubtitle")}
+          title={t(m, "teach.notAuthorizedTitle")}
         />
-        <Alert tone="info">
-          This dashboard is available to instructors. Your account does not
-          currently hold a teaching role.
+        <Alert tone="warning">
+          <strong>{session.userId}</strong> — {t(m, "teach.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -428,16 +436,17 @@ export default async function Teach() {
   const atRiskTotal = countAtRisk(withEngagement);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell actions={shellActions} brand={brand}>
+      <style>{teachPolishCss}</style>
       <style>{teachCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
-          ← Back to dashboard
+          {t(m, "teach.home.backToDashboard")}
         </Button>
 
         <PageHeader
-          title="Teaching"
-          subtitle="The courses you teach, with quick links into each course's roster, assignments, discussions, announcements, and gradebook."
+          subtitle={t(m, "teach.home.subtitle")}
+          title={t(m, "teach.home.title")}
         />
 
         {courses.length ? (
@@ -449,7 +458,9 @@ export default async function Teach() {
                   style={statAccent("var(--lms-text)")}
                 >
                   <p className="tch-stat">{summary.courseCount}</p>
-                  <p className="tch-stat-label">Courses taught</p>
+                  <p className="tch-stat-label">
+                    {t(m, "teach.home.statCourses")}
+                  </p>
                 </div>
               </Card>
               <Card>
@@ -458,7 +469,9 @@ export default async function Teach() {
                   style={statAccent("var(--lms-text)")}
                 >
                   <p className="tch-stat">{summary.totalEnrolled}</p>
-                  <p className="tch-stat-label">Learners enrolled</p>
+                  <p className="tch-stat-label">
+                    {t(m, "teach.home.statLearners")}
+                  </p>
                 </div>
               </Card>
               <Card>
@@ -471,14 +484,16 @@ export default async function Teach() {
                   )}
                 >
                   <p className="tch-stat">{atRiskTotal}</p>
-                  <p className="tch-stat-label">At-risk learners</p>
+                  <p className="tch-stat-label">
+                    {t(m, "teach.home.statAtRisk")}
+                  </p>
                 </div>
               </Card>
             </Grid>
 
             <section aria-labelledby="teach-heading">
               <h2 className="tch-section-heading" id="teach-heading">
-                By course
+                {t(m, "teach.home.byCourse")}
               </h2>
               <Grid gap={4} min="320px">
                 {withEngagement.map(({ course, engagement }) => (
@@ -488,15 +503,20 @@ export default async function Teach() {
                         <h3 className="tch-title">{course.title}</h3>
                         <div className="tch-chips">
                           <Badge tone="neutral">
-                            {course.enrolled}{" "}
-                            {course.enrolled === 1 ? "learner" : "learners"}
+                            {t(
+                              m,
+                              course.enrolled === 1
+                                ? "teach.home.learnerOne"
+                                : "teach.home.learnerOther",
+                              { count: course.enrolled },
+                            )}
                           </Badge>
                         </div>
                       </div>
 
-                      <CourseEngagementPanel engagement={engagement} />
+                      <CourseEngagementPanel engagement={engagement} m={m} />
 
-                      <CourseAtRiskPanel engagement={engagement} />
+                      <CourseAtRiskPanel engagement={engagement} m={m} />
 
                       <div className="tch-actions">
                         {QUICK_ACTIONS.map((action) => (
@@ -506,7 +526,7 @@ export default async function Teach() {
                             size="sm"
                             variant="ghost"
                           >
-                            {action.label}
+                            {t(m, action.labelKey)}
                           </Button>
                         ))}
                       </div>
@@ -518,9 +538,9 @@ export default async function Teach() {
           </>
         ) : (
           <EmptyState
-            description="When you teach courses with enrolled learners, they appear here."
-            icon="🧑‍🏫"
-            title="No teaching data yet"
+            description={t(m, "teach.home.emptyBody")}
+            icon={<CoursesIcon />}
+            title={t(m, "teach.home.emptyTitle")}
           />
         )}
       </Stack>

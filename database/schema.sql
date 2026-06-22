@@ -1356,6 +1356,51 @@ CREATE INDEX IF NOT EXISTS ix_tenant_deleg_scope
   ON tenant_admin_delegation(scope_tenant_id);
 
 -- ============================================================================
+-- TENANT SILO MIGRATION  (pool -> silo promotion saga state)
+-- ============================================================================
+-- One row per silo-promotion saga run. CONTROL-PLANE saga-state: it records a
+-- platform super-admin migrating a tenant onto a dedicated Neon DB, so it has
+-- no single owning tenant context at write time and is NOT in the RLS
+-- tenant_tables loop (same rationale as `tenant` / `tenant_admin_delegation`).
+-- Only the control-plane tenant service reads/writes it.
+--
+-- `idempotency_key` is UNIQUE so a re-POST with the same key returns the
+-- existing run instead of starting a second migration. `prev_tier` /
+-- `prev_database_ref` are captured at run start so a failed run's compensations
+-- revert the catalog to its exact prior state. `project_id` / `branch_id` /
+-- `database_ref` persist the provisioned SiloTarget once known (all opaque refs,
+-- never a raw DSN). `completed_steps` drives reverse-order rollback.
+CREATE TABLE IF NOT EXISTS tenant_silo_migration (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id         uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  idempotency_key   text NOT NULL UNIQUE,
+  status            text NOT NULL DEFAULT 'pending'
+                      CHECK (status IN (
+                        'pending','provisioning','migrating','copying',
+                        'repointing','flipping','completed','rolled_back',
+                        'compensation_failed'
+                      )),
+  -- Provisioned SiloTarget (opaque refs), populated as the saga progresses.
+  project_id        text,
+  branch_id         text,
+  database_ref      text,
+  -- Captured at run start for exact compensation reverts.
+  prev_tier         text,
+  prev_database_ref text,
+  completed_steps   text[] NOT NULL DEFAULT '{}'::text[],
+  error             text,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  started_at        timestamptz,
+  finished_at       timestamptz
+);
+CREATE INDEX IF NOT EXISTS ix_tenant_silo_migration_tenant
+  ON tenant_silo_migration(tenant_id);
+CREATE TRIGGER trg_tenant_silo_migration_updated BEFORE UPDATE
+  ON tenant_silo_migration
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ============================================================================
 -- REPORTING  (report definitions + persisted runs)
 -- ============================================================================
 -- Tenant-scoped report catalog and run history. A report_definition is a stable

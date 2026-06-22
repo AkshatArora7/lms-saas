@@ -26,6 +26,10 @@ import {
   type OffboardingRouteDeps,
 } from "./offboarding.routes.js";
 import { registerTenantRoutes, type TenantRouteDeps } from "./routes.js";
+import { createNeonSiloPort } from "./silo.neon.js";
+import { MemorySagaStateStore } from "./silo.saga.memory.js";
+import { createPrismaSagaStateStore } from "./silo.saga.prisma.js";
+import { registerSiloRoutes, type SiloRouteDeps } from "./silo.routes.js";
 import { MemorySettingsStore } from "./settings.memory.js";
 import { createPrismaSettingsStore } from "./settings.prisma.js";
 import { createSeededMemoryStore } from "./store.memory.js";
@@ -44,6 +48,10 @@ export interface BuildAppOptions {
   offboardingPorts?: OffboardingRouteDeps["ports"];
   /** Sub-tenant admin delegation store (#5); tests inject memory. */
   delegationStore?: DelegationRouteDeps["store"];
+  /** Silo provisioning port (#3); prod = Neon stub, tests inject a fake. */
+  siloPort?: SiloRouteDeps["port"];
+  /** Silo-promotion saga-state store (#3); tests inject memory. */
+  sagaStore?: SiloRouteDeps["sagaStore"];
 }
 
 /**
@@ -81,6 +89,16 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     tenantStore: store,
     store: options.delegationStore ?? createPrismaDelegationStore(),
   });
+  registerSiloRoutes(app, {
+    store,
+    port:
+      options.siloPort ??
+      createNeonSiloPort({
+        apiUrl: process.env.NEON_API_URL ?? "https://console.neon.tech/api/v2",
+        apiKey: process.env.NEON_API_KEY ?? "",
+      }),
+    sagaStore: options.sagaStore ?? createPrismaSagaStateStore(),
+  });
 
   return app;
 }
@@ -108,6 +126,7 @@ async function start(): Promise<void> {
             settingsStore: new MemorySettingsStore(),
             brandingStore: new MemoryBrandingStore(),
             delegationStore: new MemoryDelegationStore(),
+            sagaStore: new MemorySagaStateStore(),
           }
         : {},
     );

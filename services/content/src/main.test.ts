@@ -235,3 +235,239 @@ describe("content: tenant isolation", () => {
     expect(other.json().modules).toHaveLength(0);
   });
 });
+
+async function createPage(
+  app: ReturnType<typeof build>,
+  payload: { title?: string; slug?: string; body?: string } = {},
+  headers = H,
+) {
+  return app.inject({
+    method: "POST",
+    url: `/courses/${COURSE}/pages`,
+    headers,
+    payload: { title: "My Page", ...payload },
+  });
+}
+
+describe("content: rich pages (#32)", () => {
+  it("creates a page with version #1 and a derived slug", async () => {
+    const app = build();
+    const res = await createPage(app, { title: "Welcome, Students!", body: "<p>Hi</p>" });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().page).toMatchObject({
+      title: "Welcome, Students!",
+      slug: "welcome-students",
+      status: "draft",
+      publishedVersionId: null,
+    });
+
+    const pageId = res.json().page.id;
+    const versions = await app.inject({
+      method: "GET",
+      url: `/pages/${pageId}/versions`,
+      headers: H,
+    });
+    expect(versions.json().versions).toHaveLength(1);
+    expect(versions.json().versions[0]).toMatchObject({
+      versionNumber: 1,
+      state: "draft",
+      body: "<p>Hi</p>",
+    });
+  });
+
+  it("honours an explicit slug (slugified) and empty default body", async () => {
+    const app = build();
+    const res = await createPage(app, { slug: "Custom Slug" });
+    expect(res.json().page.slug).toBe("custom-slug");
+    const pageId = res.json().page.id;
+    const detail = await app.inject({ method: "GET", url: `/pages/${pageId}`, headers: H });
+    expect(detail.json().page.currentVersion.body).toBe("");
+  });
+
+  it("lists pages for the course", async () => {
+    const app = build();
+    await createPage(app, { title: "Page A" });
+    await createPage(app, { title: "Page B" });
+    const list = await app.inject({
+      method: "GET",
+      url: `/courses/${COURSE}/pages`,
+      headers: H,
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().pages).toHaveLength(2);
+  });
+
+  it("getPage resolves current version to the latest draft", async () => {
+    const app = build();
+    const pageId = (await createPage(app, { body: "<p>v1</p>" })).json().page.id;
+    await app.inject({
+      method: "PATCH",
+      url: `/pages/${pageId}`,
+      headers: H,
+      payload: { body: "<p>v2</p>" },
+    });
+    const detail = await app.inject({ method: "GET", url: `/pages/${pageId}`, headers: H });
+    expect(detail.json().page.currentVersion).toMatchObject({
+      versionNumber: 2,
+      body: "<p>v2</p>",
+      state: "draft",
+    });
+  });
+
+  it("patch with body inserts a NEW draft version and never mutates prior", async () => {
+    const app = build();
+    const pageId = (await createPage(app, { body: "<p>v1</p>" })).json().page.id;
+    const v1Id = (await app.inject({ method: "GET", url: `/pages/${pageId}/versions`, headers: H }))
+      .json()
+      .versions[0].id;
+
+    await app.inject({
+      method: "PATCH",
+      url: `/pages/${pageId}`,
+      headers: H,
+      payload: { title: "Renamed", body: "<p>v2</p>" },
+    });
+
+    const versions = (await app.inject({ method: "GET", url: `/pages/${pageId}/versions`, headers: H })).json().versions;
+    expect(versions).toHaveLength(2);
+    // newest-first
+    expect(versions[0]).toMatchObject({ versionNumber: 2, body: "<p>v2</p>" });
+    // prior version untouched
+    const v1 = await app.inject({
+      method: "GET",
+      url: `/pages/${pageId}/versions/${v1Id}`,
+      headers: H,
+    });
+    expect(v1.json().version).toMatchObject({ versionNumber: 1, body: "<p>v1</p>" });
+
+    // page row reflects the title update
+    const detail = await app.inject({ method: "GET", url: `/pages/${pageId}`, headers: H });
+    expect(detail.json().page.title).toBe("Renamed");
+  });
+
+  it("patch with no body does not add a version", async () => {
+    const app = build();
+    const pageId = (await createPage(app, { body: "<p>v1</p>" })).json().page.id;
+    await app.inject({
+      method: "PATCH",
+      url: `/pages/${pageId}`,
+      headers: H,
+      payload: { title: "Just a title" },
+    });
+    const versions = (await app.inject({ method: "GET", url: `/pages/${pageId}/versions`, headers: H })).json().versions;
+    expect(versions).toHaveLength(1);
+  });
+
+  it("publish promotes the latest draft (status + published_version_id)", async () => {
+    const app = build();
+    const pageId = (await createPage(app, { body: "<p>v1</p>" })).json().page.id;
+    const draftId = (await app.inject({ method: "GET", url: `/pages/${pageId}/versions`, headers: H }))
+      .json()
+      .versions[0].id;
+
+    const pub = await app.inject({
+      method: "POST",
+      url: `/pages/${pageId}/publish`,
+      headers: H,
+      payload: {},
+    });
+    expect(pub.statusCode).toBe(200);
+    expect(pub.json().page).toMatchObject({
+      status: "published",
+      publishedVersionId: draftId,
+    });
+
+    // After publish (no remaining draft), current version is the published one.
+    const detail = await app.inject({ method: "GET", url: `/pages/${pageId}`, headers: H });
+    expect(detail.json().page.currentVersion).toMatchObject({
+      id: draftId,
+      state: "published",
+    });
+  });
+
+  it("publish accepts an explicit versionId", async () => {
+    const app = build();
+    const pageId = (await createPage(app, { body: "<p>v1</p>" })).json().page.id;
+    const v1Id = (await app.inject({ method: "GET", url: `/pages/${pageId}/versions`, headers: H }))
+      .json()
+      .versions[0].id;
+    // add a newer draft
+    await app.inject({ method: "PATCH", url: `/pages/${pageId}`, headers: H, payload: { body: "<p>v2</p>" } });
+
+    const pub = await app.inject({
+      method: "POST",
+      url: `/pages/${pageId}/publish`,
+      headers: H,
+      payload: { versionId: v1Id },
+    });
+    expect(pub.json().page.publishedVersionId).toBe(v1Id);
+  });
+
+  it("returns full body for a specific version", async () => {
+    const app = build();
+    const pageId = (await createPage(app, { body: "<p>hello</p>" })).json().page.id;
+    const vId = (await app.inject({ method: "GET", url: `/pages/${pageId}/versions`, headers: H }))
+      .json()
+      .versions[0].id;
+    const v = await app.inject({ method: "GET", url: `/pages/${pageId}/versions/${vId}`, headers: H });
+    expect(v.statusCode).toBe(200);
+    expect(v.json().version.body).toBe("<p>hello</p>");
+  });
+
+  it("validates input and 404s for missing pages/versions", async () => {
+    const app = build();
+    const MISSING = "99999999-9999-9999-9999-999999999999";
+    expect((await createPage(app, { title: "" })).statusCode).toBe(400);
+    expect(
+      (await app.inject({ method: "GET", url: `/pages/${MISSING}`, headers: H })).statusCode,
+    ).toBe(404);
+    expect(
+      (await app.inject({ method: "PATCH", url: `/pages/${MISSING}`, headers: H, payload: { title: "x" } })).statusCode,
+    ).toBe(404);
+    expect(
+      (await app.inject({ method: "POST", url: `/pages/${MISSING}/publish`, headers: H, payload: {} })).statusCode,
+    ).toBe(404);
+
+    // page exists but no such version → 404
+    const pageId = (await createPage(app, {})).json().page.id;
+    expect(
+      (await app.inject({ method: "GET", url: `/pages/${pageId}/versions/${MISSING}`, headers: H })).statusCode,
+    ).toBe(404);
+    expect(
+      (await app.inject({ method: "POST", url: `/pages/${pageId}/publish`, headers: H, payload: { versionId: MISSING } })).statusCode,
+    ).toBe(404);
+  });
+
+  it("requires a tenant (400 when x-tenant-id is missing)", async () => {
+    const app = build();
+    const res = await app.inject({ method: "GET", url: `/courses/${COURSE}/pages` });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("tenant_required");
+  });
+
+  it("never exposes another tenant's pages or versions", async () => {
+    const app = build();
+    const created = await createPage(app, { title: "Secret", body: "<p>x</p>" });
+    const pageId = created.json().page.id;
+    const versionId = (await app.inject({ method: "GET", url: `/pages/${pageId}/versions`, headers: H }))
+      .json()
+      .versions[0].id;
+
+    // tenant B sees no pages and cannot read tenant A's page or version
+    const otherList = await app.inject({
+      method: "GET",
+      url: `/courses/${COURSE}/pages`,
+      headers: OTHER_H,
+    });
+    expect(otherList.json().pages).toHaveLength(0);
+    expect(
+      (await app.inject({ method: "GET", url: `/pages/${pageId}`, headers: OTHER_H })).statusCode,
+    ).toBe(404);
+    expect(
+      (await app.inject({ method: "GET", url: `/pages/${pageId}/versions/${versionId}`, headers: OTHER_H })).statusCode,
+    ).toBe(404);
+    expect(
+      (await app.inject({ method: "POST", url: `/pages/${pageId}/publish`, headers: OTHER_H, payload: {} })).statusCode,
+    ).toBe(404);
+  });
+});

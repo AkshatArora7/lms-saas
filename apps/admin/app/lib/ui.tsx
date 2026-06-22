@@ -117,6 +117,20 @@ export function BrandingIcon(): ReactElement {
   );
 }
 
+/** Document/page glyph for rich content pages: a sheet with a folded corner and text lines. */
+export function ContentIcon(): ReactElement {
+  return (
+    <EmptyIcon
+      paths={[
+        "M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5A1.5 1.5 0 0 1 7 3.5Z",
+        "M14 3.5V8h4",
+        "M9 12.5h6",
+        "M9 15.5h6",
+      ]}
+    />
+  );
+}
+
 /** Gear glyph for tenant settings: a centre ring with four simplified spokes. */
 export function SettingsIcon(): ReactElement {
   return (

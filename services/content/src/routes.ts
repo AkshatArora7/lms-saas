@@ -323,4 +323,129 @@ export function registerContentRoutes(
       return reply.code(204).send();
     },
   );
+
+  // --- Rich pages (#32) --------------------------------------------------
+  app.post<{ Params: { courseId: string } }>(
+    "/courses/:courseId/pages",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const body = (req.body ?? {}) as {
+        title?: unknown;
+        slug?: unknown;
+        body?: unknown;
+      };
+      if (!isNonEmptyString(body.title)) {
+        return badRequest(reply, "title is required.");
+      }
+      if (body.slug !== undefined && !isNonEmptyString(body.slug)) {
+        return badRequest(reply, "slug must be a non-empty string.");
+      }
+      if (body.body !== undefined && typeof body.body !== "string") {
+        return badRequest(reply, "body must be a string.");
+      }
+      const page = await deps.store.createPage(ctx, req.params.courseId, {
+        title: body.title.trim(),
+        ...(isNonEmptyString(body.slug) ? { slug: body.slug.trim() } : {}),
+        ...(typeof body.body === "string" ? { body: body.body } : {}),
+      });
+      return reply.code(201).send({ page });
+    },
+  );
+
+  app.get<{ Params: { courseId: string } }>(
+    "/courses/:courseId/pages",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const pages = await deps.store.listPages(ctx, req.params.courseId);
+      return reply.code(200).send({ pages });
+    },
+  );
+
+  app.get<{ Params: { id: string } }>("/pages/:id", async (req, reply) => {
+    const ctx = resolveTenantOr400(deps, req, reply);
+    if (!ctx) return reply;
+    const page = await deps.store.getPage(ctx, req.params.id);
+    if (!page) return notFound(reply, "Page not found.");
+    return reply.code(200).send({ page });
+  });
+
+  app.patch<{ Params: { id: string } }>("/pages/:id", async (req, reply) => {
+    const ctx = resolveTenantOr400(deps, req, reply);
+    if (!ctx) return reply;
+    const body = (req.body ?? {}) as {
+      title?: unknown;
+      slug?: unknown;
+      body?: unknown;
+    };
+    const patch: { title?: string; slug?: string; body?: string } = {};
+    if (body.title !== undefined) {
+      if (!isNonEmptyString(body.title)) {
+        return badRequest(reply, "title must be a non-empty string.");
+      }
+      patch.title = body.title.trim();
+    }
+    if (body.slug !== undefined) {
+      if (!isNonEmptyString(body.slug)) {
+        return badRequest(reply, "slug must be a non-empty string.");
+      }
+      patch.slug = body.slug.trim();
+    }
+    if (body.body !== undefined) {
+      if (typeof body.body !== "string") {
+        return badRequest(reply, "body must be a string.");
+      }
+      patch.body = body.body;
+    }
+    const page = await deps.store.updatePage(ctx, req.params.id, patch);
+    if (!page) return notFound(reply, "Page not found.");
+    return reply.code(200).send({ page });
+  });
+
+  app.post<{ Params: { id: string } }>(
+    "/pages/:id/publish",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const body = (req.body ?? {}) as { versionId?: unknown };
+      if (body.versionId !== undefined && !isNonEmptyString(body.versionId)) {
+        return badRequest(reply, "versionId must be a non-empty string.");
+      }
+      const page = await deps.store.publishPage(
+        ctx,
+        req.params.id,
+        isNonEmptyString(body.versionId) ? body.versionId.trim() : undefined,
+      );
+      if (!page) {
+        return notFound(reply, "Page or publishable version not found.");
+      }
+      return reply.code(200).send({ page });
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/pages/:id/versions",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const versions = await deps.store.listPageVersions(ctx, req.params.id);
+      return reply.code(200).send({ versions });
+    },
+  );
+
+  app.get<{ Params: { id: string; versionId: string } }>(
+    "/pages/:id/versions/:versionId",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const version = await deps.store.getPageVersion(
+        ctx,
+        req.params.id,
+        req.params.versionId,
+      );
+      if (!version) return notFound(reply, "Page version not found.");
+      return reply.code(200).send({ version });
+    },
+  );
 }

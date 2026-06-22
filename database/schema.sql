@@ -351,6 +351,44 @@ CREATE TABLE IF NOT EXISTS content_completion (
   PRIMARY KEY (topic_id, user_id)
 );
 
+-- Authored rich pages (WYSIWYG). A page holds identity + the published pointer;
+-- its content lives in append-only page_version rows (versioned drafts).
+CREATE TABLE IF NOT EXISTS page (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id            uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  course_id            uuid REFERENCES course(id) ON DELETE CASCADE,
+  title                text NOT NULL,
+  slug                 text NOT NULL,
+  status               text NOT NULL DEFAULT 'draft'
+                         CHECK (status IN ('draft','published')),
+  -- Plain uuid pointer to the live page_version (no FK: page_version's own RLS
+  -- scopes reads and the app resolves it within withTenant).
+  published_version_id uuid,
+  created_by           uuid REFERENCES app_user(id),
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, course_id, slug)
+);
+CREATE INDEX IF NOT EXISTS ix_page_tenant ON page(tenant_id);
+CREATE INDEX IF NOT EXISTS ix_page_course ON page(course_id);
+CREATE TRIGGER trg_page_updated BEFORE UPDATE ON page
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Immutable, append-only version history for a page (sanitized rich HTML body).
+CREATE TABLE IF NOT EXISTS page_version (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id      uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  page_id        uuid NOT NULL REFERENCES page(id) ON DELETE CASCADE,
+  version_number integer NOT NULL,
+  body           text NOT NULL DEFAULT '',
+  state          text NOT NULL DEFAULT 'draft'
+                   CHECK (state IN ('draft','published')),
+  created_by     uuid REFERENCES app_user(id),
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, page_id, version_number)
+);
+CREATE INDEX IF NOT EXISTS ix_page_version_page ON page_version(page_id);
+
 -- ============================================================================
 -- ENROLLMENT
 -- ============================================================================

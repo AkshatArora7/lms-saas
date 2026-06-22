@@ -1,0 +1,145 @@
+/**
+ * English message catalog — the SOURCE OF TRUTH for keys.
+ *
+ * `type Messages = typeof enMessages` is derived from this object, and every
+ * other locale catalog is typed `: Messages`, so a missing or mistyped key in
+ * another locale is a COMPILE error (see `es.ts`).
+ *
+ * Organisation: nested objects namespaced by FLOW (common, auth, nav, home,
+ * profile, attendance, roster, admin, editor). Add a key here first, then mirror
+ * it in every other catalog. `t(messages, "flow.key")` looks keys up by the
+ * dotted path; `{var}` placeholders are interpolated by `t`'s `vars` argument.
+ */
+export const enMessages = {
+  common: {
+    backToDashboard: "← Back to dashboard",
+    none: "none",
+    noRoles: "No roles",
+    user: "User",
+    tenant: "Tenant",
+    roles: "Roles",
+    scopes: "Scopes",
+    cancel: "Cancel",
+    save: "Save",
+    loading: "Loading…",
+    language: "Language",
+    chooseLanguage: "Choose language",
+  },
+  auth: {
+    welcomeBack: "Welcome back",
+    learnerSubtitle: "Enter your details to access your dashboard.",
+    adminSubtitle: "Sign in to the administration console.",
+    email: "Email",
+    password: "Password",
+    signIn: "Sign in",
+    signingIn: "Signing in…",
+    ssoButton: "Sign in with your school account",
+    learnerDemoHint: "Demo: admin@demo.school / student@demo.school · password123",
+    adminDemoHint: "Demo admin: admin@demo.school · password123",
+    invalidCredentials: "Email or password is incorrect.",
+    genericError: "Sign in failed. Please try again.",
+    learnerHeadline: "A focused, modern learning experience that keeps everything you need for class a single sign-in away.",
+    learnerFootnote: "Secure, accessible, and built for every learner.",
+    highlightCourses: "All your courses in one place",
+    highlightProgress: "Track progress and grades in real time",
+    highlightSso: "Secure single sign-on",
+    adminHeadline: "Run your organization from one console — courses, people, branding, and the insights to keep everything on track.",
+    adminFootnote: "Secure, tenant-isolated administration for every brand.",
+    adminHighlightManage: "Manage courses, users, and org units",
+    adminHighlightConfigure: "Configure branding and single sign-on",
+    adminHighlightReports: "Track engagement with built-in reports",
+  },
+  home: {
+    welcome: "Welcome back",
+    subtitle: "Here's your learning at a glance.",
+    myCourses: "My courses",
+    noCoursesTitle: "No courses yet",
+    noCoursesBody: "Once you're enrolled, your courses will appear here.",
+    yourAccount: "Your account",
+    viewProfile: "View profile",
+  },
+  profile: {
+    title: "Profile",
+    subtitle: "Your account details and learning preferences.",
+    account: "Account",
+    preferences: "Preferences",
+    preferencesReadOnly: "Preferences are read-only for now — editing arrives when the profile service is wired up.",
+  },
+  attendance: {
+    title: "My attendance",
+    subtitle: "Your recorded attendance across every session, newest first.",
+    sessionsRecorded: "Sessions recorded",
+    absences: "Absences",
+    tardies: "Tardies",
+    excused: "Excused",
+    history: "History",
+    minLate: "min late",
+    emptyTitle: "No attendance recorded yet",
+    emptyBody: "Once your sessions are recorded, your attendance history will appear here.",
+  },
+  roster: {
+    backToTeaching: "← Back to teaching",
+    notAuthorizedTitle: "Not authorized",
+    notAuthorizedSubtitle: "Your account cannot manage the roster.",
+    notAuthorizedBody: "Your account does not hold a teaching role.",
+    title: "{course} — roster",
+    subtitle: "Enroll learners, change roles, complete, and drop. Changes are saved straight to the enrollment service for this tenant.",
+    enrollLearner: "Enroll learner",
+    activeMembers: "Active members",
+    learners: "Learners",
+    staff: "Staff",
+    members: "Members",
+    changeRole: "Change role",
+    complete: "Complete",
+    drop: "Drop",
+    emptyTitle: "No one enrolled yet",
+    emptyBody: "Enroll your first learner to start building the roster.",
+    serviceOffline: "Service offline",
+  },
+  admin: {
+    notAuthorizedTitle: "Not authorized",
+    notAuthorizedSubtitle: "Your account cannot access the administration console.",
+    notAuthorizedBody: "Your account does not hold an administrator role, so the admin console is unavailable.",
+    title: "Administration",
+    subtitle: "Org-unit hierarchy, users & roles, enrollment, SIS sync, and tenant settings.",
+    manage: "Manage",
+    yourRole: "Your role",
+    yourRoles: "Your roles",
+    accessScopes: "Access scopes",
+    tenantTier: "Tenant tier",
+    session: "Administrator session",
+  },
+  editor: {
+    backToPages: "← Back to pages",
+    unsavedChanges: "Unsaved changes",
+    published: "Published",
+    draft: "Draft",
+    title: "Title",
+    urlSlug: "URL slug",
+    slugHelp: "Auto-generated from the title. Letters, numbers and hyphens only.",
+    pageContent: "Page content",
+    saveDraft: "Save draft",
+    publish: "Publish",
+    publishing: "Publishing…",
+    saving: "Saving…",
+    versionHistory: "Version history",
+    insertMedia: "Insert media or file",
+    insert: "Insert",
+    uploading: "Uploading…",
+  },
+} as const;
+
+/**
+ * Widen the `as const` literal leaves to `string` while preserving the exact key
+ * structure. `as const` above gives `t()` precise key typing AND lets every
+ * leaf be a known dotted path; `Messages` (the contract other catalogs satisfy)
+ * keeps the SAME keys but `string` values, so a translation can legitimately
+ * differ from the English text yet a missing/renamed key stays a compile error.
+ */
+type WidenLeaves<T> = {
+  [K in keyof T]: T[K] extends string ? string : WidenLeaves<T[K]>;
+};
+
+export type Messages = WidenLeaves<typeof enMessages>;
+
+export default enMessages;

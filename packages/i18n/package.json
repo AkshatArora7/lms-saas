@@ -1,5 +1,5 @@
 {
-  "name": "@lms/ui",
+  "name": "@lms/i18n",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -12,18 +12,13 @@
     "test": "vitest run --passWithNoTests",
     "clean": "rimraf dist .turbo"
   },
-  "dependencies": {
-    "@lms/i18n": "workspace:*"
-  },
   "peerDependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react": "^18.3.1"
   },
   "devDependencies": {
     "@lms/eslint-config": "workspace:*",
     "@lms/tsconfig": "workspace:*",
     "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
     "react": "^18.3.1",
     "vitest": "^2.0.5"
   }

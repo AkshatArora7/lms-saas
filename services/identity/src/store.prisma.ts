@@ -314,5 +314,33 @@ export function createPrismaStore(): IdentityStore {
         return record;
       });
     },
+
+    async getUserLocale(ctx, userId): Promise<string | null> {
+      return withTenant(ctx, async (db) => {
+        const rows = await db.$queryRawUnsafe<Array<{ locale: string }>>(
+          `SELECT locale
+             FROM app_user
+            WHERE id = $1::uuid AND tenant_id = $2::uuid
+            LIMIT 1`,
+          userId,
+          ctx.tenantId,
+        );
+        return rows[0]?.locale ?? null;
+      });
+    },
+
+    async updateUserLocale(ctx, userId, locale): Promise<boolean> {
+      return withTenant(ctx, async (db) => {
+        const affected = await db.$executeRawUnsafe(
+          `UPDATE app_user
+              SET locale = $3
+            WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+          userId,
+          ctx.tenantId,
+          locale,
+        );
+        return affected > 0;
+      });
+    },
   };
 }

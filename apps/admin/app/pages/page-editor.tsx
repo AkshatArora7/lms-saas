@@ -12,6 +12,7 @@ import {
   type ReactElement,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "@lms/i18n";
 
 import { sanitizeHtmlDom } from "../lib/sanitize-html";
 import type {
@@ -173,6 +174,7 @@ interface EditorProps {
 
 export default function PageEditor({ courseId, page }: EditorProps): ReactElement {
   const router = useRouter();
+  const { t } = useTranslations();
   const canvasRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -551,10 +553,10 @@ export default function PageEditor({ courseId, page }: EditorProps): ReactElemen
       ? "success"
       : "warning";
   const statusLabel = dirty
-    ? "Unsaved changes"
+    ? t("editor.unsavedChanges")
     : status === "published"
-      ? "Published"
-      : "Draft";
+      ? t("editor.published")
+      : t("editor.draft");
 
   const toneVar = useMemo<Record<Tone, string>>(
     () => ({
@@ -581,7 +583,7 @@ export default function PageEditor({ courseId, page }: EditorProps): ReactElemen
       <div className="ed-main">
         <div className="ed-banner">
           <a className="lms-btn lms-btn--ghost lms-btn--sm ed-back" href={`/courses/${courseId}/pages`} role="button">
-            {"<- Back to pages"}
+            {t("editor.backToPages")}
           </a>
           <span aria-live="polite" style={chipStyle}>
             {statusLabel}
@@ -613,7 +615,7 @@ export default function PageEditor({ courseId, page }: EditorProps): ReactElemen
         <div className="ed-fields">
           <div className="lms-field">
             <label className="lms-field__label" htmlFor={`${canvasId}-title`}>
-              Title <span aria-hidden="true">*</span>
+              {t("editor.title")} <span aria-hidden="true">*</span>
             </label>
             <input
               className="lms-input"
@@ -626,7 +628,7 @@ export default function PageEditor({ courseId, page }: EditorProps): ReactElemen
           </div>
           <div className="lms-field">
             <label className="lms-field__label" htmlFor={`${canvasId}-slug`}>
-              URL slug
+              {t("editor.urlSlug")}
             </label>
             <div className="ed-slug-wrap">
               <span aria-hidden="true" className="ed-slug-prefix">
@@ -646,7 +648,7 @@ export default function PageEditor({ courseId, page }: EditorProps): ReactElemen
               />
             </div>
             <div className="lms-field__help" id={`${canvasId}-slug-help`}>
-              Auto-generated from the title. Letters, numbers and hyphens only.
+              {t("editor.slugHelp")}
             </div>
           </div>
         </div>
@@ -654,7 +656,7 @@ export default function PageEditor({ courseId, page }: EditorProps): ReactElemen
         {/* Editor */}
         <div>
           <label className="lms-field__label" htmlFor={canvasId} id={`${canvasId}-label`}>
-            Page content
+            {t("editor.pageContent")}
           </label>
           <div className="ed-editor">
             {!readOnly ? (
@@ -730,7 +732,7 @@ export default function PageEditor({ courseId, page }: EditorProps): ReactElemen
               href={`/courses/${courseId}/pages`}
               role="button"
             >
-              Cancel
+              {t("common.cancel")}
             </a>
             <button
               aria-busy={saving}
@@ -739,7 +741,7 @@ export default function PageEditor({ courseId, page }: EditorProps): ReactElemen
               onClick={saveDraft}
               type="button"
             >
-              {saving ? "Saving…" : "Save draft"}
+              {saving ? t("editor.saving") : t("editor.saveDraft")}
             </button>
             <button
               aria-busy={publishing}
@@ -748,7 +750,7 @@ export default function PageEditor({ courseId, page }: EditorProps): ReactElemen
               onClick={publish}
               type="button"
             >
-              {publishing ? "Publishing…" : "Publish"}
+              {publishing ? t("editor.publishing") : t("editor.publish")}
             </button>
           </div>
         ) : null}
@@ -758,7 +760,7 @@ export default function PageEditor({ courseId, page }: EditorProps): ReactElemen
       <aside aria-labelledby={`${canvasId}-vh`} className="ed-aside">
         <div className="lms-card ed-aside-card">
           <h2 id={`${canvasId}-vh`} style={{ fontSize: 16, margin: "0 0 var(--lms-space-2)" }}>
-            Version history
+            {t("editor.versionHistory")}
           </h2>
           {versions.length === 0 ? (
             <p className="ed-help">
@@ -859,6 +861,7 @@ function MediaDialog({
   onUpload,
   onCancel,
 }: MediaDialogProps): ReactElement {
+  const { t } = useTranslations();
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -900,7 +903,7 @@ function MediaDialog({
         role="dialog"
       >
         <h2 id={titleId} style={{ margin: 0, fontSize: 18 }}>
-          Insert media or file
+          {t("editor.insertMedia")}
         </h2>
         <p className="ed-help">
           Images, video, PDFs and documents. Max size per your plan.
@@ -957,7 +960,7 @@ function MediaDialog({
             onClick={onCancel}
             type="button"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             aria-busy={busy}
@@ -966,7 +969,7 @@ function MediaDialog({
             onClick={onUpload}
             type="button"
           >
-            {busy ? "Uploading…" : "Insert"}
+            {busy ? t("editor.uploading") : t("editor.insert")}
           </button>
         </div>
       </div>

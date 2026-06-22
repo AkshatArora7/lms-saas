@@ -11,8 +11,11 @@ import {
   Inline,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "./lib/branding";
+import { resolveRequestLocale } from "./lib/i18n";
+import { AppLocaleSwitcher } from "./lib/locale-switcher";
 import { AppShell, CoursesIcon, GenericIcon, SuccessIcon } from "./lib/ui";
 import { getSession } from "./lib/auth";
 import { getDashboardCourses } from "./lib/dashboard";
@@ -177,6 +180,7 @@ export default async function Home() {
   if (!session) redirect("/login");
 
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
   const courses = await getDashboardCourses(session.userId, session.tenantId);
 
   const allAnnouncements = await getAnnouncements(
@@ -193,15 +197,21 @@ export default async function Home() {
     .slice(0, 4);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell
+      brand={brand}
+      actions={
+        <>
+          <AppLocaleSwitcher />
+          <SignOutButton />
+        </>
+      }
+    >
       <style>{DASHBOARD_STYLES}</style>
 
       <div className="lms-dash">
         <header>
-          <h1 className="lms-dash__hero-title">Welcome back</h1>
-          <p className="lms-dash__hero-subtitle">
-            Here&apos;s your learning at a glance.
-          </p>
+          <h1 className="lms-dash__hero-title">{t(m, "home.welcome")}</h1>
+          <p className="lms-dash__hero-subtitle">{t(m, "home.subtitle")}</p>
           <nav aria-label="Quick links" className="lms-dash__nav" style={{ marginTop: "var(--lms-space-4)" }}>
             {canTeach(session.roles) ? (
               <Button href="/teach" size="sm" variant="secondary">
@@ -233,7 +243,10 @@ export default async function Home() {
           <Stack gap={5}>
             <section aria-labelledby="courses-heading">
               <Stack gap={4}>
-                <SectionHeading id="courses-heading" title="My courses" />
+                <SectionHeading
+                  id="courses-heading"
+                  title={t(m, "home.myCourses")}
+                />
                 {courses.length ? (
                   <Grid min="240px">
                     {courses.map((course) => (
@@ -265,9 +278,9 @@ export default async function Home() {
                   </Grid>
                 ) : (
                   <EmptyState
-                    description="Once you're enrolled, your courses will appear here."
+                    description={t(m, "home.noCoursesBody")}
                     icon={<CoursesIcon />}
-                    title="No courses yet"
+                    title={t(m, "home.noCoursesTitle")}
                   />
                 )}
               </Stack>
@@ -391,22 +404,22 @@ export default async function Home() {
                     className="lms-dash__section-heading"
                     id="account-heading"
                   >
-                    Your account
+                    {t(m, "home.yourAccount")}
                   </h2>
                 </Inline>
                 <Stack gap={3}>
                   <Stack gap={1}>
-                    <span style={labelStyle}>User</span>
+                    <span style={labelStyle}>{t(m, "common.user")}</span>
                     <span style={bodyTextStyle}>{session.userId}</span>
                   </Stack>
                   <Stack gap={1}>
-                    <span style={labelStyle}>Tenant</span>
+                    <span style={labelStyle}>{t(m, "common.tenant")}</span>
                     <span style={bodyTextStyle}>
                       {session.tenantId} ({session.tier})
                     </span>
                   </Stack>
                   <Stack gap={2}>
-                    <span style={labelStyle}>Roles</span>
+                    <span style={labelStyle}>{t(m, "common.roles")}</span>
                     <Inline gap={2}>
                       {session.roles.length ? (
                         session.roles.map((role) => (
@@ -420,7 +433,7 @@ export default async function Home() {
                     </Inline>
                   </Stack>
                   <Stack gap={2}>
-                    <span style={labelStyle}>Scopes</span>
+                    <span style={labelStyle}>{t(m, "common.scopes")}</span>
                     <Inline gap={2}>
                       {session.scopes.length ? (
                         session.scopes.map((scope) => (
@@ -435,7 +448,7 @@ export default async function Home() {
                   </Stack>
                 </Stack>
                 <Button fullWidth href="/profile" variant="secondary">
-                  View profile
+                  {t(m, "home.viewProfile")}
                 </Button>
               </Stack>
             </Card>

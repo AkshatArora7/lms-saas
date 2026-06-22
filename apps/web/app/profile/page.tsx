@@ -10,9 +10,12 @@ import {
   PageHeader,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../lib/branding";
 import { getSession } from "../lib/auth";
+import { resolveRequestLocale } from "../lib/i18n";
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
 import { getProfile } from "../lib/profile";
 import { AppShell } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
@@ -145,18 +148,27 @@ export default async function ProfilePage() {
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
   const profile = await getProfile(session);
+  const m = getMessages(await resolveRequestLocale());
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell
+      brand={brand}
+      actions={
+        <>
+          <AppLocaleSwitcher />
+          <SignOutButton />
+        </>
+      }
+    >
       <style>{profileCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
-          ← Back to dashboard
+          {t(m, "common.backToDashboard")}
         </Button>
 
         <PageHeader
-          title="Profile"
-          subtitle="Your account details and learning preferences."
+          title={t(m, "profile.title")}
+          subtitle={t(m, "profile.subtitle")}
         />
 
         <Card>
@@ -173,7 +185,7 @@ export default async function ProfilePage() {
                     </Badge>
                   ))
                 ) : (
-                  <span className="pf-muted">No roles</span>
+                  <span className="pf-muted">{t(m, "common.noRoles")}</span>
                 )}
               </div>
             </div>
@@ -182,21 +194,21 @@ export default async function ProfilePage() {
 
         <Card>
           <Stack gap={4}>
-            <h2 className="pf-section-title">Account</h2>
+            <h2 className="pf-section-title">{t(m, "profile.account")}</h2>
             <dl className="pf-dl">
               <div className="pf-dl__row">
-                <dt className="pf-dt">User</dt>
+                <dt className="pf-dt">{t(m, "common.user")}</dt>
                 <dd className="pf-dd">{profile.userId}</dd>
               </div>
               <div className="pf-dl__row">
-                <dt className="pf-dt">Tenant</dt>
+                <dt className="pf-dt">{t(m, "common.tenant")}</dt>
                 <dd className="pf-dd">
                   <span>{profile.tenantId}</span>
                   <Chip tone="accent">{profile.tier}</Chip>
                 </dd>
               </div>
               <div className="pf-dl__row">
-                <dt className="pf-dt">Scopes</dt>
+                <dt className="pf-dt">{t(m, "common.scopes")}</dt>
                 <dd className="pf-dd">
                   <div className="pf-scopes">
                     {profile.scopes.length ? (
@@ -206,7 +218,7 @@ export default async function ProfilePage() {
                         </Badge>
                       ))
                     ) : (
-                      <span className="pf-muted">none</span>
+                      <span className="pf-muted">{t(m, "common.none")}</span>
                     )}
                   </div>
                 </dd>
@@ -217,11 +229,8 @@ export default async function ProfilePage() {
 
         <Card>
           <Stack gap={4}>
-            <h2 className="pf-section-title">Preferences</h2>
-            <Alert tone="info">
-              Preferences are read-only for now — editing arrives when the
-              profile service is wired up.
-            </Alert>
+            <h2 className="pf-section-title">{t(m, "profile.preferences")}</h2>
+            <Alert tone="info">{t(m, "profile.preferencesReadOnly")}</Alert>
             <Stack gap={3}>
               {profile.preferences.map((preference, index) => (
                 <div key={preference.label}>

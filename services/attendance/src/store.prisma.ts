@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 
 import { withTenant } from "@lms/db";
 
-import { attendanceEvent } from "./events.js";
+import {
+  attendanceEvent,
+  recipientsFor,
+  type AttendanceEvent,
+} from "./events.js";
+import type { StudentGuardiansResolver } from "./guardians.js";
 import {
   DEFAULT_ATTENDANCE_CODES,
   type AttendanceCategory,
@@ -97,6 +102,13 @@ const RECORD_COLUMNS = `id, tenant_id, session_id, user_id, code, minutes_late, 
  */
 export function createPrismaStore(
   generateId: () => string = randomUUID,
+  /**
+   * Resolves a student's active+consented guardians via the user-org port
+   * (#101). The call happens OUTSIDE the db tx — guardian/consent data lives in
+   * a different bounded context (user-org), so it is fetched through the port,
+   * never JOINed inside withTenant.
+   */
+  guardians: StudentGuardiansResolver = { resolveGuardians: async () => [] },
 ): AttendanceStore {
   return {
     async listCodes(ctx) {
@@ -246,7 +258,8 @@ export function createPrismaStore(
     },
 
     async finalizeSession(ctx, id) {
-      return withTenant(ctx, async (db) => {
+      // Phase 1 (tx): finalize the session and read its flagged records.
+      const finalized = await withTenant(ctx, async (db) => {
         const rows = await db.$queryRawUnsafe<SessionRow[]>(
           `UPDATE attendance_session SET status = 'finalized'
              WHERE id = $1::uuid
@@ -255,9 +268,6 @@ export function createPrismaStore(
         );
         const row = rows[0];
         if (!row) return null;
-
-        // Emit an outbox event for each absent/tardy record so the relay ->
-        // notification path informs the learner (preferences applied there).
         const flagged = await db.$queryRawUnsafe<
           { user_id: string; code: string; category: "absent" | "tardy" }[]
         >(
@@ -268,23 +278,50 @@ export function createPrismaStore(
             WHERE r.session_id = $1::uuid AND c.category IN ('absent','tardy')`,
           id,
         );
-        for (const r of flagged) {
-          const event = attendanceEvent(id, row.org_unit_id, {
-            userId: r.user_id,
-            code: r.code,
-            category: r.category,
-          });
-          await db.$executeRawUnsafe(
-            `INSERT INTO event_outbox (tenant_id, type, org_unit_id, payload)
-             VALUES ($1::uuid, $2, $3::uuid, $4::jsonb)`,
-            ctx.tenantId,
-            event.type,
-            row.org_unit_id,
-            JSON.stringify(event.payload),
-          );
-        }
-        return toSession(row);
+        return { row, flagged };
       });
+      if (!finalized) return null;
+      const { row, flagged } = finalized;
+
+      // Phase 2 (NO tx): resolve each learner's active+consented guardians via
+      // the user-org port — a cross-bounded-context call that must not run a
+      // JOIN inside withTenant. Fail-closed (the resolver returns [] on error),
+      // so the fan-out degrades to learner-only.
+      const events: AttendanceEvent[] = [];
+      for (const r of flagged) {
+        const gs = await guardians.resolveGuardians(ctx, r.user_id);
+        const recipientIds = recipientsFor(
+          r.user_id,
+          gs.map((g) => g.guardianUserId),
+        );
+        events.push(
+          attendanceEvent(
+            id,
+            row.org_unit_id,
+            { userId: r.user_id, code: r.code, category: r.category },
+            recipientIds,
+          ),
+        );
+      }
+
+      // Phase 3 (tx): write the outbox rows so the relay -> notification path
+      // fans out to each recipient (preferences applied there). The INSERT runs
+      // inside withTenant so the outbox RLS WITH CHECK passes.
+      if (events.length > 0) {
+        await withTenant(ctx, async (db) => {
+          for (const event of events) {
+            await db.$executeRawUnsafe(
+              `INSERT INTO event_outbox (tenant_id, type, org_unit_id, payload)
+               VALUES ($1::uuid, $2, $3::uuid, $4::jsonb)`,
+              ctx.tenantId,
+              event.type,
+              row.org_unit_id,
+              JSON.stringify(event.payload),
+            );
+          }
+        });
+      }
+      return toSession(row);
     },
 
     async sectionSummary(ctx, orgUnitId, chronicAbsenceThreshold) {

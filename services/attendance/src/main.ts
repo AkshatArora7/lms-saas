@@ -12,6 +12,8 @@
  * RLS scopes every query. Deployable as a container image (Dockerfile ->
  * GHCR -> container host) or, for edge/BFF roles, as Vercel Functions.
  */
+import { randomUUID } from "node:crypto";
+
 import { loadConfig, type AppConfig } from "@lms/config";
 import { createLogger } from "@lms/logger";
 import type { TenantContext } from "@lms/types";
@@ -20,6 +22,8 @@ import Fastify, {
   type FastifyRequest,
 } from "fastify";
 
+import { createHttpStudentGuardiansResolver } from "./guardians.http.js";
+import type { StudentGuardiansResolver } from "./guardians.js";
 import {
   registerAttendanceRoutes,
   type AttendanceRouteDeps,
@@ -35,6 +39,12 @@ export interface BuildAppOptions {
   config?: AppConfig;
   store?: AttendanceRouteDeps["store"];
   resolveTenant?: AttendanceRouteDeps["resolveTenant"];
+  /**
+   * Resolves a student's notifiable guardians for the absence/tardy fan-out
+   * (#101). Defaults to the gateway-backed HTTP resolver; tests inject a fake.
+   * Ignored when `store` is supplied (the store already has its resolver).
+   */
+  guardiansResolver?: StudentGuardiansResolver;
 }
 
 /**
@@ -74,9 +84,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     uptime: process.uptime(),
   }));
 
+  const guardiansResolver =
+    options.guardiansResolver ??
+    createHttpStudentGuardiansResolver({
+      gatewayUrl: process.env.GATEWAY_URL ?? "http://gateway:4000",
+    });
+
   registerAttendanceRoutes(app, {
     config,
-    store: options.store ?? createPrismaStore(),
+    store: options.store ?? createPrismaStore(randomUUID, guardiansResolver),
     resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
   });
 

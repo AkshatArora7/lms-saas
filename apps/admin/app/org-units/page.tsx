@@ -11,6 +11,8 @@ import {
   PageHeader,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
+import type { Messages, MessageKey } from "@lms/i18n";
 
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
@@ -20,24 +22,12 @@ import {
   type OrgUnit,
   type OrgUnitType,
 } from "../lib/org-units";
-import { AppShell, OrgUnitsIcon } from "../lib/ui";
+import { resolveRequestLocale } from "../lib/i18n";
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
+import { adminPolishCss, AppShell, OrgUnitsIcon } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
-const orgCss = `
-.admin-section-title {
-  font-size: 16px;
-  margin: 0;
-}
-.admin-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.admin-stat-label {
-  color: var(--lms-text-muted);
-  margin: 0;
-}
+const orgCss = `${adminPolishCss}
 /* Data-dense org hierarchy. The recursive tree is the correct representation
    (parent -> children), so it stays a nested <ul> rather than a flat table.
    Admin density: tighter rhythm via space-1, a left rail on nested levels, and
@@ -84,29 +74,29 @@ const orgCss = `
 }
 `;
 
-const TYPE_LABEL: Record<OrgUnitType, string> = {
-  organization: "Organization",
-  department: "Department",
-  semester: "Semester",
-  course_template: "Course template",
-  course_offering: "Course offering",
-  section: "Section",
-  group: "Group",
+const TYPE_LABEL_KEY: Record<OrgUnitType, MessageKey> = {
+  organization: "admin.orgUnits.typeOrganization",
+  department: "admin.orgUnits.typeDepartment",
+  semester: "admin.orgUnits.typeSemester",
+  course_template: "admin.orgUnits.typeCourseTemplate",
+  course_offering: "admin.orgUnits.typeCourseOffering",
+  section: "admin.orgUnits.typeSection",
+  group: "admin.orgUnits.typeGroup",
 };
 
-function OrgNode({ unit }: { unit: OrgUnit }): ReactElement {
+function OrgNode({ m, unit }: { m: Messages; unit: OrgUnit }): ReactElement {
   return (
     <li>
       <div className="org-node">
         <Inline align="center" gap={2}>
-          <Badge tone="accent">{TYPE_LABEL[unit.type]}</Badge>
+          <Badge tone="accent">{t(m, TYPE_LABEL_KEY[unit.type])}</Badge>
           <p className="org-node__name">{unit.name}</p>
         </Inline>
       </div>
       {unit.children.length ? (
         <ul>
           {unit.children.map((child) => (
-            <OrgNode key={child.id} unit={child} />
+            <OrgNode key={child.id} m={m} unit={child} />
           ))}
         </ul>
       ) : null}
@@ -118,18 +108,25 @@ export default async function AdminOrgUnits() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const actions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!isAdmin(session)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell brand={brand} actions={actions}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot access the administration console."
+          title={t(m, "admin.notAuthorizedTitle")}
+          subtitle={t(m, "admin.notAuthorizedSubtitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold an administrator role, so the admin console is
-          unavailable.
+          You are signed in as <strong>{session.userId}</strong>.{" "}
+          {t(m, "admin.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -139,20 +136,17 @@ export default async function AdminOrgUnits() {
 
   if (!units) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell brand={brand} actions={actions}>
         <style>{orgCss}</style>
-        <Stack gap={4}>
+        <Stack gap={5}>
           <Button href="/" size="sm" variant="ghost">
-            ← Back to console
+            {t(m, "admin.backToConsole")}
           </Button>
           <PageHeader
-            title="Org units"
-            subtitle="The hierarchy of districts, schools, departments, and grades in this tenant."
+            title={t(m, "admin.orgUnits.title")}
+            subtitle={t(m, "admin.orgUnits.subtitle")}
           />
-          <Alert tone="warning">
-            The user &amp; org service is unreachable, so the hierarchy can&apos;t
-            be loaded right now. Start the service and refresh.
-          </Alert>
+          <Alert tone="warning">{t(m, "admin.orgUnits.offlineBody")}</Alert>
         </Stack>
       </AppShell>
     );
@@ -161,51 +155,65 @@ export default async function AdminOrgUnits() {
   const stats = summarizeOrgTree(units);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell brand={brand} actions={actions}>
       <style>{orgCss}</style>
-      <Stack gap={4}>
+      <Stack gap={5}>
         <Button href="/" size="sm" variant="ghost">
-          ← Back to console
+          {t(m, "admin.backToConsole")}
         </Button>
 
         <PageHeader
-          title="Org units"
-          subtitle="The hierarchy of districts, schools, departments, and grades in this tenant."
+          title={t(m, "admin.orgUnits.title")}
+          subtitle={t(m, "admin.orgUnits.subtitle")}
         />
 
         <Grid gap={4} min="180px">
           <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{stats.unitCount}</p>
-              <p className="admin-stat-label">Total units</p>
-            </Stack>
+            <Inline align="flex-start" gap={3}>
+              <span aria-hidden="true" className="admin-stat-card__icon">
+                <OrgUnitsIcon />
+              </span>
+              <Stack gap={1}>
+                <p className="admin-stat-value">{stats.unitCount}</p>
+                <p className="admin-stat-label">
+                  {t(m, "admin.orgUnits.statUnits")}
+                </p>
+              </Stack>
+            </Inline>
           </Card>
           <Card>
-            <Stack gap={1}>
-              <p className="admin-stat">{stats.depth}</p>
-              <p className="admin-stat-label">Levels deep</p>
-            </Stack>
+            <Inline align="flex-start" gap={3}>
+              <span aria-hidden="true" className="admin-stat-card__icon">
+                <OrgUnitsIcon />
+              </span>
+              <Stack gap={1}>
+                <p className="admin-stat-value">{stats.depth}</p>
+                <p className="admin-stat-label">
+                  {t(m, "admin.orgUnits.statDepth")}
+                </p>
+              </Stack>
+            </Inline>
           </Card>
         </Grid>
 
         <section aria-labelledby="org-tree-heading">
           <Stack gap={3}>
             <h2 className="admin-section-title" id="org-tree-heading">
-              Hierarchy
+              {t(m, "admin.orgUnits.heading")}
             </h2>
             {units.length ? (
               <Card>
                 <ul className="org-tree">
                   {units.map((unit) => (
-                    <OrgNode key={unit.id} unit={unit} />
+                    <OrgNode key={unit.id} m={m} unit={unit} />
                   ))}
                 </ul>
               </Card>
             ) : (
               <EmptyState
-                description="Connect your SIS or create units to build the hierarchy of districts, schools, departments, and grades."
+                description={t(m, "admin.orgUnits.emptyBody")}
                 icon={<OrgUnitsIcon />}
-                title="No org units yet"
+                title={t(m, "admin.orgUnits.emptyTitle")}
               />
             )}
           </Stack>

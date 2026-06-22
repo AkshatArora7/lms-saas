@@ -10,28 +10,17 @@ import {
   ProgressBar,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
 import { getReport } from "../lib/reports";
-import { AppShell } from "../lib/ui";
+import { resolveRequestLocale } from "../lib/i18n";
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
+import { adminPolishCss, AppShell, ReportsIcon } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
-const reportsCss = `
-.admin-section-title {
-  font-size: 16px;
-  margin: 0;
-}
-.admin-stat {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-}
-.admin-stat-label {
-  color: var(--lms-text-muted);
-  margin: 0;
-}
+const reportsCss = `${adminPolishCss}
 .school-name {
   font-weight: 600;
   margin: 0;
@@ -71,18 +60,25 @@ export default async function AdminReports() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const actions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!isAdmin(session)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell brand={brand} actions={actions}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot access the administration console."
+          title={t(m, "admin.notAuthorizedTitle")}
+          subtitle={t(m, "admin.notAuthorizedSubtitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold an administrator role, so the admin console is
-          unavailable.
+          You are signed in as <strong>{session.userId}</strong>.{" "}
+          {t(m, "admin.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -91,19 +87,19 @@ export default async function AdminReports() {
   const { orgUnits, summary } = await getReport(session.tenantId);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell brand={brand} actions={actions}>
       <style>{reportsCss}</style>
-      <Stack gap={4}>
+      <Stack gap={5}>
         <Button href="/" size="sm" variant="ghost">
-          ← Back to console
+          {t(m, "admin.backToConsole")}
         </Button>
 
         <PageHeader
-          title="District reports"
-          subtitle="Compare schools across your district to decide where to allocate support."
+          title={t(m, "admin.reports.title")}
+          subtitle={t(m, "admin.reports.subtitle")}
           actions={
             <Button disabled variant="secondary">
-              Export CSV
+              {t(m, "admin.reports.exportCsv")}
             </Button>
           }
         />
@@ -112,37 +108,69 @@ export default async function AdminReports() {
           <>
             <Grid gap={4} min="180px">
               <Card>
-                <Stack gap={1}>
-                  <p className="admin-stat">{summary.orgUnitCount}</p>
-                  <p className="admin-stat-label">Schools</p>
-                </Stack>
+                <Inline align="flex-start" gap={3}>
+                  <span aria-hidden="true" className="admin-stat-card__icon">
+                    <ReportsIcon />
+                  </span>
+                  <Stack gap={1}>
+                    <p className="admin-stat-value">{summary.orgUnitCount}</p>
+                    <p className="admin-stat-label">
+                      {t(m, "admin.reports.statSchools")}
+                    </p>
+                  </Stack>
+                </Inline>
               </Card>
               <Card>
-                <Stack gap={1}>
-                  <p className="admin-stat">
-                    {summary.enrollmentCount.toLocaleString()}
-                  </p>
-                  <p className="admin-stat-label">Enrollments</p>
-                </Stack>
+                <Inline align="flex-start" gap={3}>
+                  <span aria-hidden="true" className="admin-stat-card__icon">
+                    <ReportsIcon />
+                  </span>
+                  <Stack gap={1}>
+                    <p className="admin-stat-value">
+                      {summary.enrollmentCount.toLocaleString()}
+                    </p>
+                    <p className="admin-stat-label">
+                      {t(m, "admin.reports.statEnrollments")}
+                    </p>
+                  </Stack>
+                </Inline>
               </Card>
               <Card>
-                <Stack gap={1}>
-                  <p className="admin-stat">{pct(summary.attendanceRate)}</p>
-                  <p className="admin-stat-label">Avg attendance</p>
-                </Stack>
+                <Inline align="flex-start" gap={3}>
+                  <span aria-hidden="true" className="admin-stat-card__icon">
+                    <ReportsIcon />
+                  </span>
+                  <Stack gap={1}>
+                    <p className="admin-stat-value">
+                      {pct(summary.attendanceRate)}
+                    </p>
+                    <p className="admin-stat-label">
+                      {t(m, "admin.reports.statAttendance")}
+                    </p>
+                  </Stack>
+                </Inline>
               </Card>
               <Card>
-                <Stack gap={1}>
-                  <p className="admin-stat">{pct(summary.averageGrade)}</p>
-                  <p className="admin-stat-label">Avg grade</p>
-                </Stack>
+                <Inline align="flex-start" gap={3}>
+                  <span aria-hidden="true" className="admin-stat-card__icon">
+                    <ReportsIcon />
+                  </span>
+                  <Stack gap={1}>
+                    <p className="admin-stat-value">
+                      {pct(summary.averageGrade)}
+                    </p>
+                    <p className="admin-stat-label">
+                      {t(m, "admin.reports.statGrade")}
+                    </p>
+                  </Stack>
+                </Inline>
               </Card>
             </Grid>
 
             <section aria-labelledby="schools-heading">
               <Stack gap={3}>
                 <h2 className="admin-section-title" id="schools-heading">
-                  By school
+                  {t(m, "admin.reports.heading")}
                 </h2>
                 <ul className="school-list">
                   {orgUnits.map((school) => (
@@ -156,31 +184,50 @@ export default async function AdminReports() {
                                 <Badge tone="neutral">{school.code}</Badge>
                               ) : null}
                               <Badge tone="neutral">
-                                {school.courseCount.toLocaleString()}{" "}
-                                {school.courseCount === 1 ? "course" : "courses"}
+                                {t(
+                                  m,
+                                  school.courseCount === 1
+                                    ? "admin.reports.courseSingular"
+                                    : "admin.reports.coursePlural",
+                                  { count: school.courseCount.toLocaleString() },
+                                )}
                               </Badge>
                               <Badge tone="accent">
-                                {school.enrollmentCount.toLocaleString()}{" "}
-                                enrollments
+                                {t(m, "admin.reports.enrollmentsBadge", {
+                                  count:
+                                    school.enrollmentCount.toLocaleString(),
+                                })}
                               </Badge>
                             </Inline>
                           </Inline>
                           <div className="school-metrics">
                             <div>
                               <span className="metric-label">
-                                Attendance {pct(school.attendanceRate)}
+                                {t(m, "admin.reports.metricAttendance", {
+                                  value: pct(school.attendanceRate),
+                                })}
                               </span>
                               <ProgressBar
-                                label={`${school.name} attendance rate`}
+                                label={`${school.name} — ${t(
+                                  m,
+                                  "admin.reports.metricAttendance",
+                                  { value: pct(school.attendanceRate) },
+                                )}`}
                                 value={school.attendanceRate ?? 0}
                               />
                             </div>
                             <div>
                               <span className="metric-label">
-                                Average grade {pct(school.averageGrade)}
+                                {t(m, "admin.reports.metricGrade", {
+                                  value: pct(school.averageGrade),
+                                })}
                               </span>
                               <ProgressBar
-                                label={`${school.name} average grade`}
+                                label={`${school.name} — ${t(
+                                  m,
+                                  "admin.reports.metricGrade",
+                                  { value: pct(school.averageGrade) },
+                                )}`}
                                 value={school.averageGrade ?? 0}
                               />
                             </div>
@@ -194,11 +241,7 @@ export default async function AdminReports() {
             </section>
           </>
         ) : (
-          <Alert tone="info">
-            No reporting data yet. Roll-up metrics appear here once schools,
-            enrollments, and activity exist for your district — or once the
-            analytics service is reachable.
-          </Alert>
+          <Alert tone="info">{t(m, "admin.reports.empty")}</Alert>
         )}
       </Stack>
     </AppShell>

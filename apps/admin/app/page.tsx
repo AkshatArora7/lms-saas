@@ -10,12 +10,14 @@ import {
   Stack,
 } from "@lms/ui";
 import { getMessages, t } from "@lms/i18n";
+import type { MessageKey } from "@lms/i18n";
 
 import { getBranding } from "./lib/branding";
 import { getSession, isAdmin } from "./lib/auth";
 import { resolveRequestLocale } from "./lib/i18n";
 import { AppLocaleSwitcher } from "./lib/locale-switcher";
 import {
+  adminPolishCss,
   AppShell,
   BrandingIcon,
   CoursesIcon,
@@ -27,116 +29,55 @@ import {
 import SignOutButton from "./sign-out-button";
 
 /**
- * Scoped layout polish for the admin console landing. Every visual decision
- * resolves from the tenant theme tokens (var(--lms-*)) so the page stays fully
+ * Admin console landing. Layout/visuals come entirely from the shared
+ * `adminPolishCss` + tenant theme tokens (var(--lms-*)) so the page stays fully
  * white-label. The at-a-glance band reflows from one stacked column on phones to
  * a multi-up grid on wider screens; the Manage nav is an icon-led grid of
- * interactive link cards. Nothing hardcodes accent/font/radius, and every row
- * has min-width:0 + overflow-wrap so there is no horizontal overflow at 360px.
+ * interactive link cards. Every row has min-width:0 + overflow-wrap so there is
+ * no horizontal overflow at 360px.
  */
-const adminCss = `
-.admin-session-card,
-.admin-detail {
-  min-width: 0;
-}
-.admin-section-title {
-  font-size: 16px;
-  margin: 0;
-}
-.admin-detail {
-  color: var(--lms-text-muted);
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.admin-stat {
-  font-size: clamp(1.6rem, 5vw, 2rem);
-  font-weight: 700;
-  line-height: 1.1;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.admin-stat-label {
-  color: var(--lms-text-muted);
-  margin: 0;
-}
-.admin-nav-card {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--lms-space-3);
-  height: 100%;
-  text-decoration: none;
-  color: inherit;
-}
-.admin-nav-card__icon {
-  flex-shrink: 0;
-  color: var(--lms-accent);
-  display: inline-flex;
-}
-.admin-nav-card__icon svg {
-  width: 24px;
-  height: 24px;
-}
-.admin-nav-card__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--lms-space-1);
-  min-width: 0;
-}
-.admin-nav-card__label {
-  font-weight: 600;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.admin-nav-card__desc {
-  color: var(--lms-text-muted);
-  font-size: var(--lms-font-size-sm);
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-`;
-
 interface NavItem {
   href: string;
-  label: string;
-  description: string;
+  labelKey: MessageKey;
+  descriptionKey: MessageKey;
   icon: ReactElement;
 }
 
 const NAV_ITEMS: NavItem[] = [
   {
     href: "/users",
-    label: "Users & roles",
-    description: "Directory, access, and role assignment.",
+    labelKey: "admin.users.title",
+    descriptionKey: "admin.users.subtitle",
     icon: <UsersIcon />,
   },
   {
     href: "/courses",
-    label: "Course catalogue",
-    description: "Courses offered across this tenant.",
+    labelKey: "admin.courses.title",
+    descriptionKey: "admin.courses.subtitle",
     icon: <CoursesIcon />,
   },
   {
     href: "/org-units",
-    label: "Org units",
-    description: "School and department hierarchy.",
+    labelKey: "admin.orgUnits.title",
+    descriptionKey: "admin.orgUnits.subtitle",
     icon: <OrgUnitsIcon />,
   },
   {
     href: "/reports",
-    label: "District reports",
-    description: "Compare schools and allocate support.",
+    labelKey: "admin.reports.title",
+    descriptionKey: "admin.reports.subtitle",
     icon: <ReportsIcon />,
   },
   {
     href: "/branding",
-    label: "White-label branding",
-    description: "Tenant logo, colours, and theme.",
+    labelKey: "admin.branding.title",
+    descriptionKey: "admin.branding.subtitle",
     icon: <BrandingIcon />,
   },
   {
     href: "/settings",
-    label: "Tenant settings",
-    description: "Org-wide configuration and SIS sync.",
+    labelKey: "admin.settings.title",
+    descriptionKey: "admin.settings.subtitle",
     icon: <SettingsIcon />,
   },
 ];
@@ -158,19 +99,19 @@ export default async function AdminHome() {
           </>
         }
       >
-        <style>{adminCss}</style>
+        <style>{adminPolishCss}</style>
         <PageHeader
           title={t(m, "admin.notAuthorizedTitle")}
           subtitle={t(m, "admin.notAuthorizedSubtitle")}
         />
-        <Stack gap={4}>
+        <Stack gap={5}>
           <Alert tone="warning">
             You are signed in as <strong>{session.userId}</strong>.{" "}
             {t(m, "admin.notAuthorizedBody")}
           </Alert>
           <Card>
             <Stack gap={3}>
-              <h2 className="admin-section-title">Roles on this account</h2>
+              <h2 className="admin-section-title">{t(m, "common.roles")}</h2>
               <Inline gap={2}>
                 {session.roles.length ? (
                   session.roles.map((role) => (
@@ -199,8 +140,8 @@ export default async function AdminHome() {
         </>
       }
     >
-      <style>{adminCss}</style>
-      <Stack gap={4}>
+      <style>{adminPolishCss}</style>
+      <Stack gap={5}>
         <PageHeader
           title={t(m, "admin.title")}
           subtitle={t(m, "admin.subtitle")}
@@ -209,7 +150,7 @@ export default async function AdminHome() {
         <Grid gap={4} min="180px">
           <Card>
             <Stack gap={1}>
-              <p className="admin-stat">{session.roles.length}</p>
+              <p className="admin-stat-value">{session.roles.length}</p>
               <p className="admin-stat-label">
                 {session.roles.length === 1
                   ? t(m, "admin.yourRole")
@@ -219,13 +160,13 @@ export default async function AdminHome() {
           </Card>
           <Card>
             <Stack gap={1}>
-              <p className="admin-stat">{session.scopes.length}</p>
+              <p className="admin-stat-value">{session.scopes.length}</p>
               <p className="admin-stat-label">{t(m, "admin.accessScopes")}</p>
             </Stack>
           </Card>
           <Card>
             <Stack gap={1}>
-              <p className="admin-stat">{session.tier}</p>
+              <p className="admin-stat-value">{session.tier}</p>
               <p className="admin-stat-label">{t(m, "admin.tenantTier")}</p>
             </Stack>
           </Card>
@@ -244,9 +185,11 @@ export default async function AdminHome() {
                       {item.icon}
                     </span>
                     <span className="admin-nav-card__body">
-                      <span className="admin-nav-card__label">{item.label}</span>
+                      <span className="admin-nav-card__label">
+                        {t(m, item.labelKey)}
+                      </span>
                       <span className="admin-nav-card__desc">
-                        {item.description}
+                        {t(m, item.descriptionKey)}
                       </span>
                     </span>
                   </span>
@@ -256,7 +199,7 @@ export default async function AdminHome() {
           </Stack>
         </section>
 
-        <Card className="admin-session-card">
+        <Card className="admin-page">
           <Stack gap={3}>
             <h2 className="admin-section-title">{t(m, "admin.session")}</h2>
             <Stack gap={1}>

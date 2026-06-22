@@ -10,14 +10,17 @@ import {
   PageHeader,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
 import { getTenant, getTenantBranding } from "../lib/tenant-api";
-import { AppShell } from "../lib/ui";
+import { resolveRequestLocale } from "../lib/i18n";
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
+import { adminPolishCss, AppShell } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
-const brandingCss = `
+const brandingCss = `${adminPolishCss}
 .brand-token {
   color: var(--lms-text-muted);
   font-size: var(--lms-font-size-sm);
@@ -62,7 +65,15 @@ const brandingCss = `
 `;
 
 /** A single colour token row: swatch + value, or a clear "not set" state. */
-function ColorRow({ label, value }: { label: string; value: string | null }) {
+function ColorRow({
+  label,
+  value,
+  fallback,
+}: {
+  label: string;
+  value: string | null;
+  fallback: string;
+}) {
   return (
     <div className="brand-token">
       <Inline align="center" gap={2}>
@@ -72,7 +83,7 @@ function ColorRow({ label, value }: { label: string; value: string | null }) {
           style={value ? { background: value } : undefined}
         />
         <span>
-          <strong>{label}</strong> {value ?? "Inherited / default"}
+          <strong>{label}</strong> {value ?? fallback}
         </span>
       </Inline>
     </div>
@@ -83,18 +94,25 @@ export default async function BrandingShowcase() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const actions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!isAdmin(session)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell brand={brand} actions={actions}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot access the administration console."
+          title={t(m, "admin.notAuthorizedTitle")}
+          subtitle={t(m, "admin.notAuthorizedSubtitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold an administrator role, so the admin console is
-          unavailable.
+          You are signed in as <strong>{session.userId}</strong>.{" "}
+          {t(m, "admin.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -109,18 +127,19 @@ export default async function BrandingShowcase() {
   const hasOverrides = brandingResponse?.overrides != null;
   const displayName =
     effective?.displayName ?? tenant?.name ?? "This tenant";
+  const inheritedDefault = t(m, "admin.branding.inheritedDefault");
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell brand={brand} actions={actions}>
       <style>{brandingCss}</style>
-      <Stack gap={4}>
+      <Stack gap={5}>
         <Button href="/" size="sm" variant="ghost">
-          ← Back to console
+          {t(m, "admin.backToConsole")}
         </Button>
 
         <PageHeader
-          title="White-label branding"
-          subtitle="Your organisation renders the product in its own brand — name, logo, colours, and theme — resolved per tenant by the tenant service with inheritance from any parent district."
+          title={t(m, "admin.branding.title")}
+          subtitle={t(m, "admin.branding.subtitle")}
         />
 
         {tenant && effective ? (
@@ -128,7 +147,7 @@ export default async function BrandingShowcase() {
             <Card>
               <Stack gap={3}>
                 <p className="brand-token">
-                  <strong>Tenant</strong> {tenant.id}
+                  <strong>{t(m, "admin.branding.tenant")}</strong> {tenant.id}
                 </p>
 
                 <div className="brand-preview">
@@ -145,12 +164,20 @@ export default async function BrandingShowcase() {
 
                 <Stack gap={1}>
                   <Inline gap={2}>
-                    <Badge tone="neutral">Theme: {effective.theme}</Badge>
+                    <Badge tone="neutral">
+                      {t(m, "admin.branding.theme", {
+                        value: effective.theme,
+                      })}
+                    </Badge>
                     <Badge tone={hasOverrides ? "accent" : "neutral"}>
-                      {hasOverrides ? "Custom overrides" : "Defaults"}
+                      {hasOverrides
+                        ? t(m, "admin.branding.customOverrides")
+                        : t(m, "admin.branding.defaults")}
                     </Badge>
                     {effective.inheritParent ? (
-                      <Badge tone="neutral">Inherits parent</Badge>
+                      <Badge tone="neutral">
+                        {t(m, "admin.branding.inheritsParent")}
+                      </Badge>
                     ) : null}
                   </Inline>
                 </Stack>
@@ -159,25 +186,37 @@ export default async function BrandingShowcase() {
 
             <Card>
               <Stack gap={3}>
-                <p className="brand-preview__name">Brand tokens</p>
+                <p className="brand-preview__name">
+                  {t(m, "admin.branding.brandTokens")}
+                </p>
                 <Stack gap={1}>
-                  <ColorRow label="Primary" value={effective.primaryColor} />
                   <ColorRow
-                    label="Secondary"
+                    fallback={inheritedDefault}
+                    label={t(m, "admin.branding.colorPrimary")}
+                    value={effective.primaryColor}
+                  />
+                  <ColorRow
+                    fallback={inheritedDefault}
+                    label={t(m, "admin.branding.colorSecondary")}
                     value={effective.secondaryColor}
                   />
-                  <ColorRow label="Accent" value={effective.accentColor} />
+                  <ColorRow
+                    fallback={inheritedDefault}
+                    label={t(m, "admin.branding.colorAccent")}
+                    value={effective.accentColor}
+                  />
                 </Stack>
                 <Stack gap={1}>
                   <p className="brand-token">
-                    <strong>Logo</strong> {effective.logoUrl ?? "Default mark"}
+                    <strong>{t(m, "admin.branding.logo")}</strong>{" "}
+                    {effective.logoUrl ?? t(m, "admin.branding.defaultMark")}
                   </p>
                   <p className="brand-token">
-                    <strong>Custom domain</strong>{" "}
+                    <strong>{t(m, "admin.branding.customDomain")}</strong>{" "}
                     {effective.customDomain ?? "—"}
                   </p>
                   <p className="brand-token">
-                    <strong>Support email</strong>{" "}
+                    <strong>{t(m, "admin.branding.supportEmail")}</strong>{" "}
                     {effective.supportEmail ?? "—"}
                   </p>
                 </Stack>
@@ -185,10 +224,7 @@ export default async function BrandingShowcase() {
             </Card>
           </Grid>
         ) : (
-          <Alert tone="warning">
-            The tenant service is unreachable, so branding cannot be shown right
-            now. Start the tenant service and reload.
-          </Alert>
+          <Alert tone="warning">{t(m, "admin.branding.offlineBody")}</Alert>
         )}
       </Stack>
     </AppShell>

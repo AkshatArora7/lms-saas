@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Button,
   Card,
   Field,
@@ -10,9 +9,13 @@ import {
   Stack,
   Textarea,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../../lib/branding";
 import { getSession, isAdmin } from "../../lib/auth";
+import { resolveRequestLocale } from "../../lib/i18n";
+import { AppLocaleSwitcher } from "../../lib/locale-switcher";
+import { AppShell } from "../../lib/ui";
 import SignOutButton from "../../sign-out-button";
 import { createCourseAction } from "../actions";
 
@@ -90,17 +93,25 @@ export default async function NewCourse({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const actions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!isAdmin(session)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell brand={brand} actions={actions}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot access the administration console."
+          title={t(m, "admin.notAuthorizedTitle")}
+          subtitle={t(m, "admin.notAuthorizedSubtitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold an administrator role.
+          You are signed in as <strong>{session.userId}</strong>.{" "}
+          {t(m, "admin.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -111,16 +122,16 @@ export default async function NewCourse({
     : searchParams.error;
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell brand={brand} actions={actions}>
       <style>{formCss}</style>
-      <Stack gap={4}>
+      <Stack gap={5}>
         <Button className="asg-back" href="/courses" size="sm" variant="ghost">
-          ← Back to catalogue
+          {t(m, "admin.backToCatalogue")}
         </Button>
 
         <PageHeader
-          title="New course"
-          subtitle="Add a course to this tenant. It starts as a draft until you publish it."
+          title={t(m, "admin.courseForm.newTitle")}
+          subtitle={t(m, "admin.courseForm.newSubtitle")}
         />
 
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
@@ -129,18 +140,31 @@ export default async function NewCourse({
           <form action={createCourseAction} className="asg-form">
             <section className="asg-section">
               <div className="asg-section-head">
-                <h2 className="asg-section-title">Details</h2>
+                <h2 className="asg-section-title">
+                  {t(m, "admin.courseForm.detailsTitle")}
+                </h2>
                 <p className="asg-section-hint">
-                  Give the course a clear title and describe what it covers.
+                  {t(m, "admin.courseForm.detailsHint")}
                 </p>
               </div>
-              <Field htmlFor="title" label="Title" required>
-                <Input name="title" placeholder="e.g. Algebra I" required />
+              <Field
+                htmlFor="title"
+                label={t(m, "admin.courseForm.fieldTitle")}
+                required
+              >
+                <Input
+                  name="title"
+                  placeholder={t(m, "admin.courseForm.titlePlaceholder")}
+                  required
+                />
               </Field>
-              <Field htmlFor="description" label="Description">
+              <Field
+                htmlFor="description"
+                label={t(m, "admin.courseForm.fieldDescription")}
+              >
                 <Textarea
                   name="description"
-                  placeholder="What this course covers"
+                  placeholder={t(m, "admin.courseForm.descriptionPlaceholder")}
                   rows={3}
                 />
               </Field>
@@ -148,16 +172,24 @@ export default async function NewCourse({
 
             <section className="asg-section">
               <div className="asg-section-head">
-                <h2 className="asg-section-title">Schedule</h2>
+                <h2 className="asg-section-title">
+                  {t(m, "admin.courseForm.scheduleTitle")}
+                </h2>
                 <p className="asg-section-hint">
-                  Optionally set when the course runs.
+                  {t(m, "admin.courseForm.scheduleHint")}
                 </p>
               </div>
               <div className="asg-grid-2">
-                <Field htmlFor="startDate" label="Start date">
+                <Field
+                  htmlFor="startDate"
+                  label={t(m, "admin.courseForm.startDate")}
+                >
                   <Input name="startDate" type="date" />
                 </Field>
-                <Field htmlFor="endDate" label="End date">
+                <Field
+                  htmlFor="endDate"
+                  label={t(m, "admin.courseForm.endDate")}
+                >
                   <Input name="endDate" type="date" />
                 </Field>
               </div>
@@ -165,9 +197,9 @@ export default async function NewCourse({
 
             <div className="asg-actionbar">
               <Button href="/courses" variant="ghost">
-                Cancel
+                {t(m, "common.cancel")}
               </Button>
-              <Button type="submit">Create course</Button>
+              <Button type="submit">{t(m, "admin.courseForm.create")}</Button>
             </div>
           </form>
         </Card>

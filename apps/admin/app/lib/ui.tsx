@@ -23,6 +23,128 @@ export function ThemeStyle(props: { brand: Brand; scope?: string }): ReactElemen
 }
 
 /**
+ * Shared admin-console polish stylesheet — ONE consistent set of class
+ * definitions for every admin screen, replacing the divergent per-page CSS
+ * blocks (e.g. `.admin-stat` was `clamp(...)` on the dashboard but a fixed
+ * `28px` elsewhere). Each in-scope page renders this string in a scoped inline
+ * `<style>` (the current RSC pattern) so the definitions are byte-identical
+ * everywhere. Every value resolves from a `var(--lms-*)` token, so the system
+ * stays fully white-label / tenant-safe. Any hover transition added here is
+ * disabled under `prefers-reduced-motion` to preserve WCAG #87.
+ */
+export const adminPolishCss = `
+.admin-page {
+  min-width: 0;
+}
+.admin-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.admin-detail {
+  color: var(--lms-text-muted);
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.admin-detail strong {
+  color: var(--lms-text);
+}
+/* Stat / summary band — composed from Card + Stack + (optional) section icon.
+   The value clamp ramp is UNIFIED across every screen so the dashboard and the
+   domain pages read with the same rhythm. */
+.admin-stat-card__icon {
+  flex-shrink: 0;
+  color: var(--lms-accent);
+  display: inline-flex;
+}
+.admin-stat-card__icon svg {
+  width: 20px;
+  height: 20px;
+}
+.admin-stat-value {
+  font-size: clamp(1.6rem, 5vw, 2rem);
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.admin-stat-label {
+  color: var(--lms-text-muted);
+  font-size: var(--lms-font-size-sm);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* Interactive "Manage" nav cards (dashboard). */
+.admin-nav-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--lms-space-3);
+  height: 100%;
+  text-decoration: none;
+  color: inherit;
+}
+.admin-nav-card__icon {
+  flex-shrink: 0;
+  color: var(--lms-accent);
+  display: inline-flex;
+}
+.admin-nav-card__icon svg {
+  width: 24px;
+  height: 24px;
+}
+.admin-nav-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lms-space-1);
+  min-width: 0;
+}
+.admin-nav-card__label {
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.admin-nav-card__desc {
+  color: var(--lms-text-muted);
+  font-size: var(--lms-font-size-sm);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* In-table drill-down links + secondary cell text. */
+.admin-link-name {
+  color: var(--lms-accent);
+  font-weight: 600;
+  margin: 0;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.admin-link-name:hover {
+  text-decoration: underline;
+}
+.admin-cell-meta {
+  color: var(--lms-text-muted);
+  font-size: var(--lms-font-size-sm);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.admin-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lms-space-2);
+}
+.admin-row-actions form {
+  display: inline;
+  margin: 0;
+}
+/* Wrapping badge clusters in dense cells (roles, org units). */
+.admin-badge-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lms-space-1);
+}
+`;
+
+/**
  * Inline-SVG empty-state icons (replacing emoji). Outline style, 24x24 viewBox,
  * stroke=currentColor so they inherit `--lms-text-subtle` from the
  * `.lms-empty-state__icon` slot. aria-hidden — meaning is carried by the

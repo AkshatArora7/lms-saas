@@ -9,9 +9,12 @@ import {
   PageHeader,
   Stack,
 } from "@lms/ui";
+import { getMessages, t, type MessageKey } from "@lms/i18n";
 
 import { getBranding } from "../lib/branding";
 import { getSession } from "../lib/auth";
+import { resolveRequestLocale } from "../lib/i18n";
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
 import {
   getAnnouncements,
   relativeTime,
@@ -116,10 +119,10 @@ const announcementsCss = `
 
 type Filter = "all" | AnnouncementScope;
 
-const FILTERS: Array<{ key: Filter; label: string }> = [
-  { key: "all", label: "All" },
-  { key: "course", label: "Courses" },
-  { key: "school", label: "School" },
+const FILTERS: Array<{ key: Filter; labelKey: MessageKey }> = [
+  { key: "all", labelKey: "announcements.filterAll" },
+  { key: "course", labelKey: "announcements.filterCourses" },
+  { key: "school", labelKey: "announcements.filterSchool" },
 ];
 
 function parseFilter(value: string | string[] | undefined): Filter {
@@ -135,6 +138,7 @@ export default async function AnnouncementsPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
 
   const all = await getAnnouncements(session.userId, session.tenantId);
   const summary = summarizeAnnouncements(all);
@@ -142,53 +146,71 @@ export default async function AnnouncementsPage({
   const visible = filter === "all" ? all : all.filter((a) => a.scope === filter);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell
+      brand={brand}
+      actions={
+        <>
+          <AppLocaleSwitcher />
+          <SignOutButton />
+        </>
+      }
+    >
       <style>{announcementsCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
-          ← Back to dashboard
+          {t(m, "common.backToDashboard")}
         </Button>
 
         <PageHeader
-          title="Announcements"
+          title={t(m, "announcements.title")}
           subtitle={
             summary.unread
-              ? `You have ${summary.unread} unread of ${summary.total}.`
-              : "You're all caught up."
+              ? t(m, "announcements.subtitleUnread", {
+                  unread: summary.unread,
+                  total: summary.total,
+                })
+              : t(m, "announcements.subtitleCaughtUp")
           }
           actions={
-            <Inline gap={2}>
-              {FILTERS.map((option) => (
-                <Button
-                  href={
-                    option.key === "all"
-                      ? "/announcements"
-                      : `/announcements?scope=${option.key}`
-                  }
-                  key={option.key}
-                  size="sm"
-                  variant={filter === option.key ? "primary" : "secondary"}
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </Inline>
+            <nav aria-label={t(m, "announcements.filterLabel")}>
+              <Inline gap={2}>
+                {FILTERS.map((option) => (
+                  <Button
+                    aria-current={filter === option.key ? "page" : undefined}
+                    href={
+                      option.key === "all"
+                        ? "/announcements"
+                        : `/announcements?scope=${option.key}`
+                    }
+                    key={option.key}
+                    size="sm"
+                    variant={filter === option.key ? "primary" : "secondary"}
+                  >
+                    {t(m, option.labelKey)}
+                  </Button>
+                ))}
+              </Inline>
+            </nav>
           }
         />
 
         {all.length === 0 ? (
           <EmptyState
-            description="When your school or your courses post updates, they'll show up here."
+            description={t(m, "announcements.emptyBody")}
             icon={<AnnouncementsIcon />}
-            title="No announcements yet"
+            title={t(m, "announcements.emptyTitle")}
           />
         ) : visible.length === 0 ? (
           <Alert tone="info">
-            No {filter === "course" ? "course" : "school"} announcements right
-            now. Try a different filter.
+            {t(
+              m,
+              filter === "course"
+                ? "announcements.filteredEmptyCourse"
+                : "announcements.filteredEmptySchool",
+            )}
           </Alert>
         ) : (
-          <ul className="ann-list" aria-label="Announcements">
+          <ul className="ann-list" aria-label={t(m, "announcements.listLabel")}>
             {visible.map((announcement) => (
               <li key={announcement.id}>
                 <Card
@@ -202,7 +224,10 @@ export default async function AnnouncementsPage({
                     <div className="ann-head">
                       <div className="ann-headline">
                         {announcement.unread ? (
-                          <span aria-label="Unread" className="ann-dot" />
+                          <span
+                            aria-label={t(m, "announcements.unread")}
+                            className="ann-dot"
+                          />
                         ) : null}
                         <h2 className="ann-title">{announcement.title}</h2>
                       </div>
@@ -211,7 +236,9 @@ export default async function AnnouncementsPage({
                           announcement.scope === "school" ? "accent" : "neutral"
                         }
                       >
-                        {announcement.scope === "school" ? "School" : "Course"}
+                        {announcement.scope === "school"
+                          ? t(m, "announcements.scopeSchool")
+                          : t(m, "announcements.scopeCourse")}
                       </Badge>
                     </div>
                     <p className="ann-body">{announcement.body}</p>

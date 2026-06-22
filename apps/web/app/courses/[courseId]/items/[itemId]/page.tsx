@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import type { CSSProperties } from "react";
 import {
-  AppShell,
   Alert,
   Badge,
   Button,
@@ -12,15 +11,19 @@ import {
   Stack,
 } from "@lms/ui";
 import type { BadgeTone } from "@lms/ui";
+import { getMessages, t, type MessageKey } from "@lms/i18n";
 
 import { getBranding } from "../../../../lib/branding";
 import { getSession } from "../../../../lib/auth";
+import { resolveRequestLocale } from "../../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../../lib/locale-switcher";
 import {
   getContentItem,
   type ContentItem,
   type ContentItemStatus,
   type ContentItemType,
 } from "../../../../lib/dashboard";
+import { AppShell } from "../../../../lib/ui";
 import SignOutButton from "../../../../sign-out-button";
 
 /**
@@ -237,52 +240,54 @@ a.ci-rail__row:focus-visible {
 }
 `;
 
-const TYPE_LABEL: Record<ContentItemType, string> = {
-  lesson: "Lesson",
-  assignment: "Assignment",
-  quiz: "Quiz",
+const TYPE_LABEL_KEY: Record<ContentItemType, MessageKey> = {
+  lesson: "item.typeLesson",
+  assignment: "item.typeAssignment",
+  quiz: "item.typeQuiz",
 };
 
-const TYPE_ACTION: Record<ContentItemType, string> = {
-  lesson: "Mark lesson complete",
-  assignment: "Open assignment",
-  quiz: "Start quiz",
+const TYPE_ACTION_KEY: Record<ContentItemType, MessageKey> = {
+  lesson: "item.actionLesson",
+  assignment: "item.actionAssignment",
+  quiz: "item.actionQuiz",
 };
 
 const STATUS_META: Record<
   ContentItemStatus,
-  { label: string; tone: BadgeTone; dot: string }
+  { labelKey: MessageKey; tone: BadgeTone; dot: string }
 > = {
-  completed: { label: "Completed", tone: "success", dot: "var(--lms-success)" },
-  in_progress: { label: "In progress", tone: "accent", dot: "var(--lms-accent)" },
+  completed: {
+    labelKey: "item.statusCompleted",
+    tone: "success",
+    dot: "var(--lms-success)",
+  },
+  in_progress: {
+    labelKey: "item.statusInProgress",
+    tone: "accent",
+    dot: "var(--lms-accent)",
+  },
   not_started: {
-    label: "Not started",
+    labelKey: "item.statusNotStarted",
     tone: "neutral",
     dot: "var(--lms-text-muted)",
   },
 };
 
-const TYPE_BODY: Record<ContentItemType, { heading: string; lines: string[] }> = {
+const TYPE_BODY: Record<
+  ContentItemType,
+  { headingKey: MessageKey; lineKeys: MessageKey[] }
+> = {
   lesson: {
-    heading: "Lesson",
-    lines: [
-      "Work through the reading below, then mark the lesson complete to track your progress.",
-      "This is placeholder lesson content. Once the content service is wired in, the authored lesson body, media, and activities will render here.",
-    ],
+    headingKey: "item.typeLesson",
+    lineKeys: ["item.lessonLine1", "item.lessonLine2"],
   },
   assignment: {
-    heading: "Assignment",
-    lines: [
-      "Read the brief, complete your work, and submit before the due date.",
-      "This is a placeholder assignment. Submission, rubric, and feedback will render here once the assignment service is connected.",
-    ],
+    headingKey: "item.typeAssignment",
+    lineKeys: ["item.assignmentLine1", "item.assignmentLine2"],
   },
   quiz: {
-    heading: "Quiz",
-    lines: [
-      "Review the instructions, then start the quiz when you're ready.",
-      "This is a placeholder quiz. Questions, timing, and scoring will render here once the assessment service is connected.",
-    ],
+    headingKey: "item.typeQuiz",
+    lineKeys: ["item.quizLine1", "item.quizLine2"],
   },
 };
 
@@ -294,6 +299,7 @@ export default async function ContentItemPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
   const view = await getContentItem(
     params.courseId,
     params.itemId,
@@ -316,20 +322,31 @@ export default async function ContentItemPage({
     index >= 0 && index < total - 1 ? siblings[index + 1] : undefined;
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell
+      brand={brand}
+      actions={
+        <>
+          <AppLocaleSwitcher />
+          <SignOutButton />
+        </>
+      }
+    >
       <style>{itemCss}</style>
       <Stack gap={4}>
         <Button href={`/courses/${course.id}`} size="sm" variant="ghost">
-          ← Back to {course.title}
+          {t(m, "item.backToCourse", { course: course.title })}
         </Button>
 
         <PageHeader
           title={item.title}
-          subtitle={`${course.code} · ${module.title}`}
+          subtitle={t(m, "item.subtitle", {
+            code: course.code ?? "",
+            module: module.title,
+          })}
           actions={
             <Inline gap={2}>
-              <Badge tone="neutral">{TYPE_LABEL[item.type]}</Badge>
-              <Chip tone={status.tone}>{status.label}</Chip>
+              <Badge tone="neutral">{t(m, TYPE_LABEL_KEY[item.type])}</Badge>
+              <Chip tone={status.tone}>{t(m, status.labelKey)}</Chip>
             </Inline>
           }
         />
@@ -339,45 +356,43 @@ export default async function ContentItemPage({
             <Card>
               <Stack gap={4}>
                 <div>
-                  <h2 className="ci-section-heading">{body.heading}</h2>
+                  <h2 className="ci-section-heading">
+                    {t(m, body.headingKey)}
+                  </h2>
                   <div className="ci-body">
-                    {body.lines.map((line, lineIndex) => (
-                      <p key={lineIndex}>{line}</p>
+                    {body.lineKeys.map((lineKey) => (
+                      <p key={lineKey}>{t(m, lineKey)}</p>
                     ))}
                   </div>
                 </div>
 
-                <Alert tone="info">
-                  Full content coming soon. The content service isn&apos;t wired
-                  up yet, so the authored body, media, and activities will appear
-                  here once it&apos;s connected.
-                </Alert>
+                <Alert tone="info">{t(m, "item.comingSoon")}</Alert>
 
                 <div className="ci-action">
                   <Button
-                    aria-label={`${TYPE_ACTION[item.type]} — available once the content service is connected`}
+                    aria-label={t(m, "item.actionUnavailable", {
+                      action: t(m, TYPE_ACTION_KEY[item.type]),
+                    })}
                     disabled
                   >
-                    {TYPE_ACTION[item.type]}
+                    {t(m, TYPE_ACTION_KEY[item.type])}
                   </Button>
                 </div>
               </Stack>
             </Card>
 
-            <nav aria-label="Within-module navigation" className="ci-nav">
+            <nav aria-label={t(m, "item.navLabel")} className="ci-nav">
               <div className="ci-nav__slot ci-nav__slot--prev">
                 {previous ? (
                   <a
                     className="ci-nav__link"
                     href={`/courses/${course.id}/items/${previous.id}`}
                   >
-                    <span className="ci-nav__dir">← Previous</span>
+                    <span className="ci-nav__dir">{t(m, "item.previous")}</span>
                     <span className="ci-nav__title">{previous.title}</span>
                   </a>
                 ) : (
-                  <p className="ci-nav__empty">
-                    You&apos;re at the start of this module.
-                  </p>
+                  <p className="ci-nav__empty">{t(m, "item.startOfModule")}</p>
                 )}
               </div>
               <div className="ci-nav__slot ci-nav__slot--next">
@@ -386,22 +401,22 @@ export default async function ContentItemPage({
                     className="ci-nav__link"
                     href={`/courses/${course.id}/items/${next.id}`}
                   >
-                    <span className="ci-nav__dir">Next →</span>
+                    <span className="ci-nav__dir">{t(m, "item.next")}</span>
                     <span className="ci-nav__title">{next.title}</span>
                   </a>
                 ) : (
-                  <p className="ci-nav__empty">
-                    You&apos;re at the end of this module.
-                  </p>
+                  <p className="ci-nav__empty">{t(m, "item.endOfModule")}</p>
                 )}
               </div>
             </nav>
           </div>
 
-          <aside aria-label="In this module">
+          <aside aria-label={t(m, "item.inThisModule")}>
             <Card className="ci-rail">
               <div>
-                <h2 className="ci-rail__heading">In this module</h2>
+                <h2 className="ci-rail__heading">
+                  {t(m, "item.inThisModule")}
+                </h2>
                 <ul className="ci-rail__list">
                   {siblings.map((sibling) => {
                     const siblingStatus = STATUS_META[sibling.status];
@@ -420,7 +435,10 @@ export default async function ContentItemPage({
                         <span className="ci-rail__label">
                           <span className="ci-rail__title">{sibling.title}</span>
                           <span className="ci-rail__status">
-                            {TYPE_LABEL[sibling.type]} · {siblingStatus.label}
+                            {t(m, "item.typeStatus", {
+                              type: t(m, TYPE_LABEL_KEY[sibling.type]),
+                              status: t(m, siblingStatus.labelKey),
+                            })}
                           </span>
                         </span>
                       </>
@@ -450,7 +468,7 @@ export default async function ContentItemPage({
               </div>
               {total > 0 ? (
                 <p className="ci-rail__count">
-                  Item {position} of {total}
+                  {t(m, "item.itemPosition", { position, total })}
                 </p>
               ) : null}
             </Card>

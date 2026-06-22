@@ -10,9 +10,12 @@ import {
   ProgressBar,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../lib/branding";
 import { getSession } from "../lib/auth";
+import { resolveRequestLocale } from "../lib/i18n";
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
 import { getCourseGrades, summarizeGrades } from "../lib/grades";
 import { AppShell, GradesIcon } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
@@ -181,20 +184,29 @@ export default async function Grades() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
   const grades = await getCourseGrades(session.userId, session.tenantId);
   const summary = summarizeGrades(grades);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell
+      brand={brand}
+      actions={
+        <>
+          <AppLocaleSwitcher />
+          <SignOutButton />
+        </>
+      }
+    >
       <style>{gradesCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
-          ← Back to dashboard
+          {t(m, "common.backToDashboard")}
         </Button>
 
         <PageHeader
-          title="Grades"
-          subtitle="Your current grade in each course, with a breakdown by category."
+          title={t(m, "grades.title")}
+          subtitle={t(m, "grades.subtitle")}
         />
 
         {grades.length ? (
@@ -207,21 +219,25 @@ export default async function Grades() {
                     { "--lms-stat-accent": "var(--lms-accent)" } as CSSProperties
                   }
                 >
-                  <p className="grd-stat">{summary.average ?? "—"}%</p>
-                  <p className="grd-stat-label">Average across courses</p>
+                  <p className="grd-stat">
+                    {summary.average ?? t(m, "grades.noPercent")}%
+                  </p>
+                  <p className="grd-stat-label">{t(m, "grades.statAverage")}</p>
                 </div>
               </Card>
               <Card>
                 <div className="grd-stat-card">
                   <p className="grd-stat">{summary.courseCount}</p>
-                  <p className="grd-stat-label">Graded courses</p>
+                  <p className="grd-stat-label">
+                    {t(m, "grades.statGradedCourses")}
+                  </p>
                 </div>
               </Card>
             </Grid>
 
             <section aria-labelledby="grades-heading">
               <h2 className="grd-section-heading" id="grades-heading">
-                By course
+                {t(m, "grades.byCourse")}
               </h2>
               <Grid gap={4} min="320px">
                 {grades.map((grade) => {
@@ -254,7 +270,10 @@ export default async function Grades() {
                         </div>
 
                         <ProgressBar
-                          label={`${grade.title} overall grade: ${grade.percent}%`}
+                          label={t(m, "grades.overallLabel", {
+                            title: grade.title,
+                            percent: grade.percent,
+                          })}
                           value={grade.percent}
                         />
 
@@ -267,7 +286,9 @@ export default async function Grades() {
                                 </span>
                                 <div className="grd-cat__meta">
                                   <Badge tone="neutral">
-                                    {category.weight}% weight
+                                    {t(m, "grades.weight", {
+                                      weight: category.weight,
+                                    })}
                                   </Badge>
                                   <span className="grd-cat__score">
                                     {category.score}%
@@ -292,9 +313,9 @@ export default async function Grades() {
           </>
         ) : (
           <EmptyState
-            description="Grades will appear here once your work has been graded."
+            description={t(m, "grades.emptyBody")}
             icon={<GradesIcon />}
-            title="No grades yet"
+            title={t(m, "grades.emptyTitle")}
           />
         )}
       </Stack>

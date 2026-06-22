@@ -136,6 +136,18 @@ export function AnnouncementsIcon(): ReactElement {
   );
 }
 
+export function DiscussionsIcon(): ReactElement {
+  return (
+    <EmptyIcon
+      paths={[
+        "M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 19 15.5H9l-4 3.5v-3.5A1.5 1.5 0 0 1 3.5 14V7A1.5 1.5 0 0 1 5 5.5Z",
+        "M8 9.5h8",
+        "M8 12h5",
+      ]}
+    />
+  );
+}
+
 export function GenericIcon(): ReactElement {
   return (
     <EmptyIcon

@@ -10,9 +10,12 @@ import {
   Stack,
   type BadgeTone,
 } from "@lms/ui";
+import { getMessages, t, type MessageKey } from "@lms/i18n";
 
 import { getBranding } from "../lib/branding";
 import { getSession } from "../lib/auth";
+import { resolveRequestLocale } from "../lib/i18n";
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
 import {
   formatDue,
   getAssignments,
@@ -115,7 +118,7 @@ const assignmentsCss = `
 .asg-type {
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .asg-due {
   font-variant-numeric: tabular-nums;
@@ -132,11 +135,11 @@ const assignmentsCss = `
 .asg-action { flex-shrink: 0; display: flex; }
 `;
 
-const STATUS_LABEL: Record<AssignmentStatus, string> = {
-  overdue: "Overdue",
-  not_started: "Not started",
-  submitted: "Submitted",
-  graded: "Graded",
+const STATUS_LABEL_KEY: Record<AssignmentStatus, MessageKey> = {
+  overdue: "assignments.statusOverdue",
+  not_started: "assignments.statusNotStarted",
+  submitted: "assignments.statusSubmitted",
+  graded: "assignments.statusGraded",
 };
 
 const STATUS_TONE: Record<AssignmentStatus, BadgeTone> = {
@@ -156,36 +159,57 @@ const STATUS_ACCENT: Record<AssignmentStatus, string> = {
 
 const SUMMARY_CARDS: {
   key: "overdue" | "dueSoon" | "submitted";
-  label: string;
+  labelKey: MessageKey;
   accent: string;
 }[] = [
-  { key: "overdue", label: "Overdue", accent: "var(--lms-danger)" },
-  { key: "dueSoon", label: "Due soon", accent: "var(--lms-warning)" },
-  { key: "submitted", label: "Submitted", accent: "var(--lms-success)" },
+  {
+    key: "overdue",
+    labelKey: "assignments.statOverdue",
+    accent: "var(--lms-danger)",
+  },
+  {
+    key: "dueSoon",
+    labelKey: "assignments.statDueSoon",
+    accent: "var(--lms-warning)",
+  },
+  {
+    key: "submitted",
+    labelKey: "assignments.statSubmitted",
+    accent: "var(--lms-success)",
+  },
 ];
 
 export default async function AssignmentsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
 
   const assignments = await getAssignments(session.userId, session.tenantId);
   const summary = summarizeAssignments(assignments);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell
+      brand={brand}
+      actions={
+        <>
+          <AppLocaleSwitcher />
+          <SignOutButton />
+        </>
+      }
+    >
       <style>{assignmentsCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
-          ← Back to dashboard
+          {t(m, "common.backToDashboard")}
         </Button>
 
         <PageHeader
-          title="Assignments"
-          subtitle="Everything due across your courses — overdue and upcoming work first."
+          title={t(m, "assignments.title")}
+          subtitle={t(m, "assignments.subtitle")}
           actions={
             <Button href="/grades" variant="secondary">
-              View grades
+              {t(m, "assignments.viewGrades")}
             </Button>
           }
         />
@@ -202,13 +226,13 @@ export default async function AssignmentsPage() {
                     }
                   >
                     <p className="asg-stat">{summary[stat.key]}</p>
-                    <p className="asg-stat-label">{stat.label}</p>
+                    <p className="asg-stat-label">{t(m, stat.labelKey)}</p>
                   </div>
                 </Card>
               ))}
             </Grid>
 
-            <ul className="asg-list" aria-label="Assignments">
+            <ul className="asg-list" aria-label={t(m, "assignments.listLabel")}>
               {assignments.map((assignment) => {
                 const graded =
                   assignment.status === "graded" &&
@@ -231,23 +255,33 @@ export default async function AssignmentsPage() {
                         <div className="asg-main">
                           <div className="asg-topline">
                             <Badge tone={STATUS_TONE[assignment.status]}>
-                              {STATUS_LABEL[assignment.status]}
+                              {t(m, STATUS_LABEL_KEY[assignment.status])}
                             </Badge>
                             <span className="asg-due">
-                              Due {formatDue(assignment.dueAt)}
+                              {t(m, "assignments.due", {
+                                date: formatDue(assignment.dueAt),
+                              })}
                             </span>
                             {graded ? (
                               <span className="asg-score">
-                                Scored {assignment.score}/{assignment.points}
+                                {t(m, "assignments.scored", {
+                                  score: assignment.score ?? 0,
+                                  points: assignment.points,
+                                })}
                               </span>
                             ) : null}
                           </div>
                           <h2 className="asg-title">{assignment.title}</h2>
                           <p className="asg-meta">
-                            {assignment.course}
-                            {assignment.code ? ` (${assignment.code})` : ""} ·{" "}
-                            <span className="asg-type">{assignment.type}</span>{" "}
-                            · {assignment.points} pts
+                            {assignment.code
+                              ? `${assignment.course} (${assignment.code})`
+                              : assignment.course}
+                            <span aria-hidden="true"> · </span>
+                            <span className="asg-type">{assignment.type}</span>
+                            <span aria-hidden="true"> · </span>
+                            {t(m, "assignments.points", {
+                              points: assignment.points,
+                            })}
                           </p>
                         </div>
                         <div className="asg-action">
@@ -256,7 +290,7 @@ export default async function AssignmentsPage() {
                             size="sm"
                             variant="ghost"
                           >
-                            Open course →
+                            {t(m, "assignments.openCourse")}
                           </Button>
                         </div>
                       </div>
@@ -268,9 +302,9 @@ export default async function AssignmentsPage() {
           </>
         ) : (
           <EmptyState
-            description="When your courses post assignments, quizzes and projects, they'll appear here."
+            description={t(m, "assignments.emptyBody")}
             icon={<AssignmentsIcon />}
-            title="No assignments yet"
+            title={t(m, "assignments.emptyTitle")}
           />
         )}
       </Stack>

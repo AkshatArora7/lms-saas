@@ -44,7 +44,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | --- | --- | --- |
 | `* (mutating domain events can be mirrored for audit)` | - | audit |
 | `* (republishes any event_outbox row to consumers)` | relay | - |
-| `ai.answer.generated` | ai | - |
 | `analytics.atrisk.flagged` | analytics | - |
 | `announcement.published` | announcement | notification |
 | `assignment.created` | assignment | notification |
@@ -58,9 +57,8 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `billing.subscription.changed` | billing | - |
 | `billing.subscription.changed (entitlements)` | - | tenant |
 | `content.completed` | - | analytics, search |
-| `content.completed (reindex)` | - | ai |
 | `content.created` | - | search |
-| `content.viewed` | - | analytics, ai |
+| `content.viewed` | - | analytics |
 | `course.copied` | course | - |
 | `course.copied (clone module tree)` | - | content |
 | `course.copied (clone quizzes)` | - | assessment |

@@ -21,8 +21,9 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 | `GET` | `/tenants/{id}/routing` | Resolve pool vs silo + database_ref for connection routing. |
 | `GET` | `/tenants/{id}/subtree` | District roll-up: root + descendants (tenant_subtree()) for parent reporting/billing. |
 | `PATCH` | `/tenants/{id}/flags` | Toggle feature flags / add-on entitlements. |
-| `PUT` | `/tenants/{id}/branding` | Set white-label branding (logo, colours, theme, custom domain). |
-| `GET` | `/tenants/{id}/branding` | Resolve effective branding (with parent inheritance). |
+| `PUT` | `/tenants/{id}/branding` | Set/override white-label branding (logo, favicon, palette, light/dark theme, custom domain, custom CSS, support email; hex colours validated). |
+| `GET` | `/tenants/{id}/branding` | Resolve effective branding -> {branding (inheritance-resolved: sub-tenant override -> parent district -> platform default), overrides (this tenant's own row)}. |
+| `GET` | `/tenants/by-domain/{host}` | Pre-auth, control-plane: resolve a custom domain (Host) to its tenant via tenant_branding.custom_domain (citext UNIQUE). Returns only {tenantId}; 404 when no tenant claims the host. Lets the learner web app brand a custom-domain landing/login screen at the edge before any session exists. |
 | `PUT` | `/tenants/{id}/settings/{key}` | Set a per-tenant governance setting (validated against the key catalog). |
 | `GET` | `/tenants/{id}/settings` | Effective governance settings (catalog defaults + overrides). |
 | `GET` | `/tenants/{id}/settings/{key}` | Effective value for one setting key. |
@@ -58,7 +59,7 @@ Tenant catalogue and lifecycle: provisioning saga, pool/silo routing, sub-tenant
 
 ## Notes
 
-Control-plane; `tenant` is NOT in the RLS tenant_tables loop. Provisioning is a saga with compensation (delete branch on failure). Offboarding orchestrates per-service export/purge behind ports; per-service admin export/erasure endpoints are the contract (unverified services surface as failed, never silent).
+Control-plane; `tenant` is NOT in the RLS tenant_tables loop. Provisioning is a saga with compensation (delete branch on failure). Offboarding orchestrates per-service export/purge behind ports; per-service admin export/erasure endpoints are the contract (unverified services surface as failed, never silent). White-label branding (#89/#12) is per-tenant including sub-tenants: `tenant_branding` stores logo/favicon/palette/theme/custom_domain/custom_css/support_email, and the SQL function `tenant_effective_branding()` walks the parent chain to resolve effective branding with the precedence sub-tenant override -> parent district -> platform default (theme/custom_domain/custom_css are tenant-specific, not inherited). `GET /tenants/by-domain/:host` is the pre-auth, control-plane host->tenant lookup the learner web app calls at the edge for custom domains; it is safe at control-plane because `custom_domain` is globally unique and the response carries only the opaque tenant id. See [DEPLOYMENT.md](../DEPLOYMENT.md#custom-domains-white-label-at-the-edge) for the Vercel custom-domain ops procedure.
 
 ## Cross-cutting
 

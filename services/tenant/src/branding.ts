@@ -89,4 +89,31 @@ export interface BrandingStore {
 
   /** Effective branding: own row with NULLs filled from ancestors. */
   getEffectiveBranding(tenantId: string): Promise<BrandingRecord>;
+
+  /**
+   * Resolve a custom domain (the incoming request Host) to its owning tenant id,
+   * or null when no tenant claims it. PRE-AUTH and control-plane: it runs before
+   * any tenant context/JWT exists, so it is NOT RLS-scoped. Safe because
+   * `custom_domain` is GLOBALLY UNIQUE — a host maps to at most one tenant — and
+   * only the opaque tenant id is returned (no tenant-owned data). The caller
+   * then re-resolves effective branding via getEffectiveBranding(tenantId).
+   */
+  resolveTenantByDomain(host: string): Promise<string | null>;
+}
+
+/**
+ * Normalize an incoming Host header for an exact custom-domain lookup: trim
+ * surrounding whitespace, lowercase (citext is case-insensitive but the memory
+ * store mirrors via lowercase), and defensively strip a trailing dot and any
+ * `:port` suffix. Returns null when the result is empty (invalid host).
+ */
+export function normalizeHost(host: string): string | null {
+  let h = host.trim().toLowerCase();
+  // Strip a :port suffix (but leave IPv6-bracketed hosts alone — not expected
+  // for custom domains). e.g. "school.edu:443" -> "school.edu".
+  const colon = h.indexOf(":");
+  if (colon !== -1 && h.indexOf("]") === -1) h = h.slice(0, colon);
+  // Strip a trailing FQDN dot. e.g. "school.edu." -> "school.edu".
+  if (h.endsWith(".")) h = h.slice(0, -1);
+  return h.length > 0 ? h : null;
 }

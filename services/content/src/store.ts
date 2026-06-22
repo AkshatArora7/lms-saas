@@ -1,5 +1,7 @@
 import type { TenantContext } from "@lms/types";
 
+import type { ScormVersion } from "./scorm/manifest.js";
+
 export type TopicKind = "html" | "file" | "link" | "scorm" | "lti" | "video";
 
 export const TOPIC_KINDS: readonly TopicKind[] = [
@@ -145,6 +147,68 @@ export interface NewReleaseConditionInput {
   expression: Record<string, unknown>;
 }
 
+// --- SCORM packages & runtime (#31) ----------------------------------------
+
+export type ScormCompletionStatus =
+  | "completed"
+  | "incomplete"
+  | "not_attempted"
+  | "unknown";
+export type ScormSuccessStatus = "passed" | "failed" | "unknown";
+
+export interface ScormPackageRecord {
+  id: string;
+  tenantId: string;
+  topicId: string | null;
+  version: ScormVersion;
+  title: string | null;
+  launchHref: string;
+  masteryScore: number | null;
+  blobUrl: string;
+  manifest: Record<string, unknown>;
+}
+
+export interface NewScormPackageInput {
+  topicId?: string | null;
+  blobUrl: string;
+  version: ScormVersion;
+  title: string | null;
+  launchHref: string;
+  masteryScore: number | null;
+  manifest: Record<string, unknown>;
+}
+
+export interface ScormAttemptRecord {
+  id: string;
+  tenantId: string;
+  packageId: string;
+  learnerId: string;
+  completionStatus: ScormCompletionStatus;
+  successStatus: ScormSuccessStatus;
+  scoreScaled: number | null;
+  scoreRaw: number | null;
+  lessonStatus: string | null;
+  sessionTime: string | null;
+  totalTime: string | null;
+  attemptedAt: string;
+  updatedAt: string;
+}
+
+export interface SaveScormAttemptInput {
+  learnerId: string;
+  completionStatus?: ScormCompletionStatus;
+  successStatus?: ScormSuccessStatus;
+  scoreScaled?: number | null;
+  scoreRaw?: number | null;
+  lessonStatus?: string | null;
+  sessionTime?: string | null;
+  totalTime?: string | null;
+}
+
+export type SaveScormAttemptResult =
+  | { ok: true; attempt: ScormAttemptRecord }
+  | { ok: false; reason: "package_not_found" };
+
 /**
  * Persistence boundary for the content service (modules, topics, release
  * conditions). Routes depend only on this interface; production uses an
@@ -230,4 +294,29 @@ export interface ContentStore {
     pageId: string,
     versionId: string,
   ): Promise<PageVersionRecord | null>;
+
+  // --- SCORM (#31) ---------------------------------------------------------
+
+  createScormPackage(
+    ctx: TenantContext,
+    input: NewScormPackageInput,
+  ): Promise<ScormPackageRecord>;
+
+  getScormPackage(
+    ctx: TenantContext,
+    id: string,
+  ): Promise<ScormPackageRecord | null>;
+
+  /** Idempotent upsert of the learner's attempt; guards the package exists. */
+  saveScormAttempt(
+    ctx: TenantContext,
+    packageId: string,
+    input: SaveScormAttemptInput,
+  ): Promise<SaveScormAttemptResult>;
+
+  getScormAttempt(
+    ctx: TenantContext,
+    packageId: string,
+    learnerId: string,
+  ): Promise<ScormAttemptRecord | null>;
 }

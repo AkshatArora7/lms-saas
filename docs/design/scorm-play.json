@@ -1,0 +1,200 @@
+{
+  "$grounding": "Grounded in: docs/design/ui-dual-tone-tokens.json (WEB tone tokens — this surface lives in apps/web), apps/web/app/courses/[courseId]/items/[itemId]/page.tsx (the canonical learner course-player: AppShell + ghost back Button + PageHeader with Badge(type)+Chip(status) carried by TEXT + a .ci-grid two-column layout — reading column + sticky 'In this module' aside — Card body + an info Alert for 'coming soon' + a disabled placeholder action; all visuals resolve from var(--lms-*) tenant tokens), apps/web/app/lib/branding.ts pattern (getBranding(tenantId), tenant accent via --lms-accent), and handshake feat-scorm-import-play.md §4.F routes (GET /scorm/packages/:id launch info; PUT /scorm/packages/:id/runtime save cmi; GET .../runtime?learnerId read-back), §4.E cmi->normalized status mapping, §6 follow-ups (full JS RTE bridge window.API / API_1484_11 and byte-serving package assets are documented follow-ups; learnerId currently from body), and §4.G (terminal/passing attempts emit LEARNING_EVENT_CAPTURED so results reach the gradebook/analytics path). ALL tokens REUSED from the WEB tone; NO new palette. Net-new patterns (sandboxed launch iframe + an explicit 'mark complete' control standing in for the full RTE bridge) are flagged in openQuestions; everything else reuses the existing course-player chrome and @lms/ui components.",
+  "screen": "Play SCORM package (learner)",
+  "story": "#31",
+  "goal": "A learner launches a SCORM package, works through it, and has their completion + score recorded against them — and can see their current attempt status at any time. Because the full SCORM JS runtime bridge is a documented follow-up, the learner can also explicitly report completion via the runtime endpoint (a server-side record), so progress is never stuck.",
+  "primaryUsers": ["learner"],
+  "route": "/courses/[courseId]/scorm/[packageId]  (learner app; reached from the course/module item list the way /courses/[courseId]/items/[itemId] is)",
+  "informationHierarchy": [
+    "The content itself: the launch surface (iframe of launchHref under blobUrl, or a clearly-labelled placeholder while asset-serving is the follow-up) — the learner is here to do the activity",
+    "Their current status & score: completion (completed/incomplete/not started), pass/fail, and score — what counts toward their record",
+    "The action that advances them: 'Mark complete' / 'Report result' (calls the runtime endpoint) with clear, announced feedback",
+    "Orientation: package title + course context + a 'Back to course' link",
+    "Honest scope note: the package's runtime assets and the automatic JS RTE bridge are coming soon — meanwhile completion is recorded by the explicit action"
+  ],
+  "wiresTo": "On load: GET /scorm/packages/:id (-> { package: { id, version, title, launchHref, masteryScore, blobUrl } }) for launch info + GET /scorm/packages/:id/runtime?learnerId=<session.userId> (-> { attempt | null }) for current status. Launch URL = blobUrl joined with the relative launchHref (when asset-serving is live). On 'Mark complete'/'Report result': PUT /scorm/packages/:id/runtime { learnerId, completionStatus, successStatus?, scoreScaled?, scoreRaw?, lessonStatus?, sessionTime? } -> 200 { attempt: { completionStatus, successStatus, scoreScaled, scoreRaw, ... } }. A terminal/passing attempt server-side emits LEARNING_EVENT_CAPTURED (results reach analytics/gradebook).",
+  "states": ["loading (RSC fetch package + attempt)", "ready-not-started (attempt null/not_attempted)", "ready-in-progress (incomplete)", "ready-completed (completed; show score + pass/fail)", "asset-serving-follow-up (launchHref can't be served yet -> placeholder panel)", "reporting (PUT in flight)", "report-success", "report-error", "package-not-found (404)", "service-offline"],
+  "designTokens": {
+    "$note": "WEB tone from docs/design/ui-dual-tone-tokens.json, exposed at runtime as --lms-* vars via ThemeStyle tone='web' (roomier, softer, body targets AAA). accent is the TENANT accent via --lms-accent. Reference vars, never literals.",
+    "color": {
+      "bg": "var(--lms-bg) /* #FAFAF8 */",
+      "surface": "var(--lms-surface) /* #FFFFFF */",
+      "surface2": "var(--lms-surface-2) /* #F2F1EC — iframe frame + status rail fill */",
+      "border": "var(--lms-border) /* #E4E2D9 */",
+      "borderStrong": "var(--lms-border-strong) /* #C8C5B8 — iframe + panel boundary */",
+      "text": "var(--lms-text) /* #1B2430 */",
+      "muted": "var(--lms-text-muted) /* #46505C — captions, status detail */",
+      "subtle": "var(--lms-text-subtle) /* #6B7480 — placeholders only */",
+      "accent": "var(--lms-accent) /* TENANT accent; never hard-coded */",
+      "accentSoft": "var(--lms-accent-soft) /* in-progress chip / current marker */",
+      "danger": "var(--lms-danger) /* #C2261B — report errors, failed status */",
+      "success": "var(--lms-success) /* #0B7A52 — completed / passed */",
+      "warning": "var(--lms-warning) /* #8A5A00 — follow-up scope note */",
+      "focusRing": "var(--lms-focus) /* #1E4E8C, 3px solid, offset 2px (web focus >=7:1) */"
+    },
+    "typography": {
+      "fontFamily": "var(--lms-font-family) /* tenant font, else system-ui fallback */",
+      "scale": { "xs": "12px", "sm": "14px", "base": "16px", "lg": "18px", "xl": "20px", "2xl": "24px" },
+      "weight": { "regular": 400, "medium": 500, "semibold": 600, "bold": 700 },
+      "lineHeight": { "tight": 1.2, "snug": 1.35, "normal": 1.6 }
+    },
+    "space": { "scale": [0, 4, 8, 12, 16, 24, 32, 48, 64], "unit": "px", "$map": "--lms-space-1..8; reuse the course-player .ci-* rhythm (grid gap space-5, body gap space-4/3)" },
+    "radius": { "sm": "var(--lms-radius-sm) /* web soft 8px */", "md": "var(--lms-radius-md) /* 12px — cards/iframe frame */", "lg": "var(--lms-radius-lg) /* 16px */", "pill": "var(--lms-radius-pill) /* 999px */" },
+    "shadow": { "sm": "var(--lms-shadow-sm)", "md": "var(--lms-shadow-md)", "lg": "var(--lms-shadow-lg)" },
+    "zIndex": { "base": 0, "dropdown": 100, "overlay": 200, "modal": 300, "toast": 400 }
+  },
+  "layout": {
+    "grid": {
+      "phone": { "columns": 4, "gutter": 16, "margin": 16 },
+      "tablet": { "columns": 8, "gutter": 24, "margin": 24 },
+      "desktop": { "columns": 12, "gutter": 24, "margin": 32 }
+    },
+    "containerMaxWidth": "1200px (AppShell .lms-shell__main)",
+    "regions": ["header (AppShell topbar: brand + SignOutButton)", "main (back Button -> PageHeader -> .sc-grid: launch column + status/completion aside)"],
+    "composition": {
+      "desktop": "Reuse the course-player .ci-grid model: a two-column CSS grid minmax(0,1fr) + ~20rem. Left = the launch column (LaunchSurface iframe/placeholder, full width of its column, 16:9-ish min-height, fluid). Right = a sticky CompletionPanel aside (current status, score, and the report/mark-complete action).",
+      "tablet": "Single column; CompletionPanel moves BELOW the launch surface (still a full Card).",
+      "phone": "Single column, stacked: launch surface first (min-height ~52vh, fluid, never wider than viewport), CompletionPanel below. No horizontal overflow at 360px; the iframe is width:100% with a fluid aspect-ratio box."
+    }
+  },
+  "breakpoints": {
+    "phone": "<=600px",
+    "tablet": "601-1024px",
+    "desktop": ">=1025px",
+    "approach": "mobile-first, fluid. The launch surface is a responsive aspect-ratio container (width:100%) so the iframe scales without horizontal overflow; on phone it gets a generous min-height and the learner scrolls the page, not a clipped frame. Status text uses overflow-wrap:anywhere. Nothing overflows at 360px."
+  },
+  "components": [
+    {
+      "name": "BackLink (reuse Button variant=ghost size=sm, like .ci back link)",
+      "purpose": "Return to the course/module.",
+      "anatomy": ["ghost Button with leading arrow"],
+      "content": "'<- Back to {course title}'.",
+      "variants": ["default"],
+      "states": ["default", "hover (bg var(--lms-surface-2))", "focus-visible (3px var(--lms-focus) ring offset 2px)"],
+      "responsive": { "phone": "self-start", "tablet": "self-start", "desktop": "self-start" },
+      "interactions": "navigates to /courses/[courseId]; real <a>",
+      "a11y": { "role": "link", "label": "text label is the name", "keyboard": "Tab/Enter", "minTouchTarget": "44x44px" }
+    },
+    {
+      "name": "PageHeader (reuse @lms/ui — mirror course-player header)",
+      "purpose": "Title + course context + the at-a-glance status, exactly like the content-item player.",
+      "anatomy": ["h1 = package title", "subtitle = course code/title context", "actions = Inline[ Badge('SCORM 1.2'/'SCORM 2004') , Chip(status) ]"],
+      "content": "title 'Workplace Safety Fundamentals' · subtitle '{course.code} - SCORM module' · Badge 'SCORM 1.2' · Chip status (see StatusChip).",
+      "variants": ["default"],
+      "states": ["default"],
+      "responsive": { "phone": "title + Badge/Chip stack", "tablet": "inline", "desktop": "inline" },
+      "interactions": "n/a",
+      "a11y": { "role": "heading", "label": "title is the h1; Badge/Chip carry TEXT not color alone", "keyboard": "n/a", "minTouchTarget": "n/a" }
+    },
+    {
+      "name": "LaunchSurface (NET-NEW — sandboxed iframe OR documented placeholder)",
+      "purpose": "Host the SCORM content. When asset-serving is live, embed launchHref resolved under blobUrl in a titled, sandboxed iframe. Until then, render an honest placeholder so the learner is never staring at a broken frame.",
+      "anatomy": [
+        "A bordered frame (1px var(--lms-border-strong), radius var(--lms-radius-md), bg var(--lms-surface-2)) wrapping a responsive aspect-ratio box",
+        "LIVE variant: <iframe title='SCORM content: {package title}' src='{resolved launch URL}' sandbox='allow-scripts allow-same-origin' allow='fullscreen' loading='lazy' width=100% height=100%> + an 'Open in full screen' / 'Open in a new tab' affordance above the frame",
+        "PLACEHOLDER variant: centered content — an inline-SVG content/play glyph (aria-hidden) + heading 'Launch coming soon' + body explaining asset-serving is a follow-up + the launch href shown read-only (monospace) so it's transparent what WOULD load"
+      ],
+      "content": "Placeholder body: 'This SCORM package's interactive content will play here once package files are served. Its launch page is {launchHref}. In the meantime, use the panel to record your completion.' Live frame caption (sr + visible): 'Interactive SCORM content. If it doesn't load, use Open in a new tab.'",
+      "variants": ["live-iframe", "placeholder-follow-up"],
+      "states": ["loading (skeleton block in the aspect-ratio box)", "loaded (live)", "load-error (frame failed -> inline Alert tone=warning 'Couldn't load the content here. Open it in a new tab.' + a link)", "placeholder (asset-serving follow-up)"],
+      "responsive": { "phone": "full-width, min-height ~52vh, aspect-ratio fluid; page scrolls", "tablet": "full-width of column, ~16:9", "desktop": "fills the left grid column, ~16:9, generous height" },
+      "interactions": "iframe is sandboxed (allow-scripts allow-same-origin only; NO allow-top-navigation / allow-popups-to-escape-sandbox) so embedded content can't break out or hijack the page. 'Open in new tab' is a normal link with rel='noopener noreferrer'. The frame must be reachable but must NOT create a keyboard trap — Tab moves into and back out of the iframe normally; an 'Open in a new tab' control gives a guaranteed escape.",
+      "a11y": { "role": "iframe MUST have a descriptive title attribute ('SCORM content: {title}'); placeholder is a labelled region with a heading", "label": "iframe title names the content; placeholder heading + body convey state in text", "keyboard": "no keyboard trap — focus enters and leaves the iframe with Tab; provide a visible focusable 'Open in a new tab' escape; if a learner can't operate embedded content, the CompletionPanel still lets them record progress", "minTouchTarget": "44x44px on the open/fullscreen controls" }
+    },
+    {
+      "name": "StatusChip (reuse Chip @lms/ui — same STATUS_META text+tone pattern as the course-player)",
+      "purpose": "Convey completion + pass/fail by TEXT and tone, never color alone (matches items/[itemId] STATUS_META).",
+      "anatomy": ["Chip with a text label; an aria-hidden status dot may accompany, like .ci-rail__dot"],
+      "content": "Completion: 'Not started' (tone neutral) / 'In progress' (tone accent) / 'Completed' (tone success). When a success_status exists, append it: 'Completed - Passed' (success) or 'Completed - Failed' (danger). 'Not started' when attempt is null or not_attempted.",
+      "variants": ["not-started (neutral)", "in-progress (accent)", "completed (success)", "completed-passed (success)", "completed-failed (danger)"],
+      "states": ["default"],
+      "responsive": { "phone": "in PageHeader actions, wraps under title", "tablet": "inline", "desktop": "inline" },
+      "interactions": "static; reflects the latest attempt (re-renders after a successful PUT)",
+      "a11y": { "role": "status text", "label": "meaning in the Chip TEXT; color is reinforcement only (WCAG noColorOnly)", "keyboard": "n/a", "minTouchTarget": "n/a" }
+    },
+    {
+      "name": "CompletionPanel (reuse Card + Stack + Chip + Button; sticky aside on desktop)",
+      "purpose": "Show the learner's current attempt and let them record/report completion via the runtime endpoint.",
+      "anatomy": [
+        "Card (sticky aside on desktop, full-width Card below on tablet/phone) with h2 'Your progress'",
+        "A small definition list: Status (StatusChip), Result (Passed/Failed/Not yet determined), Score (e.g. '82% (0.82)' or 'No score recorded'), Mastery (the package masteryScore as a target, e.g. 'Passing score 80%' or 'No passing score set'), Last updated (relative time of attempt.updatedAt)",
+        "An action region with the report/mark-complete control(s) + an aria-live status",
+        "A short honest note: 'Your result is recorded against your account and reported to your instructor.'"
+      ],
+      "content": "Empty (no attempt): Status 'Not started', Result 'Not yet determined', Score 'No score recorded'. After completion: Status 'Completed - Passed', Result 'Passed', Score '82% (0.82)', 'Passing score 80%', 'Updated just now'.",
+      "variants": ["not-started", "in-progress", "completed", "follow-up (no auto-RTE -> the explicit action is the primary path)"],
+      "states": ["loading (skeleton rows)", "idle", "reporting (action busy + aria-busy)", "report-success (status announces 'Progress saved.')", "report-error (Alert tone=danger + retry; nothing lost)", "completed-locked (optional: once completed, action becomes 'Mark in progress again' OR stays as 'Update result' — see openQuestions)"],
+      "responsive": { "phone": "full-width Card below the launch surface; dl stacks", "tablet": "full-width Card below launch surface", "desktop": "sticky aside ~20rem beside the launch column (top: var(--lms-space-5))" },
+      "interactions": "The MarkCompleteControl PUTs the runtime endpoint and the panel re-renders from the returned attempt; the StatusChip and score update in place; the aria-live region announces the result.",
+      "a11y": { "role": "complementary (aside) with an h2; <dl> for the status pairs; aria-live=polite status region for save feedback", "label": "h2 'Your progress' names the region; values carried by text", "keyboard": "controls in logical order after the launch surface; Enter/Space activate", "minTouchTarget": "44x44px" }
+    },
+    {
+      "name": "MarkCompleteControl (reuse Button @lms/ui + optional small score Field)",
+      "purpose": "The explicit, honest stand-in for the full JS RTE bridge: let the learner record completion (and optionally a score) server-side via PUT /scorm/packages/:id/runtime.",
+      "anatomy": [
+        "Primary Button 'Mark complete' (sends completionStatus='completed'); for graded packages an optional disclosure 'Report a score' reveals a small numeric Field (0-100) -> sent as scoreRaw with scoreMax=100 so the backend computes scoreScaled, and successStatus derived against masteryScore",
+        "aria-live=polite status line under the button"
+      ],
+      "content": "Button 'Mark complete'. Disclosure 'Report a score (optional)'. Field label 'Your score (out of 100)'. Status: 'Saving your progress...', 'Progress saved.', 'Couldn't save - try again.' Helper: 'Use this to record that you've finished. Automatic tracking from the content itself is coming soon.'",
+      "variants": ["completion-only", "with-score (graded package / masteryScore present)"],
+      "states": ["idle", "busy (Button aria-busy + disabled to prevent double-submit)", "success (status announced; panel re-renders)", "error (Alert tone=danger role=alert + retry; entered score retained)", "disabled (while package/attempt still loading)"],
+      "responsive": { "phone": "Button full-width; score Field full-width", "tablet": "Button auto width", "desktop": "Button auto width within the aside" },
+      "interactions": "Click -> PUT { learnerId: session.userId, completionStatus:'completed', scoreRaw?, scoreMax: 100? } -> on 200 update panel from returned attempt; on a passing/terminal attempt the backend emits LEARNING_EVENT_CAPTURED (no client work). learnerId is taken from the session today (see openQuestions re: server-trusted identity).",
+      "a11y": { "role": "button + optional labelled numeric input + aria-live status", "label": "Button names the action; score Field has a <label>; result announced politely; errors via role=alert", "keyboard": "Enter/Space activate; disclosure toggles with Enter/Space (aria-expanded); numeric input standard entry", "minTouchTarget": "44x44px" }
+    },
+    {
+      "name": "FollowUpNote (reuse Alert tone=info/warning — mirror the course-player 'coming soon' info Alert)",
+      "purpose": "Be honest that automatic SCORM tracking + asset-serving are follow-ups, so the explicit Mark-complete path makes sense to the learner.",
+      "anatomy": ["Alert (tone=info) with the scope note; placed near the launch surface or top of the CompletionPanel"],
+      "content": "'This SCORM module records your completion when you mark it complete. Automatic progress and score tracking directly from the content is coming soon.'",
+      "variants": ["default"],
+      "states": ["default"],
+      "responsive": { "phone": "full-width", "tablet": "full-width", "desktop": "full-width within its column" },
+      "interactions": "static",
+      "a11y": { "role": "status (info)", "label": "meaning in text + inline-SVG info icon, never color alone", "keyboard": "n/a", "minTouchTarget": "n/a" }
+    },
+    {
+      "name": "NotFound / ServiceOffline (reuse Alert @lms/ui + PageHeader, like the player notFound path)",
+      "purpose": "Cover the error/edge flows consistently.",
+      "anatomy": ["PageHeader 'Module unavailable'", "Alert tone=warning with real copy + a back link"],
+      "content": "Package 404: 'This SCORM module no longer exists or was moved.' · Service offline: 'The content service is unavailable. Start it (CONTENT_STORE=memory pnpm dev in services/content) to play this module.'",
+      "variants": ["not-found", "service-offline"],
+      "states": ["default"],
+      "responsive": { "phone": "full-width", "tablet": "full-width", "desktop": "full-width" },
+      "interactions": "terminal with a 'Back to course' link",
+      "a11y": { "role": "status (warning)", "label": "text + inline-SVG warning icon, never color alone", "keyboard": "back link focusable", "minTouchTarget": "44x44px" }
+    }
+  ],
+  "flows": [
+    "Happy path (ungraded): open the module -> LaunchSurface shows the content (or placeholder while asset-serving is a follow-up) + CompletionPanel shows 'Not started' -> learner works through it -> 'Mark complete' -> 'Saving your progress...' -> PUT 200 -> StatusChip flips to 'Completed', 'Progress saved.' announced; backend emits LEARNING_EVENT_CAPTURED.",
+    "Happy path (graded): masteryScore present -> learner opens 'Report a score', enters 82 -> Mark complete -> backend computes scaled 0.82 >= 0.80 -> attempt returns success_status passed -> StatusChip 'Completed - Passed', Score '82% (0.82)'.",
+    "Returning learner: GET runtime returns an existing attempt -> panel pre-populated with their status/score on load (no re-entry needed).",
+    "Not started: attempt null -> StatusChip 'Not started'; Mark complete available.",
+    "Loading: skeleton in the launch box + skeleton dl rows while package + attempt fetch.",
+    "Asset-serving follow-up: launchHref can't be served -> LaunchSurface placeholder explains it and shows the launch href; completion still recordable.",
+    "Report error: PUT fails -> Alert tone=danger role=alert + retry; entered score retained; status unchanged.",
+    "Package not found / service offline: PageHeader 'Module unavailable' + warning Alert + back link; no attempt fetched.",
+    "Reduced motion: skeleton shimmer and any frame/chip transitions respect prefers-reduced-motion."
+  ],
+  "accessibility": {
+    "wcag": "2.2 AA",
+    "contrastMin": "4.5:1 body text / 3:1 large text, UI & focus ring (web tone verified: text 15.2:1, muted 8.3:1, focus #1E4E8C >=7:1)",
+    "focusOrder": "logical DOM order — back link -> PageHeader -> 'Open in a new tab' (launch escape) -> iframe content -> CompletionPanel (status -> score disclosure -> Mark complete). Visible :focus-visible 3px var(--lms-focus) ring offset 2px on every interactive element.",
+    "iframe": "the launch <iframe> MUST have a descriptive title attribute ('SCORM content: {package title}'); it is sandboxed (allow-scripts allow-same-origin; no top-navigation/popup-escape); it must NOT trap keyboard focus — Tab enters and exits normally, and a visible focusable 'Open in a new tab' control guarantees an escape and an alternative if embedded content is inoperable.",
+    "status": "completion/pass/fail conveyed by Chip TEXT + tone, never color alone (matches the course-player STATUS_META); save feedback in an aria-live=polite region; errors via role=alert; the StatusChip update after a PUT is announced.",
+    "noKeyboardTrap": "explicitly tested — focus must be able to leave the iframe; the 'Open in a new tab' link and the CompletionPanel are always keyboard-reachable.",
+    "motion": "respect prefers-reduced-motion — disable skeleton shimmer and transitions; keep instant color state changes and a static focus ring.",
+    "semantics": "AppShell header/main landmarks; single h1 (package title) -> h2 'Your progress'; CompletionPanel is a <complementary> aside; status pairs in a <dl>; iframe titled; score input labelled via Field; aria only where native won't do.",
+    "touchTargets": "44x44px minimum for back link, open-in-new-tab, score disclosure, Mark complete, and retry.",
+    "noColorOnly": "every status, result, and error carries a text label (+ inline-SVG icon for alerts) in addition to tone."
+  },
+  "openQuestions": [
+    "FULL RTE BRIDGE (documented follow-up, per handshake §6): the SCORM JS runtime bridge (window.API for 1.2 / window.API_1484_11 for 2004 that the content reads/writes) is NOT built for #31. This surface records completion via the EXPLICIT MarkCompleteControl -> PUT /scorm/packages/:id/runtime. Confirm wording so learners understand auto-tracking is coming; when the bridge lands, the explicit control can become a fallback/manual override.",
+    "ASSET SERVING (documented follow-up, §6): byte-serving the package's runtime files under blobUrl is not built. Confirm whether to render the live sandboxed iframe (when a served launch URL is available) OR ship the placeholder variant first. Design supports BOTH via the LaunchSurface variants; recommend placeholder-first, iframe behind a feature check on whether the launch URL resolves.",
+    "LEARNER IDENTITY (handshake §6 UNKNOWN): the runtime routes take learnerId from the body today; the content service has no x-user-id resolver. Design sends session.userId from the web app via a BFF route (mirror app/api/uploads) that forwards the authenticated user. Confirm the gateway/identity plan so a learner can't report progress as someone else (server-trusted identity). security-agent gate.",
+    "NEW BFF ROUTES: this surface needs web BFF routes to GET /scorm/packages/:id, GET .../runtime, and PUT .../runtime (forwarding x-tenant-id + the authenticated learnerId). Confirm placement alongside the existing web lib/dashboard fetch helpers. frontend-dev builds; security-agent reviews.",
+    "RE-OPEN AFTER COMPLETE: should a learner be able to change a 'Completed' attempt back (re-attempt)? Current backend = single upserted attempt (UNIQUE tenant+package+learner); multiple historical attempts are a follow-up (§6). Design defaults to 'Update result' staying available (idempotent upsert). Confirm whether to lock after completion.",
+    "SCORE INPUT FOR UNGRADED PACKAGES: only show 'Report a score' when masteryScore is present (graded). For ungraded packages offer completion-only. Confirm this gating with product.",
+    "GRADEBOOK SURFACING (§4.G): results reach analytics/LRS via LEARNING_EVENT_CAPTURED today; a dedicated grading-side consumer is a follow-up. The panel says 'reported to your instructor' — confirm that's accurate for the current path or soften to 'recorded against your account'."
+  ]
+}

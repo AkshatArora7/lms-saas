@@ -13,8 +13,17 @@ import { loadConfig, type AppConfig } from "@lms/config";
 import { createLogger } from "@lms/logger";
 import type { TenantContext } from "@lms/types";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+import { createRemoteJWKSet } from "jose";
 
 import { registerEmbedRoutes, type EmbedRouteDeps } from "./embed.routes.js";
+import type {
+  Clock,
+  JwksResolver,
+  JwksResolverFactory,
+} from "./lti.js";
+import { registerLtiRoutes } from "./lti.routes.js";
+import { createPrismaStore } from "./store.prisma.js";
+import type { LtiStore } from "./store.js";
 
 const SERVICE = "lti";
 const log = createLogger(SERVICE);
@@ -27,6 +36,30 @@ export interface BuildAppOptions {
   publicBaseUrl?: string;
   /** Base URL of the learner app the widget links out to. */
   launchBaseUrl?: string;
+  /** LTI launch store — tests inject a MemoryLtiStore; prod uses Prisma. */
+  store?: LtiStore;
+  /** JWKS resolver factory — tests inject a local-keyset fake. */
+  jwksFactory?: JwksResolverFactory;
+  /** Clock — tests inject a fixed clock for deterministic exp/nonce checks. */
+  clock?: Clock;
+}
+
+/**
+ * Real JWKS factory: one remote keyset per platform jwks_url, cached. The
+ * keyset is `createRemoteJWKSet`, whose call signature matches `JwksResolver`.
+ */
+function remoteJwksFactory(): JwksResolverFactory {
+  const cache = new Map<string, JwksResolver>();
+  return {
+    forJwksUrl(jwksUrl: string): JwksResolver {
+      let resolver = cache.get(jwksUrl);
+      if (!resolver) {
+        resolver = createRemoteJWKSet(new URL(jwksUrl)) as unknown as JwksResolver;
+        cache.set(jwksUrl, resolver);
+      }
+      return resolver;
+    },
+  };
 }
 
 /**
@@ -80,6 +113,23 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       : process.env.EMBED_LAUNCH_URL
         ? { launchBaseUrl: process.env.EMBED_LAUNCH_URL }
         : {}),
+  });
+
+  const launchBaseUrl =
+    options.launchBaseUrl ?? process.env.LTI_LAUNCH_URL ?? process.env.EMBED_LAUNCH_URL;
+  const publicBaseUrl =
+    options.publicBaseUrl ?? process.env.LTI_PUBLIC_URL ?? process.env.EMBED_PUBLIC_URL;
+
+  registerLtiRoutes(app, {
+    resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+    store: options.store ?? createPrismaStore(),
+    jwksFactory: options.jwksFactory ?? remoteJwksFactory(),
+    clock: options.clock ?? (() => new Date()),
+    secret: config.JWT_SECRET,
+    audience: config.JWT_AUDIENCE,
+    ...(config.JWT_ISSUER ? { issuer: config.JWT_ISSUER } : {}),
+    ...(launchBaseUrl !== undefined ? { launchBaseUrl } : {}),
+    ...(publicBaseUrl !== undefined ? { publicBaseUrl } : {}),
   });
 
   return app;

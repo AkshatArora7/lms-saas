@@ -3,6 +3,7 @@ import type { TenantContext } from "@lms/types";
 import {
   emptyBranding,
   mergeBranding,
+  normalizeHost,
   type BrandingPatch,
   type BrandingRecord,
   type BrandingStore,
@@ -58,5 +59,19 @@ export class MemoryBrandingStore implements BrandingStore {
       if (parent) acc = mergeBranding(acc, parent);
     }
     return acc;
+  }
+
+  async resolveTenantByDomain(host: string): Promise<string | null> {
+    // Mirrors the prisma control-plane lookup: exact, case-insensitive match on
+    // customDomain (lowercase both sides to emulate citext). Globally unique, so
+    // the first match is the sole owner.
+    const normalized = normalizeHost(host);
+    if (!normalized) return null;
+    for (const row of this.rows.values()) {
+      if (row.customDomain?.trim().toLowerCase() === normalized) {
+        return row.tenantId;
+      }
+    }
+    return null;
   }
 }

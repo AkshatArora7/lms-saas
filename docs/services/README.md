@@ -14,7 +14,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [user-org](user-org.md) | 4003 | Postgres (read-heavy) | `app_user`, `org_unit`, `academic_session`, `parental_consent`, `guardian_relationship` |
 | [enrollment](enrollment.md) | 4004 | Postgres | `enrollment`, `self_registration_policy`, `self_registration_request` |
 | [course](course.md) | 4005 | Postgres | `course`, `release_condition` |
-| [content](content.md) | 4006 | JSONB + Blob | `content_module`, `content_topic`, `content_completion`, `page`, `page_version`, `release_condition`, `scorm_package`, `xapi_statement` |
+| [content](content.md) | 4006 | JSONB + Blob | `content_module`, `content_topic`, `content_completion`, `page`, `page_version`, `release_condition`, `scorm_package`, `scorm_attempt`, `xapi_statement` |
 | [assignment](assignment.md) | 4007 | Postgres + Blob | `assignment`, `submission`, `submission_annotation`, `assignment_group`, `assignment_group_member` |
 | [assessment](assessment.md) | 4008 | JSONB (write-heavy) | `question_library`, `question`, `quiz`, `quiz_section`, `quiz_question`, `quiz_attempt`, `quiz_response` |
 | [grading](grading.md) | 4009 | Postgres | `grade_scheme`, `grade_category`, `grade_item`, `grade` |
@@ -26,7 +26,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [analytics](analytics.md) | 4015 | Postgres | `caliper_event`, `engagement_summary`, `xapi_statement` |
 | [reporting](reporting.md) | 4016 | Postgres + JSONB | `report_definition`, `report_run` |
 | [ai](ai.md) | 4017 | pgvector + JSONB | `ai_embedding`, `ai_chat`, `ai_message` |
-| [lti](lti.md) | 4018 | Postgres + Redis | `lti_registration`, `lti_deployment` |
+| [lti](lti.md) | 4018 | Postgres | `lti_registration`, `lti_deployment`, `lti_launch_session` |
 | [sis](sis.md) | 4019 | Postgres | `sis_sync`, `sis_id_map` |
 | [video](video.md) | 4020 | Blob + JSONB | `video_asset` |
 | [search](search.md) | 4021 | Postgres (pg_trgm/vector) | `search_document` |
@@ -75,16 +75,13 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `grade.released` | - | notification |
 | `grading.final.calculated` | grading | - |
 | `grading.graded` | grading | notification |
-| `grading.graded (AGS score passback)` | - | lti |
 | `grading.graded (reflect status)` | - | assignment |
 | `guardian.linked` | user-org | - |
 | `guardian.revoked` | user-org | - |
 | `identity.role.assigned` | identity | - |
 | `identity.role.revoked` | identity | - |
 | `identity.user.authenticated` | identity | - |
-| `learning.event_captured` | analytics | - |
-| `lti.deeplink.created` | lti | - |
-| `lti.tool.launched` | lti | - |
+| `learning.event_captured` | content, analytics | - |
 | `notification.failed` | notification | - |
 | `notification.sent` | notification | - |
 | `orgunit.created` | user-org | - |
@@ -138,7 +135,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | analytics | notification, reporting |
 | reporting | course, enrollment |
 | ai | content |
-| lti | grading, identity, user-org |
+| lti | identity |
 | sis | course, enrollment, user-org |
 | video | - |
 | search | content, course, discussion |

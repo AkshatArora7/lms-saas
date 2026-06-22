@@ -19,6 +19,7 @@
     "@lms/events": "workspace:*",
     "@lms/logger": "workspace:*",
     "@lms/types": "workspace:*",
+    "fast-xml-parser": "^4.4.1",
     "fastify": "^4.28.1"
   },
   "devDependencies": {

@@ -5,6 +5,8 @@ import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { blobKey, validateUpload, type BlobSigner } from "./blob.js";
+import { parseManifest } from "./scorm/manifest.js";
+import { normalizeCmi, type RawCmi } from "./scorm/runtime.js";
 import {
   TOPIC_KINDS,
   type ContentStore,
@@ -446,6 +448,141 @@ export function registerContentRoutes(
       );
       if (!version) return notFound(reply, "Page version not found.");
       return reply.code(200).send({ version });
+    },
+  );
+
+  // --- SCORM import & runtime (#31) --------------------------------------
+  // Import: parse the (already-extracted) imsmanifest.xml and store a launchable
+  // package. Unzip + asset byte-serving is a documented follow-up; the manifest
+  // XML is supplied in the request body alongside the uploaded .zip blob URL.
+  app.post("/scorm/packages", async (req, reply) => {
+    const ctx = resolveTenantOr400(deps, req, reply);
+    if (!ctx) return reply;
+    const body = (req.body ?? {}) as {
+      manifestXml?: unknown;
+      topicId?: unknown;
+      blobUrl?: unknown;
+    };
+    if (!isNonEmptyString(body.manifestXml)) {
+      return badRequest(reply, "manifestXml is required.");
+    }
+    if (!isNonEmptyString(body.blobUrl)) {
+      return badRequest(reply, "blobUrl is required.");
+    }
+    if (body.topicId !== undefined && !isNonEmptyString(body.topicId)) {
+      return badRequest(reply, "topicId must be a non-empty string.");
+    }
+    const parsed = parseManifest(body.manifestXml);
+    if (!parsed.ok) {
+      // Map the parser reasons to a stable error code per the route contract.
+      const error =
+        parsed.reason === "unsafe_href"
+          ? "unsafe_href"
+          : parsed.reason === "no_launchable_resource"
+            ? "no_launchable_resource"
+            : "invalid_manifest";
+      return reply.code(400).send({ error, message: parsed.message });
+    }
+    const m = parsed.manifest;
+    const pkg = await deps.store.createScormPackage(ctx, {
+      blobUrl: body.blobUrl.trim(),
+      version: m.version,
+      title: m.organizationTitle,
+      launchHref: m.launchHref,
+      masteryScore: m.masteryScore,
+      manifest: m as unknown as Record<string, unknown>,
+      ...(isNonEmptyString(body.topicId) ? { topicId: body.topicId.trim() } : {}),
+    });
+    return reply.code(201).send({ package: pkg });
+  });
+
+  app.get<{ Params: { id: string } }>(
+    "/scorm/packages/:id",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const pkg = await deps.store.getScormPackage(ctx, req.params.id);
+      if (!pkg) return notFound(reply, "SCORM package not found.");
+      return reply.code(200).send({ package: pkg });
+    },
+  );
+
+  app.put<{ Params: { id: string } }>(
+    "/scorm/packages/:id/runtime",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const body = (req.body ?? {}) as {
+        learnerId?: unknown;
+        lessonStatus?: unknown;
+        completionStatus?: unknown;
+        successStatus?: unknown;
+        scoreRaw?: unknown;
+        scoreMax?: unknown;
+        scoreScaled?: unknown;
+        sessionTime?: unknown;
+        totalTime?: unknown;
+      };
+      if (!isNonEmptyString(body.learnerId)) {
+        return badRequest(reply, "learnerId is required.");
+      }
+      // Normalize the raw cmi fields (either SCORM 1.2 or 2004) before storing.
+      const raw: RawCmi = {
+        ...(typeof body.lessonStatus === "string"
+          ? { lessonStatus: body.lessonStatus }
+          : {}),
+        ...(typeof body.completionStatus === "string"
+          ? { completionStatus: body.completionStatus }
+          : {}),
+        ...(typeof body.successStatus === "string"
+          ? { successStatus: body.successStatus }
+          : {}),
+        ...(typeof body.scoreRaw === "number" ? { scoreRaw: body.scoreRaw } : {}),
+        ...(typeof body.scoreMax === "number" ? { scoreMax: body.scoreMax } : {}),
+        ...(typeof body.scoreScaled === "number"
+          ? { scoreScaled: body.scoreScaled }
+          : {}),
+        ...(typeof body.sessionTime === "string"
+          ? { sessionTime: body.sessionTime }
+          : {}),
+        ...(typeof body.totalTime === "string"
+          ? { totalTime: body.totalTime }
+          : {}),
+      };
+      const n = normalizeCmi(raw);
+      const result = await deps.store.saveScormAttempt(ctx, req.params.id, {
+        learnerId: body.learnerId.trim(),
+        completionStatus: n.completionStatus,
+        successStatus: n.successStatus,
+        scoreScaled: n.scoreScaled,
+        scoreRaw: n.scoreRaw,
+        lessonStatus: n.lessonStatus,
+        sessionTime: n.sessionTime,
+        totalTime: n.totalTime,
+      });
+      if (!result.ok) return notFound(reply, "SCORM package not found.");
+      return reply.code(200).send({ attempt: result.attempt });
+    },
+  );
+
+  app.get<{ Params: { id: string }; Querystring: { learnerId?: string } }>(
+    "/scorm/packages/:id/runtime",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const learnerId = req.query.learnerId;
+      if (!isNonEmptyString(learnerId)) {
+        return badRequest(reply, "learnerId query parameter is required.");
+      }
+      // The package must exist for this tenant; otherwise 404.
+      const pkg = await deps.store.getScormPackage(ctx, req.params.id);
+      if (!pkg) return notFound(reply, "SCORM package not found.");
+      const attempt = await deps.store.getScormAttempt(
+        ctx,
+        req.params.id,
+        learnerId.trim(),
+      );
+      return reply.code(200).send({ attempt });
     },
   );
 }

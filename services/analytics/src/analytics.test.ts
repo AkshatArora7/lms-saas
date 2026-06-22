@@ -14,16 +14,34 @@ import {
   ORG_ADMIN_EXACT,
   ORG_ADMIN_IN_SUBTREE,
 } from "./store.memory.js";
+import type { StandardRole } from "@lms/types";
+
 import {
   aggregateEvents,
   buildCourseEngagement,
   buildOrgUnitRollups,
   isCourseReadAuthorized,
+  ORG_ADMIN_ROLE,
   ratePct,
   round1,
   summarizeOrgUnitRollups,
+  SUPER_ADMIN_ROLE,
+  TEACHING_ENROLLMENT_ROLES,
   type EngagementSourceData,
 } from "./store.js";
+
+// The canonical, stable role-key vocabulary (`@lms/types`) the authz constants
+// must belong to. A compile-time `StandardRole` member used here as a runtime
+// allow-list so the guard test below proves no drift to a non-canonical name.
+const STANDARD_ROLES: readonly StandardRole[] = [
+  "learner",
+  "instructor",
+  "teaching_assistant",
+  "course_builder",
+  "observer",
+  "org_admin",
+  "super_admin",
+];
 
 const config = {
   TENANT_MODE: "hybrid",
@@ -493,33 +511,81 @@ describe("course engagement + at-risk (#277, pure builder)", () => {
   });
 });
 
+describe("authz role constants key off StandardRole (#302)", () => {
+  it("the privileged + teaching constants are all canonical StandardRole members", () => {
+    // Guard against drift: every authz role value must belong to the closed
+    // `@lms/types` union (the single source of truth), not a hand-typed literal.
+    // (`"teacher"` was such a non-canonical literal; it is now dropped.)
+    expect(STANDARD_ROLES).toContain(SUPER_ADMIN_ROLE);
+    expect(STANDARD_ROLES).toContain(ORG_ADMIN_ROLE);
+    for (const role of TEACHING_ENROLLMENT_ROLES) {
+      expect(STANDARD_ROLES).toContain(role);
+    }
+  });
+
+  it("the teaching set is exactly the canonical teaching roles (no dead 'teacher')", () => {
+    expect([...TEACHING_ENROLLMENT_ROLES]).toEqual([
+      "instructor",
+      "teaching_assistant",
+    ]);
+    expect(TEACHING_ENROLLMENT_ROLES).not.toContain("teacher" as StandardRole);
+  });
+});
+
 describe("isCourseReadAuthorized (#284, refined #294, pure)", () => {
+  // Demo personas keyed off the StandardRole constants (not bare strings). The
+  // expected allow/deny outcomes are unchanged from before #302 — this is the
+  // behavior-unchanged guarantee for the demo role set.
   it("allows a teacher of the course", () => {
     expect(
-      isCourseReadAuthorized({ roles: ["instructor"], teaches: true, adminScopesCourse: false }),
+      isCourseReadAuthorized({
+        roles: [TEACHING_ENROLLMENT_ROLES[0]!],
+        teaches: true,
+        adminScopesCourse: false,
+      }),
     ).toBe(true);
   });
   it("denies a teacher who does not teach the course", () => {
     expect(
-      isCourseReadAuthorized({ roles: ["instructor"], teaches: false, adminScopesCourse: false }),
+      isCourseReadAuthorized({
+        roles: [TEACHING_ENROLLMENT_ROLES[0]!],
+        teaches: false,
+        adminScopesCourse: false,
+      }),
     ).toBe(false);
   });
   it("allows a super_admin tenant-wide even when not teaching or scoping", () => {
     expect(
-      isCourseReadAuthorized({ roles: ["super_admin"], teaches: false, adminScopesCourse: false }),
+      isCourseReadAuthorized({
+        roles: [SUPER_ADMIN_ROLE],
+        teaches: false,
+        adminScopesCourse: false,
+      }),
     ).toBe(true);
   });
   it("allows an org_admin only when the course is in their scope (#294)", () => {
     expect(
-      isCourseReadAuthorized({ roles: ["org_admin"], teaches: false, adminScopesCourse: true }),
+      isCourseReadAuthorized({
+        roles: [ORG_ADMIN_ROLE],
+        teaches: false,
+        adminScopesCourse: true,
+      }),
     ).toBe(true);
     expect(
-      isCourseReadAuthorized({ roles: ["org_admin"], teaches: false, adminScopesCourse: false }),
+      isCourseReadAuthorized({
+        roles: [ORG_ADMIN_ROLE],
+        teaches: false,
+        adminScopesCourse: false,
+      }),
     ).toBe(false);
   });
   it("allows an out-of-scope org_admin who nonetheless teaches the course (OR)", () => {
     expect(
-      isCourseReadAuthorized({ roles: ["org_admin"], teaches: true, adminScopesCourse: false }),
+      isCourseReadAuthorized({
+        roles: [ORG_ADMIN_ROLE],
+        teaches: true,
+        adminScopesCourse: false,
+      }),
     ).toBe(true);
   });
   it("denies an unrelated role", () => {

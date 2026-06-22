@@ -563,6 +563,20 @@ enforced with **zero external setup**.
 | `admin@demo.school` / `password123` | web **and** admin console |
 | `student@demo.school` / `password123` | web app (admin console shows "not authorized") |
 
+**Prove the whole stack is healthy:** once it's up, run the full-stack smoke
+check — it asserts every needed service's `GET /health` returns 200, does one
+**authenticated gateway round-trip** (login at identity → `GET /whoami` through
+the gateway), and confirms web + admin `/` render (< 500). It **exits non-zero**
+on any failure, so it's the one command to trust the mesh is wired end-to-end:
+
+```bash
+pnpm smoke        # node scripts/smoke.mjs — green = the mesh works
+```
+
+> **Port 5432 already in use?** The bundled Postgres publishes on `${PG_PORT:-5432}`.
+> If you already run a local Postgres on 5432, set `PG_PORT=5433` (in `.env` or
+> your shell) before `pnpm start:build` so the stack doesn't collide.
+
 **Tear down:**
 
 ```bash

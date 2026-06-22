@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 
 import type { TenantContext } from "@lms/types";
 
+import {
+  FakeCourseAccessPolicy,
+  type CourseAccessPolicy,
+  type Principal,
+} from "./access.js";
 import type { CaptionTrack, Rendition } from "./transcoder.js";
 import type {
   NewVideoInput,
@@ -23,6 +28,12 @@ export class MemoryVideoStore implements VideoStore {
   constructor(
     private readonly generateId: () => string = randomUUID,
     private readonly now: () => Date = () => new Date(),
+    /**
+     * Course-access policy used to replicate the DB-side list filter offline
+     * (#319). Defaults to an empty Fake (admins see all course-scoped videos;
+     * everyone else sees only `course_id IS NULL` ones).
+     */
+    private readonly policy: CourseAccessPolicy = new FakeCourseAccessPolicy(),
   ) {}
 
   async createVideo(
@@ -39,16 +50,26 @@ export class MemoryVideoStore implements VideoStore {
       renditions: [],
       captions: [],
       durationSeconds: null,
+      courseId: input.courseId ?? null,
       createdAt: this.now().toISOString(),
     };
     this.videos.push(video);
     return { ...video };
   }
 
-  async listVideos(ctx: TenantContext): Promise<VideoRecord[]> {
-    return this.videos
+  async listVideos(
+    ctx: TenantContext,
+    viewer: Principal,
+  ): Promise<VideoRecord[]> {
+    const tenantVideos = this.videos
       .filter((v) => v.tenantId === ctx.tenantId)
-      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    const courseIds = tenantVideos
+      .map((v) => v.courseId)
+      .filter((c): c is string => c !== null);
+    const visible = await this.policy.visibleCourseIds(ctx, courseIds, viewer);
+    return tenantVideos
+      .filter((v) => v.courseId === null || visible.has(v.courseId))
       .map((v) => ({ ...v }));
   }
 

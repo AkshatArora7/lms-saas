@@ -4,6 +4,10 @@ import type { FastifyRequest } from "fastify";
 import { describe, expect, it } from "vitest";
 
 import { StubCaptioner } from "./captioner.js";
+import {
+  FakeCourseAccessPolicy,
+  type CourseAccessPolicy,
+} from "./access.js";
 import { buildApp } from "./main.js";
 import { SyncPipelineRunner } from "./pipeline.js";
 import { DEMO_TENANT_ID, MemoryVideoStore } from "./store.memory.js";
@@ -40,6 +44,8 @@ function resolveTenant(req: FastifyRequest): TenantContext {
 const TEACHER_ID = "44444444-4444-4444-4444-444444444444";
 const OTHER_ID = "55555555-5555-5555-5555-555555555555";
 const ADMIN_ID = "66666666-6666-6666-6666-666666666666";
+const COURSE_ID = "77777777-7777-7777-7777-777777777777";
+const ENROLLED_STUDENT_ID = "88888888-8888-8888-8888-888888888888";
 
 const TEACHER_HEADERS = {
   "x-tenant-id": DEMO_TENANT_ID,
@@ -56,9 +62,35 @@ const ADMIN_HEADERS = {
   "x-user-id": ADMIN_ID,
   "x-user-roles": "org_admin",
 };
+const ENROLLED_STUDENT_HEADERS = {
+  "x-tenant-id": DEMO_TENANT_ID,
+  "x-user-id": ENROLLED_STUDENT_ID,
+  "x-user-roles": "student",
+};
+
+/**
+ * Seeded course-access policy for #319 tests: in the demo tenant, the teacher
+ * and the enrolled student have access to COURSE_ID; OTHER_ID does not (the
+ * non-enrolled tenant member). Admins short-circuit by role.
+ */
+function seededPolicy(): FakeCourseAccessPolicy {
+  return new FakeCourseAccessPolicy(
+    new Map([
+      [
+        DEMO_TENANT_ID,
+        new Map([
+          [COURSE_ID, new Set([TEACHER_ID, ENROLLED_STUDENT_ID])],
+        ]),
+      ],
+    ]),
+  );
+}
 
 /** Build a test app wired to a memory store + deterministic offline seams. */
-function buildTestApp(store = new MemoryVideoStore()) {
+function buildTestApp(
+  policy: CourseAccessPolicy = new FakeCourseAccessPolicy(),
+  store = new MemoryVideoStore(undefined, undefined, policy),
+) {
   const transcoder = new StubTranscoder();
   const captioner = new StubCaptioner();
   const pipeline = new SyncPipelineRunner({ store, transcoder, captioner });
@@ -69,6 +101,7 @@ function buildTestApp(store = new MemoryVideoStore()) {
     transcoder,
     captioner,
     pipeline,
+    courseAccessPolicy: policy,
   });
 }
 
@@ -328,6 +361,165 @@ describe("video service", () => {
       headers: STUDENT_HEADERS,
     });
     expect(listA.json().videos).toHaveLength(1);
+  });
+
+  // --- Course-scoped streaming access control (#319) --------------------
+  async function createCourseVideo(
+    app: ReturnType<typeof buildTestApp>,
+  ): Promise<Record<string, unknown>> {
+    const res = await app.inject({
+      method: "POST",
+      url: "/videos",
+      headers: TEACHER_HEADERS, // uploader role; teacher is also enrolled
+      payload: {
+        title: "Course Lecture",
+        sourceBlobUrl: "https://blob.local/t/x/video/v/course-01.mp4",
+        courseId: COURSE_ID,
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const video = res.json().video as Record<string, unknown>;
+    expect(video.courseId).toBe(COURSE_ID);
+    return video;
+  }
+
+  it("lets an enrolled student read a course-scoped video", async () => {
+    const app = buildTestApp(seededPolicy());
+    const created = await createCourseVideo(app);
+    const res = await app.inject({
+      method: "GET",
+      url: `/videos/${created.id}`,
+      headers: ENROLLED_STUDENT_HEADERS,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().video.id).toBe(created.id);
+  });
+
+  it("lets a teacher/TA (enrollment row) read a course-scoped video", async () => {
+    const app = buildTestApp(seededPolicy());
+    const created = await createCourseVideo(app);
+    const res = await app.inject({
+      method: "GET",
+      url: `/videos/${created.id}`,
+      headers: TEACHER_HEADERS,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().video.id).toBe(created.id);
+  });
+
+  it("lets an admin read a course-scoped video", async () => {
+    const app = buildTestApp(seededPolicy());
+    const created = await createCourseVideo(app);
+    const res = await app.inject({
+      method: "GET",
+      url: `/videos/${created.id}`,
+      headers: ADMIN_HEADERS,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().video.id).toBe(created.id);
+  });
+
+  it("returns 404 to a non-enrolled tenant member on a course-scoped video", async () => {
+    const app = buildTestApp(seededPolicy());
+    const created = await createCourseVideo(app);
+    const res = await app.inject({
+      method: "GET",
+      url: `/videos/${created.id}`,
+      headers: STUDENT_HEADERS, // OTHER_ID is not enrolled
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe("not_found");
+  });
+
+  it("denies the stream/playback URLs to a forbidden caller (404, no body URLs)", async () => {
+    const app = buildTestApp(seededPolicy());
+    const created = await createCourseVideo(app);
+    const res = await app.inject({
+      method: "GET",
+      url: `/videos/${created.id}`,
+      headers: STUDENT_HEADERS,
+    });
+    expect(res.statusCode).toBe(404);
+    // The playback contract (sourceBlobUrl / renditions) is in the 200 body;
+    // a 404 means a forbidden course-scoped video never yields a stream URL.
+    expect(res.json().video).toBeUndefined();
+    expect(JSON.stringify(res.json())).not.toContain("course-01.mp4");
+  });
+
+  it("excludes course-scoped videos from the list for a non-enrolled member", async () => {
+    const app = buildTestApp(seededPolicy());
+    await createCourseVideo(app);
+    const list = await app.inject({
+      method: "GET",
+      url: "/videos",
+      headers: STUDENT_HEADERS,
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().videos).toHaveLength(0);
+  });
+
+  it("includes a course-scoped video in the list for an enrolled student, but not for a non-enrolled member", async () => {
+    const app = buildTestApp(seededPolicy());
+    const created = await createCourseVideo(app);
+
+    const enrolledList = await app.inject({
+      method: "GET",
+      url: "/videos",
+      headers: ENROLLED_STUDENT_HEADERS,
+    });
+    const enrolledVideos = enrolledList.json().videos as Array<
+      Record<string, unknown>
+    >;
+    expect(enrolledVideos).toHaveLength(1);
+    expect(enrolledVideos[0]!.id).toBe(created.id);
+
+    const otherList = await app.inject({
+      method: "GET",
+      url: "/videos",
+      headers: STUDENT_HEADERS,
+    });
+    expect(otherList.json().videos).toHaveLength(0);
+  });
+
+  it("keeps null-course videos readable + listed by any tenant member (no regression)", async () => {
+    const app = buildTestApp(seededPolicy());
+    const nullCourse = await createReadyVideo(app); // no courseId → null
+    await createCourseVideo(app); // course-scoped, OTHER_ID not enrolled
+
+    // Any tenant member reads the null-course video by id.
+    const byId = await app.inject({
+      method: "GET",
+      url: `/videos/${nullCourse.id}`,
+      headers: STUDENT_HEADERS,
+    });
+    expect(byId.statusCode).toBe(200);
+
+    // The list for a non-enrolled member shows ONLY the null-course video.
+    const list = await app.inject({
+      method: "GET",
+      url: "/videos",
+      headers: STUDENT_HEADERS,
+    });
+    const videos = list.json().videos as Array<Record<string, unknown>>;
+    expect(videos).toHaveLength(1);
+    expect(videos[0]!.id).toBe(nullCourse.id);
+    expect(videos[0]!.courseId).toBeNull();
+  });
+
+  it("keeps cross-tenant isolation on a course-scoped video (foreign tenant 404)", async () => {
+    const app = buildTestApp(seededPolicy());
+    const created = await createCourseVideo(app); // tenant A
+
+    const getB = await app.inject({
+      method: "GET",
+      url: `/videos/${created.id}`,
+      headers: {
+        "x-tenant-id": TENANT_B_ID,
+        "x-user-id": ENROLLED_STUDENT_ID,
+        "x-user-roles": "student",
+      },
+    });
+    expect(getB.statusCode).toBe(404);
   });
 
   // --- Pure helper unit tests -------------------------------------------

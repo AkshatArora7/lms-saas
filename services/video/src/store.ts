@@ -1,5 +1,6 @@
 import type { TenantContext } from "@lms/types";
 
+import type { Principal } from "./access.js";
 import type { CaptionTrack, Rendition } from "./transcoder.js";
 
 /** Lifecycle of a video asset (matches the `video_asset.status` CHECK). */
@@ -22,6 +23,12 @@ export interface VideoRecord {
   renditions: Rendition[];
   captions: CaptionTrack[];
   durationSeconds: number | null;
+  /**
+   * Optional course association (#319). When set, reads/streams are restricted
+   * to enrolled students / course teachers / admins (an app-authz filter over
+   * RLS); when `null`, any tenant member may read (legacy behavior).
+   */
+  courseId: string | null;
   createdAt: string;
 }
 
@@ -29,6 +36,8 @@ export interface NewVideoInput {
   title: string;
   sourceBlobUrl: string;
   ownerId: string;
+  /** Optional course to scope streaming access to (#319). */
+  courseId?: string | null;
 }
 
 /**
@@ -40,7 +49,13 @@ export interface NewVideoInput {
 export interface VideoStore {
   createVideo(ctx: TenantContext, input: NewVideoInput): Promise<VideoRecord>;
 
-  listVideos(ctx: TenantContext): Promise<VideoRecord[]>;
+  /**
+   * List videos the `viewer` may access (#319): course-scoped videos are
+   * filtered out unless the viewer is enrolled/teaching/admin; `course_id IS
+   * NULL` videos remain listed for any tenant member. Filtering is DB-side in
+   * the Postgres store; the memory store replicates it via the injected policy.
+   */
+  listVideos(ctx: TenantContext, viewer: Principal): Promise<VideoRecord[]>;
 
   getVideo(ctx: TenantContext, id: string): Promise<VideoRecord | null>;
 

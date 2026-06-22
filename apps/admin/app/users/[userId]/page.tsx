@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import {
   Alert,
-  AppShell,
   Avatar,
   Badge,
   Button,
@@ -14,6 +13,8 @@ import {
   Stack,
 } from "@lms/ui";
 import type { BadgeTone } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
+import type { MessageKey } from "@lms/i18n";
 
 import { getBranding } from "../../lib/branding";
 import { getSession, isAdmin } from "../../lib/auth";
@@ -21,26 +22,18 @@ import {
   getDirectoryUserDetail,
   type UserStatus,
 } from "../../lib/directory";
+import { resolveRequestLocale } from "../../lib/i18n";
+import { AppLocaleSwitcher } from "../../lib/locale-switcher";
+import { adminPolishCss, AppShell } from "../../lib/ui";
 import SignOutButton from "../../sign-out-button";
 
-const userCss = `
-.admin-section-title {
-  font-size: 16px;
-  margin: 0;
-}
-.admin-detail {
-  color: var(--lms-text-muted);
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.admin-detail strong {
-  color: var(--lms-text);
-}
+const userCss = `${adminPolishCss}
 .admin-profile {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: var(--lms-space-3);
+  min-width: 0;
 }
 .admin-profile__name {
   font-size: 18px;
@@ -50,10 +43,10 @@ const userCss = `
 }
 `;
 
-const STATUS_META: Record<UserStatus, { label: string; tone: BadgeTone }> = {
-  active: { label: "Active", tone: "success" },
-  invited: { label: "Invited", tone: "accent" },
-  inactive: { label: "Inactive", tone: "neutral" },
+const STATUS_META: Record<UserStatus, { labelKey: MessageKey; tone: BadgeTone }> = {
+  active: { labelKey: "admin.users.statusActive", tone: "success" },
+  invited: { labelKey: "admin.users.statusInvited", tone: "accent" },
+  inactive: { labelKey: "admin.users.statusInactive", tone: "neutral" },
 };
 
 export default async function AdminUserDetail({
@@ -64,18 +57,25 @@ export default async function AdminUserDetail({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const actions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!isAdmin(session)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell brand={brand} actions={actions}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot access the administration console."
+          title={t(m, "admin.notAuthorizedTitle")}
+          subtitle={t(m, "admin.notAuthorizedSubtitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold an administrator role, so the admin console is
-          unavailable.
+          You are signed in as <strong>{session.userId}</strong>.{" "}
+          {t(m, "admin.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -86,16 +86,16 @@ export default async function AdminUserDetail({
 
   if (result.status === "offline") {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
-        <Stack gap={4}>
+      <AppShell brand={brand} actions={actions}>
+        <Stack gap={5}>
           <Button href="/users" size="sm" variant="ghost">
-            ← Back to users
+            {t(m, "admin.backToUsers")}
           </Button>
-          <PageHeader title="User" subtitle="Account profile, roles, and activity." />
-          <Alert tone="warning">
-            The user &amp; org service is unreachable, so this profile can&apos;t
-            be loaded right now. Start the service and refresh.
-          </Alert>
+          <PageHeader
+            title={t(m, "admin.userDetail.title")}
+            subtitle={t(m, "admin.userDetail.subtitle")}
+          />
+          <Alert tone="warning">{t(m, "admin.userDetail.offlineBody")}</Alert>
         </Stack>
       </AppShell>
     );
@@ -106,14 +106,17 @@ export default async function AdminUserDetail({
   const orgUnitLabel = user.orgUnits.length ? user.orgUnits.join(", ") : "—";
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell brand={brand} actions={actions}>
       <style>{userCss}</style>
-      <Stack gap={4}>
+      <Stack gap={5}>
         <Button href="/users" size="sm" variant="ghost">
-          ← Back to users
+          {t(m, "admin.backToUsers")}
         </Button>
 
-        <PageHeader title="User" subtitle="Account profile, roles, and activity." />
+        <PageHeader
+          title={t(m, "admin.userDetail.title")}
+          subtitle={t(m, "admin.userDetail.subtitle")}
+        />
 
         <Card>
           <div className="admin-profile">
@@ -122,23 +125,27 @@ export default async function AdminUserDetail({
               <p className="admin-profile__name">{user.name}</p>
               <p className="admin-detail">{user.email}</p>
             </Stack>
-            <Chip tone={status.tone}>{status.label}</Chip>
+            <Chip tone={status.tone}>{t(m, status.labelKey)}</Chip>
           </div>
         </Card>
 
         <Grid gap={4} min="240px">
           <Card>
             <Stack gap={3}>
-              <h2 className="admin-section-title">Account</h2>
+              <h2 className="admin-section-title">
+                {t(m, "admin.userDetail.account")}
+              </h2>
               <Stack gap={1}>
                 <p className="admin-detail">
-                  <strong>Status:</strong> {status.label}
+                  <strong>{t(m, "admin.userDetail.status")}:</strong>{" "}
+                  {t(m, status.labelKey)}
                 </p>
                 <p className="admin-detail">
-                  <strong>Org unit:</strong> {orgUnitLabel}
+                  <strong>{t(m, "admin.userDetail.orgUnit")}:</strong>{" "}
+                  {orgUnitLabel}
                 </p>
                 <p className="admin-detail">
-                  <strong>User ID:</strong> {user.id}
+                  <strong>{t(m, "admin.userDetail.userId")}:</strong> {user.id}
                 </p>
               </Stack>
             </Stack>
@@ -146,7 +153,9 @@ export default async function AdminUserDetail({
 
           <Card>
             <Stack gap={3}>
-              <h2 className="admin-section-title">Roles</h2>
+              <h2 className="admin-section-title">
+                {t(m, "admin.userDetail.rolesTitle")}
+              </h2>
               <Inline gap={2}>
                 {user.roles.length ? (
                   user.roles.map((role) => (
@@ -155,7 +164,7 @@ export default async function AdminUserDetail({
                     </Badge>
                   ))
                 ) : (
-                  <span className="admin-detail">none</span>
+                  <span className="admin-detail">{t(m, "common.none")}</span>
                 )}
               </Inline>
             </Stack>
@@ -164,11 +173,12 @@ export default async function AdminUserDetail({
 
         <Card>
           <Stack gap={3}>
-            <h2 className="admin-section-title">Recent activity</h2>
+            <h2 className="admin-section-title">
+              {t(m, "admin.userDetail.activityTitle")}
+            </h2>
             <Divider />
             <p className="admin-detail">
-              Sign-in history, enrollment changes, and audit events will appear
-              here once the audit service is connected.
+              {t(m, "admin.userDetail.activityBody")}
             </p>
           </Stack>
         </Card>

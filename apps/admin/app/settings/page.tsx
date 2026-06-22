@@ -10,18 +10,17 @@ import {
   PageHeader,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../lib/branding";
 import { getSession, isAdmin } from "../lib/auth";
 import { getTenantOverview } from "../lib/tenant";
-import { AppShell } from "../lib/ui";
+import { resolveRequestLocale } from "../lib/i18n";
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
+import { adminPolishCss, AppShell } from "../lib/ui";
 import SignOutButton from "../sign-out-button";
 
-const settingsCss = `
-.set-section-title {
-  font-size: 16px;
-  margin: 0;
-}
+const settingsCss = `${adminPolishCss}
 .set-detail {
   color: var(--lms-text-muted);
   margin: 0;
@@ -71,8 +70,12 @@ const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> 
   };
 
 /** Render an effective governance setting value for display. */
-function settingValue(value: unknown): string {
-  if (typeof value === "boolean") return value ? "Enabled" : "Disabled";
+function settingValue(
+  value: unknown,
+  m: ReturnType<typeof getMessages>,
+): string {
+  if (typeof value === "boolean")
+    return value ? t(m, "admin.settings.enabled") : t(m, "admin.settings.disabled");
   if (value === null || value === undefined) return "—";
   return String(value);
 }
@@ -81,18 +84,25 @@ export default async function TenantSettings() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
+
+  const actions = (
+    <>
+      <AppLocaleSwitcher />
+      <SignOutButton />
+    </>
+  );
 
   if (!isAdmin(session)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell brand={brand} actions={actions}>
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot access the administration console."
+          title={t(m, "admin.notAuthorizedTitle")}
+          subtitle={t(m, "admin.notAuthorizedSubtitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold an administrator role, so the admin console is
-          unavailable.
+          You are signed in as <strong>{session.userId}</strong>.{" "}
+          {t(m, "admin.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -101,63 +111,68 @@ export default async function TenantSettings() {
   const overview = await getTenantOverview(session.tenantId);
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell brand={brand} actions={actions}>
       <style>{settingsCss}</style>
-      <Stack gap={4}>
+      <Stack gap={5}>
         <Button href="/" size="sm" variant="ghost">
-          ← Back to console
+          {t(m, "admin.backToConsole")}
         </Button>
 
         <PageHeader
-          title="Tenant settings"
-          subtitle="Your organisation's identity, tenancy model, and governance policies."
+          title={t(m, "admin.settings.title")}
+          subtitle={t(m, "admin.settings.subtitle")}
           actions={
             <Button disabled variant="secondary">
-              Edit settings
+              {t(m, "admin.settings.editSettings")}
             </Button>
           }
         />
 
         {overview ? (
           <>
-            <Alert tone="info">
-              Settings are read-only for now — editing identity and policies
-              arrives with the tenant service write path.
-            </Alert>
+            <Alert tone="info">{t(m, "admin.settings.readOnlyNotice")}</Alert>
 
             <Grid gap={4} min="280px">
               <Card>
                 <Stack gap={3}>
-                  <h2 className="set-section-title">Organisation</h2>
+                  <h2 className="admin-section-title">
+                    {t(m, "admin.settings.organisation")}
+                  </h2>
                   <Inline gap={3}>
                     <BrandMark brand={brand} decorative size={44} />
                     <Stack gap={1}>
                       <p className="set-brand-name">{overview.name}</p>
                       <p className="set-detail">
-                        {overview.tenancy.label} tenant
+                        {t(m, "admin.settings.tenantLabel", {
+                          label: overview.tenancy.label,
+                        })}
                       </p>
                     </Stack>
                   </Inline>
                   <Stack gap={1}>
                     <p className="set-detail">
-                      <strong>Tenant ID:</strong> {overview.tenantId}
+                      <strong>{t(m, "admin.settings.tenantId")}:</strong>{" "}
+                      {overview.tenantId}
                     </p>
                     <p className="set-detail">
-                      <strong>Slug:</strong> {overview.slug}
+                      <strong>{t(m, "admin.settings.slug")}:</strong>{" "}
+                      {overview.slug}
                     </p>
                     <p className="set-detail">
-                      <strong>Region:</strong> {overview.region}
+                      <strong>{t(m, "admin.settings.region")}:</strong>{" "}
+                      {overview.region}
                     </p>
                     <div className="set-detail">
                       <Inline align="center" gap={2}>
-                        <strong>Status:</strong>
+                        <strong>{t(m, "admin.settings.status")}:</strong>
                         <Badge tone={STATUS_TONE[overview.status] ?? "neutral"}>
                           {overview.status}
                         </Badge>
                       </Inline>
                     </div>
                     <p className="set-detail">
-                      <strong>Plan:</strong> {overview.plan ?? "—"}
+                      <strong>{t(m, "admin.settings.plan")}:</strong>{" "}
+                      {overview.plan ?? "—"}
                     </p>
                   </Stack>
                 </Stack>
@@ -166,7 +181,9 @@ export default async function TenantSettings() {
               <Card>
                 <Stack gap={3}>
                   <Inline gap={2} justify="space-between">
-                    <h2 className="set-section-title">Tenancy model</h2>
+                    <h2 className="admin-section-title">
+                      {t(m, "admin.settings.tenancyModel")}
+                    </h2>
                     <Badge
                       tone={
                         overview.tenancy.model === "silo" ? "accent" : "neutral"
@@ -183,37 +200,35 @@ export default async function TenantSettings() {
 
             <Card>
               <Stack gap={3}>
-                <h2 className="set-section-title">Governance policies</h2>
+                <h2 className="admin-section-title">
+                  {t(m, "admin.settings.governanceTitle")}
+                </h2>
                 {Object.keys(overview.settings).length ? (
                   <ul className="set-settings">
                     {Object.entries(overview.settings).map(([key, value]) => (
                       <li key={key}>
                         <code>{key}</code>
                         <span className="set-detail">
-                          <strong>{settingValue(value)}</strong>
+                          <strong>{settingValue(value, m)}</strong>
                         </span>
                       </li>
                     ))}
                   </ul>
                 ) : (
                   <p className="set-detail">
-                    No governance policies are configured — platform defaults
-                    apply.
+                    {t(m, "admin.settings.noPolicies")}
                   </p>
                 )}
                 <Inline gap={2}>
                   <Button href="/branding" variant="secondary">
-                    View branding
+                    {t(m, "admin.settings.viewBranding")}
                   </Button>
                 </Inline>
               </Stack>
             </Card>
           </>
         ) : (
-          <Alert tone="warning">
-            The tenant service is unreachable, so tenancy details cannot be
-            shown right now. Start the tenant service and reload.
-          </Alert>
+          <Alert tone="warning">{t(m, "admin.settings.offlineBody")}</Alert>
         )}
       </Stack>
     </AppShell>

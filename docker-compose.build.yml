@@ -161,6 +161,11 @@ services:
       context: .
       dockerfile: services/attendance/Dockerfile
 
+  relay:
+    build:
+      context: .
+      dockerfile: services/relay/Dockerfile
+
   # Learner web app (already builds in the base file; kept here for parity).
   web:
     build:

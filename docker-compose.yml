@@ -75,7 +75,9 @@ services:
       POSTGRES_PASSWORD: lms
       POSTGRES_DB: lms
     ports:
-      - "5432:5432"
+      # Publish via a variable so a collaborator who already runs a local Postgres
+      # on 5432 can override the host port (e.g. PG_PORT=5433) and still `up`.
+      - "${PG_PORT:-5432}:5432"
     volumes:
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./database/policies/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
@@ -604,6 +606,36 @@ services:
       - "4025:4025"
     restart: unless-stopped
 
+  # Transactional-outbox publisher (issue #344). A long-running WORKER, not a
+  # gateway upstream: it drains event_outbox per-tenant (under FORCE RLS via
+  # @lms/db.withTenant) and POSTs each event to the notification service's
+  # `POST /events` for fan-out. It still runs a tiny Fastify server purely for a
+  # `/health` liveness probe (+ a manual `/relay/run` trigger) on port 4026, so
+  # the standard node-http healthcheck applies. depends_on notification (its
+  # delivery target) + seed (so the demo tenant exists before the first drain).
+  relay:
+    # Local-build fallback (uncomment to build instead of pulling GHCR):
+    # build:
+    #   context: .
+    #   dockerfile: services/relay/Dockerfile
+    image: ghcr.io/akshatarora7/lms-saas/relay:latest
+    environment:
+      <<: *common-env
+      PORT: 4026
+      NOTIFICATION_EVENTS_URL: http://notification:4012/events
+      RELAY_POLL_INTERVAL_MS: ${RELAY_POLL_INTERVAL_MS:-5000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      notification:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    healthcheck: *svc-healthcheck
+    ports:
+      - "4026:4026"
+    restart: unless-stopped
+
   # Learner web app (Next.js standalone). Server-side *_URL env points at the
   # services it calls via compose DNS. Healthy = `/` returns < 500.
   web:
@@ -621,6 +653,7 @@ services:
       ENROLLMENT_SERVICE_URL: http://enrollment:4004
       COURSE_SERVICE_URL: http://course:4005
       CONTENT_SERVICE_URL: http://content:4006
+      TENANT_SERVICE_URL: http://tenant:4002
       ASSIGNMENT_SERVICE_URL: http://assignment:4007
       GRADING_SERVICE_URL: http://grading:4009
       DISCUSSION_SERVICE_URL: http://discussion:4010
@@ -638,6 +671,8 @@ services:
       course:
         condition: service_healthy
       content:
+        condition: service_healthy
+      tenant:
         condition: service_healthy
       assignment:
         condition: service_healthy
@@ -680,6 +715,7 @@ services:
       IDENTITY_URL: http://identity:4001
       USER_ORG_SERVICE_URL: http://user-org:4003
       COURSE_SERVICE_URL: http://course:4005
+      CONTENT_SERVICE_URL: http://content:4006
       TENANT_SERVICE_URL: http://tenant:4002
       ANALYTICS_SERVICE_URL: http://analytics:4015
     depends_on:
@@ -688,6 +724,8 @@ services:
       user-org:
         condition: service_healthy
       course:
+        condition: service_healthy
+      content:
         condition: service_healthy
       tenant:
         condition: service_healthy

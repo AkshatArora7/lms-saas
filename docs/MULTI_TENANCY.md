@@ -109,8 +109,100 @@ Promote a tenant to silo when it:
 - requires residency in a region without a pool, or
 - signs an enterprise contract demanding physical isolation.
 
-Migration: copy the tenant's rows into the new per-tenant DB (bulk copy), repoint
-the catalog mapping, flip `tier` to `silo`. **No application code change.**
+## Pool → silo promotion saga (#3)
+
+Promotion is a **compensating saga** owned by the control-plane `tenant` service
+(`services/tenant/src/silo.*.ts`). Because the silo branch gets the **identical**
+`schema.sql` + `rls.sql`, pool ↔ silo is schema-identical and **requires no
+application code change** — the saga only writes to the `tenant` catalog and a
+control-plane saga-state table.
+
+### The injectable port
+
+All infra-facing work sits behind `SiloProvisioningPort` (`silo.ts`) — exactly
+like the SIS OneRoster client and the tenant offboarding ports — so the engine is
+hermetic and testable with a fake (no Neon, no network):
+
+| Port method | Purpose |
+| ----------- | ------- |
+| `createProject(tenantId, region)` | Stand up the dedicated Neon project (idempotent). |
+| `createBranch(tenantId, projectId)` | Create the primary branch + its DSN secret-store ref. |
+| `runMigrations(target)` | Apply `schema.sql` + `rls.sql` so the silo is schema-identical to pool. |
+| `copyTenantData(tenantId, target)` | Bulk-copy this tenant's rows pool → silo for every tenant-scoped table (preserving per-row `tenant_id`). |
+| `deprovision(tenantId, target)` | Compensation: tear down the project/branch (idempotent). |
+
+Production wires the Neon REST adapter `createNeonSiloPort` (`silo.neon.ts`);
+tests inject a fake.
+
+### The five ordered steps
+
+The pure engine `promoteToSilo(input, deps)` (`silo.saga.ts`) runs five steps,
+each with a forward action and a compensation:
+
+| # | Step | Forward | Compensation |
+| - | ---- | ------- | ------------ |
+| 1 | `provision` | `createProject` + `createBranch` → `SiloTarget` | `deprovision(target)` |
+| 2 | `migrate` | `runMigrations(target)` | (covered by step-1 deprovision) |
+| 3 | `copy` | `copyTenantData(tenantId, target)` | (data lives in the soon-deprovisioned branch) |
+| 4 | `repoint` | `store.setDatabaseRef(id, target.databaseRef)` | `store.setDatabaseRef(id, prevRef)` |
+| 5 | `flip` | `store.setTier(id, 'silo')` (+ activate if it was `provisioning`) | `store.setTier(id, prevTier)` (+ revert status) |
+
+**Repoint (4) deliberately precedes flip (5)** so a partially-failed run never
+leaves a `silo`-tier tenant whose `database_ref` is null (which the routing layer
+above would treat as unroutable). The engine captures the prior `tier` and
+`database_ref` at run start so a compensation reverts *exactly*.
+
+### Rollback rule
+
+On **any** step failure the engine runs the compensations of all *completed*
+steps in **reverse order** — catalog first (cheap, local: revert
+`database_ref`/`tier`), infra last (`deprovision` tears down the branch/project)
+— then marks the run `rolled_back`. If a compensation itself throws, the run is
+marked `compensation_failed` (surfaced for manual intervention, never silently
+swallowed). This is the AC's rollback path; forward-resume of a partial run is a
+non-goal — recovery is a fresh promote with a new idempotency key.
+
+### Idempotency & saga state
+
+Each run is one row of the **control-plane** `tenant_silo_migration` table (no
+RLS — it records platform-operator actions, like `tenant_admin_delegation`).
+`idempotency_key` is **UNIQUE**, so a re-POST with the same key returns the
+existing run rather than starting a second saga. The row carries `status`
+(`pending` → in-flight → `completed`/`rolled_back`/`compensation_failed`), the
+captured prev-values, the `SiloTarget` once known, and `completed_steps[]` that
+drives the reverse-order rollback.
+
+### HTTP contract
+
+| Method | Path | Behaviour |
+| ------ | ---- | --------- |
+| `POST` | `/tenants/:id/promote-to-silo` | Body `{ idempotencyKey, actorId?, region? }`. Validates the id is a uuid, the tenant exists, and `tier='pool'`. Runs the saga: **200** `{ migration, tenant }` on success; **409** `{ migration, failedStep }` on failure+rollback; **409** `already_silo` if not pool-tier; **409** `idempotency_key_conflict` on cross-tenant key reuse; **400** on a missing key/bad uuid; **404** unknown tenant. |
+| `GET` | `/tenants/:id/silo-migration` | Read the latest run: `{ migration: { id, tenantId, status, completedSteps, target?, error?, startedAt, finishedAt } }`; **404** if none. |
+
+`database_ref` (and the run's `target`) are surfaced only as **opaque
+secret-store refs** — never a raw DSN. The route completes synchronously with the
+fake adapter; the status endpoint plus a 202 path are designed in so the live
+adapter can move bulk copy to async without an API break.
+
+### Authorization
+
+`POST /tenants/:id/promote-to-silo` is a **destructive control-plane action** and
+carries **no in-service claim** — consistent with the whole control-plane surface,
+including the equally destructive `POST /tenants/:id/offboard`. The
+gateway/platform-admin **super-admin gate is MANDATORY** and must be in place
+before this route is enabled in production (see follow-ups below).
+
+### Follow-ups (not yet implemented)
+
+1. **Live Neon adapter.** `silo.neon.ts` currently ships as a documented **stub**
+   whose methods throw `not_implemented`. The real implementation — Neon REST
+   `createProject`/`createBranch`, a secret-store **write** of the resulting
+   `database_ref`, and prod `runMigrations`/`copyTenantData` (preserving per-row
+   `tenant_id`) — is deferred. The saga engine, catalog repoint, and rollback ship
+   now and are fully covered via the fake adapter.
+2. **Mandatory upstream super-admin gate** for `POST /tenants/:id/promote-to-silo`
+   at the gateway/platform-admin layer (consistent with the offboard route; no
+   in-service claim is invented).
 
 ## Tenant-aware caching & analytics
 

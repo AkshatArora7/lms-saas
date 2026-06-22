@@ -23,6 +23,7 @@ interface TenantRow {
   status: TenantStatus;
   region: string;
   plan_id: string | null;
+  database_ref: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -42,6 +43,7 @@ function toRecord(row: TenantRow): TenantRecord {
     status: row.status,
     region: row.region,
     planId: row.plan_id ?? null,
+    databaseRef: row.database_ref ?? null,
     subdomain: subdomainFor(row.slug),
     createdAt: asIso(row.created_at),
     updatedAt: asIso(row.updated_at),
@@ -49,7 +51,7 @@ function toRecord(row: TenantRow): TenantRecord {
 }
 
 const SELECT_COLUMNS = `id, slug, name, kind, parent_id, tier, status, region,
-  plan_id, created_at, updated_at`;
+  plan_id, database_ref, created_at, updated_at`;
 
 /**
  * Control-plane tenant store. The `tenant` table is the tenant registry itself
@@ -224,6 +226,28 @@ export function createPrismaStore(): TenantStore {
         RETURNING ${SELECT_COLUMNS}`,
         id,
         status,
+      );
+      return rows[0] ? toRecord(rows[0]) : null;
+    },
+
+    async setDatabaseRef(id, databaseRef) {
+      const rows = await db.$queryRawUnsafe<TenantRow[]>(
+        `UPDATE tenant SET database_ref = $2, updated_at = now()
+          WHERE id = $1::uuid
+        RETURNING ${SELECT_COLUMNS}`,
+        id,
+        databaseRef,
+      );
+      return rows[0] ? toRecord(rows[0]) : null;
+    },
+
+    async setTier(id, tier) {
+      const rows = await db.$queryRawUnsafe<TenantRow[]>(
+        `UPDATE tenant SET tier = $2, updated_at = now()
+          WHERE id = $1::uuid
+        RETURNING ${SELECT_COLUMNS}`,
+        id,
+        tier,
       );
       return rows[0] ? toRecord(rows[0]) : null;
     },

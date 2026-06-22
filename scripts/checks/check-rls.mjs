@@ -20,6 +20,7 @@ const EXCEPTIONS = {
   permission: "global permission catalog shared across tenants (no tenant_id)",
   role_permission: "join-based RLS via parent role (rls.sql tenant_isolation on role)",
   tenant_admin_delegation: "cross-tenant control plane; uses delegator/scope tenant ids, not tenant_id",
+  tenant_silo_migration: "control-plane saga state; platform super-admin pool->silo promotion, no owning tenant context at write time",
 };
 
 function main() {

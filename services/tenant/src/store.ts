@@ -26,6 +26,12 @@ export interface TenantRecord {
   status: TenantStatus;
   region: string;
   planId: string | null;
+  /**
+   * OPAQUE secret-store reference to the tenant's dedicated DSN, set when the
+   * tenant is promoted to `silo`; null for pool tenants (shared infra). NEVER a
+   * raw DSN — downstream resolves the ref to a connection string out of band.
+   */
+  databaseRef: string | null;
   /** Derived routing host: `${slug}.lms.app`. Not stored; computed on read. */
   subdomain: string;
   createdAt: string;
@@ -88,6 +94,19 @@ export interface TenantStore {
   listSubtree(rootId: string): Promise<TenantRecord[]>;
   /** Transition a tenant's lifecycle status (e.g. to `deleted` on offboarding). */
   setStatus(id: string, status: TenantStatus): Promise<TenantRecord | null>;
+  /**
+   * Repoint the silo DSN reference (the silo-promotion saga's `repoint` step;
+   * its compensation reverts to the prior value / null). Control-plane.
+   */
+  setDatabaseRef(
+    id: string,
+    databaseRef: string | null,
+  ): Promise<TenantRecord | null>;
+  /**
+   * Flip pool<->silo (the saga's `flip` step; compensation reverts). The
+   * `database_ref` must be set before flipping to silo. Control-plane.
+   */
+  setTier(id: string, tier: TenantTier): Promise<TenantRecord | null>;
 }
 
 /** Derived routing host for a tenant slug. Pure so stores and tests share it. */

@@ -11,6 +11,7 @@ import {
   type ProvisionTenantResult,
   type TenantRecord,
   type TenantStore,
+  type TenantTier,
 } from "./store.js";
 
 /** Plan codes the demo control plane knows about; mirrors seeded `plan` rows. */
@@ -90,6 +91,7 @@ export class MemoryTenantStore implements TenantStore {
       status: "provisioning",
       region,
       planId,
+      databaseRef: null,
       subdomain: subdomainFor(slug),
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -132,6 +134,25 @@ export class MemoryTenantStore implements TenantStore {
     const tenant = this.tenants.find((t) => t.id === id);
     if (!tenant) return null;
     tenant.status = status;
+    tenant.updatedAt = this.now().toISOString();
+    return tenant;
+  }
+
+  async setDatabaseRef(
+    id: string,
+    databaseRef: string | null,
+  ): Promise<TenantRecord | null> {
+    const tenant = this.tenants.find((t) => t.id === id);
+    if (!tenant) return null;
+    tenant.databaseRef = databaseRef;
+    tenant.updatedAt = this.now().toISOString();
+    return tenant;
+  }
+
+  async setTier(id: string, tier: TenantTier): Promise<TenantRecord | null> {
+    const tenant = this.tenants.find((t) => t.id === id);
+    if (!tenant) return null;
+    tenant.tier = tier;
     tenant.updatedAt = this.now().toISOString();
     return tenant;
   }
@@ -194,6 +215,7 @@ export function createSeededMemoryStore(
     status: "active",
     region: "us-east",
     planId: null,
+    databaseRef: null,
     subdomain: subdomainFor("demo"),
     createdAt: new Date("2026-01-01T00:00:00.000Z").toISOString(),
     updatedAt: new Date("2026-01-01T00:00:00.000Z").toISOString(),

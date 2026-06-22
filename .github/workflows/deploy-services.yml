@@ -1,13 +1,20 @@
 name: Deploy Services
 
 # Builds and publishes container images for changed microservices to the
-# GitHub Container Registry (ghcr.io). A downstream environment (Fly.io,
-# Render, Railway, or a Vercel-adjacent container host) pulls these images.
-# Only services with changes are built (path-filtered matrix).
+# GitHub Container Registry (ghcr.io), then deploys them to Fly.io staging
+# (see docs/ADR-0032-container-host-flyio.md). Only services with changes
+# are built (path-filtered matrix). Images are tagged with the commit SHA on
+# every build and with semver tags on git release tags (v*). On pushes to
+# main the built services are deployed to Fly.io and smoke-tested at /health.
+#
+# Fly deploys are guarded: if the FLY_API_TOKEN secret is absent the deploy
+# job skips GREEN (mirrors deploy-web.yml) so forks/PRs without the secret
+# still pass.
 
 on:
   push:
     branches: [main]
+    tags: ["v*"]
     paths: ["services/**", "packages/**", ".github/workflows/deploy-services.yml"]
   # Manual re-deploy: pick a single service or "all". Useful when a push
   # deploy was skipped/failed and the images still need publishing.
@@ -54,6 +61,7 @@ jobs:
             lti: services/lti/**
             mobile-bff: services/mobile-bff/**
             notification: services/notification/**
+            relay: services/relay/**
             reporting: services/reporting/**
             rubric: services/rubric/**
             search: services/search/**
@@ -70,7 +78,7 @@ jobs:
           INPUT_SERVICE: ${{ github.event.inputs.service }}
           PUSH_SERVICES: ${{ steps.filter.outputs.changes }}
         run: |
-          ALL='["ai","analytics","announcement","assessment","assignment","attendance","audit","billing","calendar","content","course","discussion","enrollment","gateway","grading","identity","lti","mobile-bff","notification","reporting","rubric","search","sis","tenant","user-org","video"]'
+          ALL='["ai","analytics","announcement","assessment","assignment","attendance","audit","billing","calendar","content","course","discussion","enrollment","gateway","grading","identity","lti","mobile-bff","notification","relay","reporting","rubric","search","sis","tenant","user-org","video"]'
           if [ "$EVENT" = "push" ]; then
             echo "services=$PUSH_SERVICES" >> "$GITHUB_OUTPUT"
           elif [ "$INPUT_SERVICE" = "all" ]; then
@@ -105,14 +113,94 @@ jobs:
         id: image
         run: echo "repo=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
+      # Compute image tags/labels. SHA tag (no prefix) keeps parity with the
+      # deploy job's ghcr.io/<repo>/<svc>:<sha> reference; semver tags publish
+      # on git release tags (v*); latest only on the default branch.
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.image.outputs.repo }}/${{ matrix.service }}
+          tags: |
+            type=sha,format=long,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
       - name: Build & push ${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
           context: .
           file: services/${{ matrix.service }}/Dockerfile
           push: true
-          tags: |
-            ghcr.io/${{ steps.image.outputs.repo }}/${{ matrix.service }}:latest
-            ghcr.io/${{ steps.image.outputs.repo }}/${{ matrix.service }}:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    needs: [changes, build-push]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging
+    strategy:
+      # Deploy each built service independently; one failure shouldn't abort
+      # the others (each smoke-tests its own /health).
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    steps:
+      # Guard: only deploy when FLY_API_TOKEN is configured. Mirrors
+      # deploy-web.yml so forks/PRs without the secret skip GREEN.
+      - name: Check Fly credentials
+        id: guard
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -n "$FLY_API_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice ::FLY_API_TOKEN not set — skipping Fly deploy (configure to enable)"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.guard.outputs.enabled == 'true'
+
+      - name: Compute lowercase image base
+        id: image
+        if: steps.guard.outputs.enabled == 'true'
+        run: echo "repo=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Install flyctl
+        if: steps.guard.outputs.enabled == 'true'
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy ${{ matrix.service }} to Fly.io (staging)
+        if: steps.guard.outputs.enabled == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy \
+            --app lms-${{ matrix.service }}-staging \
+            --image ghcr.io/${{ steps.image.outputs.repo }}/${{ matrix.service }}:${{ github.sha }} \
+            --config services/${{ matrix.service }}/fly.toml \
+            --strategy rolling
+
+      # Post-deploy smoke test: poll /health until HTTP 200 (~120s) or fail.
+      - name: Smoke test /health
+        if: steps.guard.outputs.enabled == 'true'
+        run: |
+          URL="https://lms-${{ matrix.service }}-staging.fly.dev/health"
+          echo "Polling $URL for HTTP 200 (timeout ~120s)..."
+          for i in $(seq 1 24); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$URL" || echo 000)
+            if [ "$CODE" = "200" ]; then
+              echo "OK: $URL returned 200 after $((i * 5))s"
+              exit 0
+            fi
+            echo "attempt $i: got $CODE, retrying in 5s..."
+            sleep 5
+          done
+          echo "::error ::Smoke test failed: $URL never returned 200"
+          exit 1

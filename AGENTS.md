@@ -86,6 +86,37 @@ run them locally:
 | `pnpm check:handshake` | [`check-handshake.mjs`](scripts/checks/check-handshake.mjs) | Validates the multi-agent delegation protocol's machine-readable surfaces (see [`docs/AGENT_DELEGATION_PROTOCOL.md`](docs/AGENT_DELEGATION_PROTOCOL.md) §7): the handshake template (`.claude/agents/handshake.template.md`) has all seven required sections (§1 Task … §7 Handshake log), in order; and the agent roles named in `docs/AGENT_DELEGATION_PROTOCOL.md` and `.claude/agents/README.md` match the actual `.claude/agents/*.md` files (no undocumented agent file, no documented role without a file). Folded into `check:rules`. Live handshakes are git-ignored, so their lint is local-only and non-fatal in CI. |
 | `pnpm test:checks` | guard unit tests | `node --test` over the guards' own red/green unit tests (`scripts/checks/**/*.test.mjs`). |
 
+### 3.2 Repository automation / required owner settings
+
+Two GitHub Actions workflows keep merged work flowing to `main` with no manual
+clicks. They are least-privilege (`GITHUB_TOKEN`, `contents: write` +
+`pull-requests: write`) and **warn-not-fail** when an owner setting is missing,
+so they are safe no-ops until the one-time settings below are in place.
+
+| Workflow | Trigger | What it does |
+| -------- | ------- | ------------ |
+| [`.github/workflows/auto-merge.yml`](.github/workflows/auto-merge.yml) | PR opened / reopened / ready-for-review / synchronize (non-draft, base `main`) | Enables **auto-merge (squash)** so a PR merges itself once all required checks pass. |
+| [`.github/workflows/auto-update-branches.yml`](.github/workflows/auto-update-branches.yml) | push to `main` | **Updates behind PR branches** — merges the new `main` into each open non-draft PR targeting `main`, satisfying "Require branches up to date" so auto-merge can fire. Per-PR failures (conflicts) warn and are skipped. |
+
+**Already active.** Branch protection on `main` requires the
+**`Lint · Typecheck · Build · Test`** status check (job name in
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml)) with **"Require branches
+up to date"** on. This is what both workflows above wait on / unblock.
+
+**Owner-only, one-time (the `GITHUB_TOKEN` cannot set these — do them in the
+GitHub UI):**
+
+- **Delete head branches on merge** — *Settings → General → Pull Requests →*
+  check **"Automatically delete head branches"**.
+- **Project board item → Done on merge** — either use the **Projects (v2)
+  built-in Workflow** (*Project → ⋯ → Workflows →* "Item closed" / PR "merged"
+  → set **Status = Done**, no token needed), **or** add a workflow using a
+  **PAT / GitHub App token with `project` scope** (`GITHUB_TOKEN` does not carry
+  it).
+
+The workflow file headers carry the full rationale (loop-safety, `GITHUB_TOKEN`
+caveat, enumeration approach) — refer to them rather than duplicating it here.
+
 ---
 
 ## 4. Definition of done

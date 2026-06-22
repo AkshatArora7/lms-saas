@@ -8,9 +8,12 @@ import {
   Stack,
 } from "@lms/ui";
 import type { BadgeTone } from "@lms/ui";
+import { getMessages, t, type MessageKey } from "@lms/i18n";
 
 import { getBranding } from "../../lib/branding";
 import { getSession } from "../../lib/auth";
+import { resolveRequestLocale } from "../../lib/i18n";
+import { AppLocaleSwitcher } from "../../lib/locale-switcher";
 import {
   getCourseDetail,
   type ContentItemStatus,
@@ -111,7 +114,7 @@ const COURSE_STYLES = `
 .lms-cd__type {
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .lms-cd__item-link {
   color: var(--lms-accent);
@@ -135,16 +138,19 @@ const COURSE_STYLES = `
 }
 `;
 
-const TYPE_LABEL: Record<ContentItemType, string> = {
-  lesson: "Lesson",
-  assignment: "Assignment",
-  quiz: "Quiz",
+const TYPE_LABEL_KEY: Record<ContentItemType, MessageKey> = {
+  lesson: "course.typeLesson",
+  assignment: "course.typeAssignment",
+  quiz: "course.typeQuiz",
 };
 
-const STATUS_META: Record<ContentItemStatus, { label: string; tone: BadgeTone }> = {
-  completed: { label: "Completed", tone: "success" },
-  in_progress: { label: "In progress", tone: "accent" },
-  not_started: { label: "Not started", tone: "neutral" },
+const STATUS_META: Record<
+  ContentItemStatus,
+  { labelKey: MessageKey; tone: BadgeTone }
+> = {
+  completed: { labelKey: "course.statusCompleted", tone: "success" },
+  in_progress: { labelKey: "course.statusInProgress", tone: "accent" },
+  not_started: { labelKey: "course.statusNotStarted", tone: "neutral" },
 };
 
 export default async function CoursePage({
@@ -155,6 +161,7 @@ export default async function CoursePage({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
   const course = await getCourseDetail(
     params.courseId,
     session.userId,
@@ -163,12 +170,20 @@ export default async function CoursePage({
   if (!course) notFound();
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell
+      brand={brand}
+      actions={
+        <>
+          <AppLocaleSwitcher />
+          <SignOutButton />
+        </>
+      }
+    >
       <style>{COURSE_STYLES}</style>
 
       <div className="lms-cd">
         <Button href="/" size="sm" variant="ghost">
-          ← Back to dashboard
+          {t(m, "common.backToDashboard")}
         </Button>
 
         <Card>
@@ -190,7 +205,7 @@ export default async function CoursePage({
                 size="sm"
                 variant="secondary"
               >
-                Discussions
+                {t(m, "course.discussions")}
               </Button>
             </div>
           </header>
@@ -199,7 +214,7 @@ export default async function CoursePage({
         <div className="lms-cd__grid">
           <section aria-labelledby="modules-heading">
             <h2 className="lms-cd__section-heading" id="modules-heading">
-              Course content
+              {t(m, "course.courseContent")}
             </h2>
             {course.modules.length ? (
               <Stack gap={4}>
@@ -215,7 +230,7 @@ export default async function CoursePage({
                               <span className="lms-cd__item-main">
                                 <Badge tone="neutral">
                                   <span className="lms-cd__type">
-                                    {TYPE_LABEL[item.type]}
+                                    {t(m, TYPE_LABEL_KEY[item.type])}
                                   </span>
                                 </Badge>
                                 <a
@@ -225,7 +240,9 @@ export default async function CoursePage({
                                   {item.title}
                                 </a>
                               </span>
-                              <Chip tone={status.tone}>{status.label}</Chip>
+                              <Chip tone={status.tone}>
+                                {t(m, status.labelKey)}
+                              </Chip>
                             </li>
                           );
                         })}
@@ -236,9 +253,9 @@ export default async function CoursePage({
               </Stack>
             ) : (
               <EmptyState
-                description="Content for this course hasn't been published yet."
+                description={t(m, "course.noModulesBody")}
                 icon={<ContentIcon />}
-                title="No modules yet"
+                title={t(m, "course.noModulesTitle")}
               />
             )}
           </section>
@@ -247,16 +264,20 @@ export default async function CoursePage({
             <Card className="lms-cd__aside-card">
               <Stack gap={4}>
                 <h2 className="lms-cd__section-heading" id="overview-heading">
-                  Overview
+                  {t(m, "course.overview")}
                 </h2>
                 <Stack gap={3}>
                   <div className="lms-cd__ov-row">
-                    <span className="lms-cd__ov-label">Your role</span>
+                    <span className="lms-cd__ov-label">
+                      {t(m, "course.yourRole")}
+                    </span>
                     <span className="lms-cd__ov-value">{course.role}</span>
                   </div>
                   {course.instructor ? (
                     <div className="lms-cd__ov-row">
-                      <span className="lms-cd__ov-label">Instructor</span>
+                      <span className="lms-cd__ov-label">
+                        {t(m, "course.instructor")}
+                      </span>
                       <span className="lms-cd__ov-value">
                         {course.instructor}
                       </span>
@@ -264,13 +285,17 @@ export default async function CoursePage({
                   ) : null}
                   {course.term ? (
                     <div className="lms-cd__ov-row">
-                      <span className="lms-cd__ov-label">Term</span>
+                      <span className="lms-cd__ov-label">
+                        {t(m, "course.term")}
+                      </span>
                       <span className="lms-cd__ov-value">{course.term}</span>
                     </div>
                   ) : null}
                   {course.code ? (
                     <div className="lms-cd__ov-row">
-                      <span className="lms-cd__ov-label">Course code</span>
+                      <span className="lms-cd__ov-label">
+                        {t(m, "course.courseCode")}
+                      </span>
                       <span className="lms-cd__ov-value">{course.code}</span>
                     </div>
                   ) : null}

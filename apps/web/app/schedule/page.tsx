@@ -11,9 +11,12 @@ import {
   Stack,
   type BadgeTone,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../lib/branding";
 import { getSession } from "../lib/auth";
+import { resolveRequestLocale } from "../lib/i18n";
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
 import {
   getWeekSchedule,
   groupByDay,
@@ -222,6 +225,7 @@ export default async function SchedulePage() {
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
 
   const entries = await getWeekSchedule(session.userId, session.tenantId);
   const days = groupByDay(entries);
@@ -229,16 +233,24 @@ export default async function SchedulePage() {
   const nextEntryId = summary.next?.id;
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell
+      brand={brand}
+      actions={
+        <>
+          <AppLocaleSwitcher />
+          <SignOutButton />
+        </>
+      }
+    >
       <style>{scheduleCss}</style>
       <Stack gap={4}>
         <Button href="/" size="sm" variant="ghost">
-          ← Back to dashboard
+          {t(m, "common.backToDashboard")}
         </Button>
 
         <PageHeader
-          title="My schedule"
-          subtitle="Your classes this week — times, rooms, and instructors."
+          title={t(m, "schedule.title")}
+          subtitle={t(m, "schedule.subtitle")}
         />
 
         {entries.length ? (
@@ -253,7 +265,9 @@ export default async function SchedulePage() {
                 >
                   <Stack gap={1}>
                     <p className="sched-stat">{summary.totalClasses}</p>
-                    <p className="sched-stat-label">Classes this week</p>
+                    <p className="sched-stat-label">
+                      {t(m, "schedule.statClasses")}
+                    </p>
                   </Stack>
                 </div>
               </Card>
@@ -266,7 +280,9 @@ export default async function SchedulePage() {
                 >
                   <Stack gap={1}>
                     <p className="sched-stat">{summary.daysWithClasses}</p>
-                    <p className="sched-stat-label">Teaching days</p>
+                    <p className="sched-stat-label">
+                      {t(m, "schedule.statDays")}
+                    </p>
                   </Stack>
                 </div>
               </Card>
@@ -278,38 +294,53 @@ export default async function SchedulePage() {
                   }
                 >
                   <div className="sched-next-card">
-                    <p className="sched-kicker">Up next</p>
+                    <p className="sched-kicker">{t(m, "schedule.upNext")}</p>
                     {summary.next ? (
                       <>
                         <p className="sched-next-title">{summary.next.course}</p>
                         <p className="sched-meta">
-                          {summary.next.day} · {formatRange(summary.next)} ·{" "}
-                          {summary.next.room}
+                          {t(m, "schedule.nextMeta", {
+                            day: summary.next.day,
+                            time: formatRange(summary.next),
+                            room: summary.next.room,
+                          })}
                         </p>
                       </>
                     ) : (
-                      <p className="sched-meta">No upcoming classes.</p>
+                      <p className="sched-meta">
+                        {t(m, "schedule.noUpcoming")}
+                      </p>
                     )}
                   </div>
                 </div>
               </Card>
             </Grid>
 
-            <section aria-label="This week">
-              <p className="sched-section-heading">
-                This week
-              </p>
+            <section aria-labelledby="week-heading">
+              <h2 className="sched-section-heading" id="week-heading">
+                {t(m, "schedule.thisWeek")}
+              </h2>
               <Grid gap={4} min="18rem">
                 {days.map((group) => (
                   <Card as="article" className="sched-day-card" key={group.day}>
                     <div className="sched-day-head">
-                      <h2 className="sched-day-title">{group.day}</h2>
+                      <h3 className="sched-day-title">{group.day}</h3>
                       <span className="sched-day-count">
-                        {group.entries.length}{" "}
-                        {group.entries.length === 1 ? "class" : "classes"}
+                        {t(
+                          m,
+                          group.entries.length === 1
+                            ? "schedule.classOne"
+                            : "schedule.classOther",
+                          { count: group.entries.length },
+                        )}
                       </span>
                     </div>
-                    <ul className="sched-list" aria-label={`${group.day} classes`}>
+                    <ul
+                      className="sched-list"
+                      aria-label={t(m, "schedule.dayClassesLabel", {
+                        day: group.day,
+                      })}
+                    >
                       {group.entries.map((entry) => {
                         const isNext = entry.id === nextEntryId;
                         return (
@@ -334,7 +365,7 @@ export default async function SchedulePage() {
                                     <div className="sched-course-row">
                                       {isNext ? (
                                         <Badge tone={NEXT_BADGE_TONE}>
-                                          Up next
+                                          {t(m, "schedule.upNext")}
                                         </Badge>
                                       ) : null}
                                       <p className="sched-course">{entry.course}</p>
@@ -366,9 +397,9 @@ export default async function SchedulePage() {
           </>
         ) : (
           <EmptyState
-            description="Once your school publishes a timetable, your weekly classes will appear here."
+            description={t(m, "schedule.emptyBody")}
             icon={<ScheduleIcon />}
-            title="No schedule published"
+            title={t(m, "schedule.emptyTitle")}
           />
         )}
       </Stack>

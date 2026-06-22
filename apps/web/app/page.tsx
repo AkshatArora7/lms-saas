@@ -168,7 +168,7 @@ function SectionHeading({
       </h2>
       {href ? (
         <Button href={href} size="sm" variant="ghost">
-          {linkLabel ?? "View all"}
+          {linkLabel}
         </Button>
       ) : null}
     </div>
@@ -212,29 +212,31 @@ export default async function Home() {
         <header>
           <h1 className="lms-dash__hero-title">{t(m, "home.welcome")}</h1>
           <p className="lms-dash__hero-subtitle">{t(m, "home.subtitle")}</p>
-          <nav aria-label="Quick links" className="lms-dash__nav" style={{ marginTop: "var(--lms-space-4)" }}>
+          <nav aria-label={t(m, "nav.quickLinks")} className="lms-dash__nav" style={{ marginTop: "var(--lms-space-4)" }}>
             {canTeach(session.roles) ? (
               <Button href="/teach" size="sm" variant="secondary">
-                Teaching
+                {t(m, "nav.teaching")}
               </Button>
             ) : null}
             <Button href="/schedule" size="sm" variant="secondary">
-              Schedule
+              {t(m, "nav.schedule")}
             </Button>
             <Button href="/announcements" size="sm" variant="secondary">
-              Announcements
+              {t(m, "nav.announcements")}
               {announcementsSummary.unread
-                ? ` (${announcementsSummary.unread})`
+                ? t(m, "home.announcementsUnreadSuffix", {
+                    count: announcementsSummary.unread,
+                  })
                 : ""}
             </Button>
             <Button href="/assignments" size="sm" variant="secondary">
-              Assignments
+              {t(m, "nav.assignments")}
             </Button>
             <Button href="/grades" size="sm" variant="secondary">
-              View grades
+              {t(m, "nav.viewGrades")}
             </Button>
             <Button href="/attendance" size="sm" variant="secondary">
-              Attendance
+              {t(m, "nav.attendance")}
             </Button>
           </nav>
         </header>
@@ -293,7 +295,8 @@ export default async function Home() {
                     <SectionHeading
                       href="/assignments"
                       id="upnext-heading"
-                      title="Up next"
+                      linkLabel={t(m, "common.viewAll")}
+                      title={t(m, "home.upNext")}
                     />
                     {upNext.length ? (
                       <ul className="lms-dash__list">
@@ -317,7 +320,9 @@ export default async function Home() {
                                 </span>
                               </span>
                               <Badge tone={overdue ? "danger" : "neutral"}>
-                                {overdue ? "Overdue · " : "Due "}
+                                {overdue
+                                  ? t(m, "assignments.overduePrefix")
+                                  : t(m, "assignments.duePrefix")}
                                 {formatDue(assignment.dueAt)}
                               </Badge>
                             </li>
@@ -326,9 +331,9 @@ export default async function Home() {
                       </ul>
                     ) : (
                       <EmptyState
-                        description="You're all caught up. New work will show up here."
+                        description={t(m, "home.nothingDueBody")}
                         icon={<SuccessIcon />}
-                        title="Nothing due"
+                        title={t(m, "home.nothingDueTitle")}
                       />
                     )}
                   </Stack>
@@ -341,7 +346,8 @@ export default async function Home() {
                     <SectionHeading
                       href="/announcements"
                       id="announcements-heading"
-                      title="Recent announcements"
+                      linkLabel={t(m, "common.viewAll")}
+                      title={t(m, "home.recentAnnouncements")}
                     />
                     {recentAnnouncements.length ? (
                       <Stack gap={2}>
@@ -368,7 +374,9 @@ export default async function Home() {
                                   {announcement.title}
                                 </span>
                                 {announcement.unread ? (
-                                  <Badge tone="accent">Unread</Badge>
+                                  <Badge tone="accent">
+                                    {t(m, "announcements.unread")}
+                                  </Badge>
                                 ) : null}
                               </Inline>
                               <span className="lms-dash__clamp2">
@@ -384,9 +392,9 @@ export default async function Home() {
                       </Stack>
                     ) : (
                       <EmptyState
-                        description="School and course updates will appear here."
+                        description={t(m, "home.noAnnouncementsBody")}
                         icon={<GenericIcon />}
-                        title="No announcements"
+                        title={t(m, "home.noAnnouncementsTitle")}
                       />
                     )}
                   </Stack>
@@ -428,7 +436,7 @@ export default async function Home() {
                           </Badge>
                         ))
                       ) : (
-                        <span style={bodyTextStyle}>none</span>
+                        <span style={bodyTextStyle}>{t(m, "common.none")}</span>
                       )}
                     </Inline>
                   </Stack>
@@ -442,7 +450,7 @@ export default async function Home() {
                           </Badge>
                         ))
                       ) : (
-                        <span style={bodyTextStyle}>none</span>
+                        <span style={bodyTextStyle}>{t(m, "common.none")}</span>
                       )}
                     </Inline>
                   </Stack>

@@ -15,6 +15,10 @@ export interface EnrollmentRecord {
   role: string;
   status: EnrollmentStatus;
   enrolledAt: string;
+  /** Resolved learner name via RLS-scoped LEFT JOIN app_user; null if unmatched. */
+  displayName: string | null;
+  /** Resolved learner email via RLS-scoped LEFT JOIN app_user; null if unmatched. */
+  email: string | null;
 }
 
 export interface NewEnrollmentInput {

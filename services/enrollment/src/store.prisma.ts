@@ -17,6 +17,8 @@ interface EnrollmentRow {
   role: string | null;
   status: EnrollmentStatus;
   enrolled_at: Date | string;
+  display_name: string | null;
+  email: string | null;
 }
 
 function toRecord(row: EnrollmentRow): EnrollmentRecord {
@@ -31,14 +33,22 @@ function toRecord(row: EnrollmentRow): EnrollmentRecord {
       row.enrolled_at instanceof Date
         ? row.enrolled_at.toISOString()
         : String(row.enrolled_at),
+    displayName: row.display_name,
+    email: row.email,
   };
 }
 
+// LEFT JOIN app_user resolves the learner's name/email; it runs inside
+// withTenant, so the GUC-scoped RLS on app_user (same tenant_tables loop as
+// enrollment) guarantees only same-tenant users match — no cross-tenant leak.
+// LEFT (not inner) so a roster row never drops if the app_user row is missing.
 const SELECT_JOINED = `
   SELECT e.id, e.tenant_id, e.user_id, e.org_unit_id, r.name AS role,
-         e.status, e.enrolled_at
+         e.status, e.enrolled_at,
+         u.display_name AS display_name, u.email AS email
     FROM enrollment e
-    LEFT JOIN role r ON r.id = e.role_id`;
+    LEFT JOIN role r ON r.id = e.role_id
+    LEFT JOIN app_user u ON u.id = e.user_id`;
 
 /**
  * Postgres-backed enrollment store. Every call runs through `withTenant`, so all

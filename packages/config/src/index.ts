@@ -35,6 +35,7 @@ const schema = z.object({
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().default("llama-3.3-70b-versatile"),
+  GROQ_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
 
   // Observability / distributed tracing (#83). Optional + tolerant: the OTel
   // preload (@lms/observability/register) reads RAW process.env before config

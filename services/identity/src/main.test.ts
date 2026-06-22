@@ -144,6 +144,30 @@ class MemoryStore implements IdentityStore {
     this.identities.set(linkKey, user.id);
     return user;
   }
+
+  async getUserLocale(
+    ctx: TenantContext,
+    userId: string,
+  ): Promise<string | null> {
+    const user = [...this.usersByEmail.values()].find(
+      (u) => u.id === userId && u.tenantId === ctx.tenantId,
+    );
+    if (!user) return null;
+    return user.locale ?? "en";
+  }
+
+  async updateUserLocale(
+    ctx: TenantContext,
+    userId: string,
+    locale: string,
+  ): Promise<boolean> {
+    const user = [...this.usersByEmail.values()].find(
+      (u) => u.id === userId && u.tenantId === ctx.tenantId,
+    );
+    if (!user) return false;
+    user.locale = locale;
+    return true;
+  }
 }
 
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
@@ -437,6 +461,109 @@ describe("identity service", () => {
       headers: { authorization: "Bearer not-a-real-token" },
     });
     expect(bad.statusCode).toBe(401);
+    await app.close();
+  });
+
+  // i18n / localization (#88) ───────────────────────────────────────────────
+
+  async function loginToken(app: ReturnType<typeof buildWithStore>) {
+    const login = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      headers: { "x-tenant-id": TENANT_ID },
+      payload: { email: "teacher@school.test", password: "correct horse battery" },
+    });
+    return login.json().accessToken as string;
+  }
+
+  it("GET /auth/me surfaces the user's locale (defaulting to 'en')", async () => {
+    const app = buildWithStore(await makeStore());
+    const me = await app.inject({
+      method: "GET",
+      url: "/auth/me",
+      headers: { authorization: `Bearer ${await loginToken(app)}` },
+    });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().locale).toBe("en");
+    await app.close();
+  });
+
+  it("PATCH /users/me/locale updates the caller's locale, reflected in /auth/me", async () => {
+    const app = buildWithStore(await makeStore());
+    const token = await loginToken(app);
+
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/users/me/locale",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { locale: "es" },
+    });
+    expect(patch.statusCode).toBe(204);
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/auth/me",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(me.json().locale).toBe("es");
+    await app.close();
+  });
+
+  it("PATCH /users/me/locale rejects an unsupported locale with 400", async () => {
+    const app = buildWithStore(await makeStore());
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/users/me/locale",
+      headers: { authorization: `Bearer ${await loginToken(app)}` },
+      payload: { locale: "fr" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("unsupported_locale");
+    await app.close();
+  });
+
+  it("PATCH /users/me/locale requires a valid bearer token", async () => {
+    const app = buildWithStore(await makeStore());
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/users/me/locale",
+      payload: { locale: "es" },
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("PATCH /users/me/locale only affects the caller's own record (no IDOR)", async () => {
+    const store = await makeStore();
+    // A second user in the same tenant whose locale must be untouched.
+    store.seedUser(
+      "other@school.test",
+      {
+        id: "user-other",
+        tenantId: TENANT_ID,
+        displayName: "Other User",
+        status: "active",
+        passwordHash: await hashPassword("other-pass"),
+        locale: "en",
+      },
+      { roles: ["learner"], scopes: [] },
+    );
+    const app = buildWithStore(store);
+
+    // The teacher changes their own locale; there is no way to target a
+    // different user — the id is taken from the token, not the request.
+    const token = await loginToken(app);
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/users/me/locale",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { locale: "es", userId: "user-other" },
+    });
+    expect(patch.statusCode).toBe(204);
+
+    // The caller (teacher = user-active) changed; the other user did not.
+    expect(await store.getUserLocale(tenant, "user-active")).toBe("es");
+    expect(await store.getUserLocale(tenant, "user-other")).toBe("en");
     await app.close();
   });
 });

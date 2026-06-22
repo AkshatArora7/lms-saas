@@ -9,7 +9,13 @@ import type { AppConfig } from "@lms/config";
 import type { StandardRole, TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import type { IdentityStore } from "./store.js";
+import type { AccessTokenClaims } from "@lms/auth";
+
+import {
+  isSupportedLocale,
+  SUPPORTED_LOCALES,
+  type IdentityStore,
+} from "./store.js";
 import {
   buildAuthorizationUrl,
   defaultOidcExchanger,
@@ -43,6 +49,9 @@ interface TokenBody {
 interface SsoCallbackBody {
   code?: unknown;
   state?: unknown;
+}
+interface LocaleBody {
+  locale?: unknown;
 }
 
 /** Roles/scopes granted to a brand-new user provisioned via SSO. */
@@ -96,6 +105,45 @@ async function issueTokens(
     refreshToken: material.token,
     expiresIn: deps.config.ACCESS_TOKEN_TTL,
   };
+}
+
+/**
+ * Verify the bearer token and build a tenant context from its (authoritative)
+ * claims. Returns null and sends a 401 when the token is missing/invalid. The
+ * tenant id comes from the verified token — not a client header — so store
+ * calls keyed off it stay scoped to the caller's own tenant. Reuses the
+ * gateway-resolved tier/databaseUrl when available, else falls back to config.
+ */
+async function authenticate(
+  deps: IdentityRouteDeps,
+  req: FastifyRequest,
+  reply: FastifyReply,
+): Promise<{ ctx: TenantContext; claims: AccessTokenClaims } | null> {
+  const header = req.headers.authorization ?? "";
+  const [scheme, token] = header.split(" ");
+  if (scheme !== "Bearer" || !token) {
+    void reply
+      .code(401)
+      .send({ error: "unauthorized", message: "Missing bearer token." });
+    return null;
+  }
+  let claims: AccessTokenClaims;
+  try {
+    claims = await verifyAccessToken(token, signerOpts(deps.config));
+  } catch {
+    void reply.code(401).send({
+      error: "invalid_token",
+      message: "Access token is invalid or expired.",
+    });
+    return null;
+  }
+  const ctx: TenantContext = {
+    tenantId: claims.tenantId,
+    tier: deps.config.DEFAULT_TENANT_TIER,
+    parentTenantId: claims.parentTenantId,
+    databaseUrl: deps.config.DATABASE_URL,
+  };
+  return { ctx, claims };
 }
 
 function resolveTenantOr400(
@@ -244,30 +292,55 @@ export function registerAuthRoutes(
   });
 
   app.get("/auth/me", async (req, reply) => {
-    const header = req.headers.authorization ?? "";
-    const [scheme, token] = header.split(" ");
-    if (scheme !== "Bearer" || !token) {
-      return reply.code(401).send({
-        error: "unauthorized",
-        message: "Missing bearer token.",
+    const auth = await authenticate(deps, req, reply);
+    if (!auth) return reply;
+    const { ctx, claims } = auth;
+
+    // Surface the user's display-language preference for i18n resolution. The
+    // lookup is tenant-scoped (id + tenant) and defaults to 'en' when the row
+    // carries none. (#88)
+    const locale = (await deps.store.getUserLocale(ctx, claims.sub)) ?? "en";
+
+    return reply.code(200).send({
+      userId: claims.sub,
+      tenantId: claims.tenantId,
+      parentTenantId: claims.parentTenantId ?? null,
+      tier: claims.tier,
+      roles: claims.roles,
+      scopes: claims.scopes,
+      locale,
+    });
+  });
+
+  // Update the authenticated user's OWN locale (#88). The target user id is
+  // derived from the verified token (`claims.sub`), never from the body/params,
+  // so a caller can only change their own preference (IDOR-safe). The write is
+  // tenant-scoped through the store.
+  app.patch("/users/me/locale", async (req, reply) => {
+    const auth = await authenticate(deps, req, reply);
+    if (!auth) return reply;
+    const { ctx, claims } = auth;
+
+    const body = (req.body ?? {}) as LocaleBody;
+    if (!isSupportedLocale(body.locale)) {
+      return reply.code(400).send({
+        error: "unsupported_locale",
+        message: `locale must be one of: ${SUPPORTED_LOCALES.join(", ")}.`,
       });
     }
-    try {
-      const claims = await verifyAccessToken(token, signerOpts(deps.config));
-      return reply.code(200).send({
-        userId: claims.sub,
-        tenantId: claims.tenantId,
-        parentTenantId: claims.parentTenantId ?? null,
-        tier: claims.tier,
-        roles: claims.roles,
-        scopes: claims.scopes,
-      });
-    } catch {
-      return reply.code(401).send({
-        error: "invalid_token",
-        message: "Access token is invalid or expired.",
+
+    const updated = await deps.store.updateUserLocale(
+      ctx,
+      claims.sub,
+      body.locale,
+    );
+    if (!updated) {
+      return reply.code(404).send({
+        error: "user_not_found",
+        message: "No such user in this tenant.",
       });
     }
+    return reply.code(204).send();
   });
 
   registerSsoRoutes(app, deps);

@@ -11,9 +11,12 @@ import {
   PageHeader,
   Stack,
 } from "@lms/ui";
+import { getMessages, t } from "@lms/i18n";
 
 import { getBranding } from "../../../lib/branding";
 import { getSession } from "../../../lib/auth";
+import { resolveRequestLocale } from "../../../lib/i18n";
+import { AppLocaleSwitcher } from "../../../lib/locale-switcher";
 import { canTeach, getTaughtCourse } from "../../../lib/teaching";
 import { getRoster } from "../../../lib/enrollment-api";
 import SignOutButton from "../../../sign-out-button";
@@ -106,17 +109,26 @@ export default async function CourseRoster({
   const session = await getSession();
   if (!session) redirect("/login");
   const brand = getBranding(session.tenantId);
+  const m = getMessages(await resolveRequestLocale());
 
   if (!canTeach(session.roles)) {
     return (
-      <AppShell brand={brand} actions={<SignOutButton />}>
+      <AppShell
+        brand={brand}
+        actions={
+          <>
+            <AppLocaleSwitcher />
+            <SignOutButton />
+          </>
+        }
+      >
         <PageHeader
-          title="Not authorized"
-          subtitle="Your account cannot manage the roster."
+          title={t(m, "roster.notAuthorizedTitle")}
+          subtitle={t(m, "roster.notAuthorizedSubtitle")}
         />
         <Alert tone="warning">
-          You are signed in as <strong>{session.userId}</strong>, but your
-          account does not hold a teaching role.
+          You are signed in as <strong>{session.userId}</strong>.{" "}
+          {t(m, "roster.notAuthorizedBody")}
         </Alert>
       </AppShell>
     );
@@ -136,19 +148,27 @@ export default async function CourseRoster({
   const staff = roster.length - learners;
 
   return (
-    <AppShell brand={brand} actions={<SignOutButton />}>
+    <AppShell
+      brand={brand}
+      actions={
+        <>
+          <AppLocaleSwitcher />
+          <SignOutButton />
+        </>
+      }
+    >
       <style>{rosterCss}</style>
       <Stack gap={4}>
         <Button href="/teach" size="sm" variant="ghost">
-          ← Back to teaching
+          {t(m, "roster.backToTeaching")}
         </Button>
 
         <PageHeader
-          title={`${course.title} - roster`}
-          subtitle="Enroll learners, change roles, complete, and drop. Changes are saved straight to the enrollment service for this tenant."
+          title={t(m, "roster.title", { course: course.title })}
+          subtitle={t(m, "roster.subtitle")}
           actions={
             <Button href={`/teach/${courseId}/roster/new`} size="sm">
-              Enroll learner
+              {t(m, "roster.enrollLearner")}
             </Button>
           }
         />
@@ -160,19 +180,19 @@ export default async function CourseRoster({
           <Card>
             <Stack gap={1}>
               <p className="ros-stat">{roster.length}</p>
-              <p className="ros-stat-label">Active members</p>
+              <p className="ros-stat-label">{t(m, "roster.activeMembers")}</p>
             </Stack>
           </Card>
           <Card>
             <Stack gap={1}>
               <p className="ros-stat">{learners}</p>
-              <p className="ros-stat-label">Learners</p>
+              <p className="ros-stat-label">{t(m, "roster.learners")}</p>
             </Stack>
           </Card>
           <Card>
             <Stack gap={1}>
               <p className="ros-stat">{staff}</p>
-              <p className="ros-stat-label">Staff</p>
+              <p className="ros-stat-label">{t(m, "roster.staff")}</p>
             </Stack>
           </Card>
         </Grid>
@@ -181,7 +201,7 @@ export default async function CourseRoster({
           <section aria-labelledby="roster-heading">
             <Stack gap={3}>
               <h2 className="ros-section-title" id="roster-heading">
-                Members
+                {t(m, "roster.members")}
               </h2>
               <ul className="ros-list">
                 {roster.map((enrollment) => (
@@ -216,7 +236,7 @@ export default async function CourseRoster({
                             size="sm"
                             variant="secondary"
                           >
-                            Change role
+                            {t(m, "roster.changeRole")}
                           </Button>
                           <form action={completeEnrollmentAction}>
                             <input
@@ -230,7 +250,7 @@ export default async function CourseRoster({
                               value={enrollment.id}
                             />
                             <Button size="sm" type="submit">
-                              Complete
+                              {t(m, "roster.complete")}
                             </Button>
                           </form>
                           <form action={dropEnrollmentAction}>
@@ -245,7 +265,7 @@ export default async function CourseRoster({
                               value={enrollment.id}
                             />
                             <Button size="sm" type="submit" variant="danger">
-                              Drop
+                              {t(m, "roster.drop")}
                             </Button>
                           </form>
                         </div>
@@ -258,14 +278,14 @@ export default async function CourseRoster({
           </section>
         ) : result.ok ? (
           <EmptyState
-            description="Enroll your first learner to start building the roster."
+            description={t(m, "roster.emptyBody")}
             icon="[ ]"
-            title="No one enrolled yet"
+            title={t(m, "roster.emptyTitle")}
           />
         ) : (
           <Card>
             <Stack gap={2}>
-              <Badge tone="warning">Service offline</Badge>
+              <Badge tone="warning">{t(m, "roster.serviceOffline")}</Badge>
               <p className="ros-meta">
                 Start the enrollment service (ENROLLMENT_STORE=memory pnpm dev in
                 services/enrollment) to manage the roster here.

@@ -12,6 +12,7 @@
     "clean": "rimraf .next .turbo"
   },
   "dependencies": {
+    "@lms/i18n": "workspace:*",
     "@lms/ui": "workspace:*",
     "@lms/types": "workspace:*",
     "next": "^14.2.5",

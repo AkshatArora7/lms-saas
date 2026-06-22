@@ -35,6 +35,9 @@ importers:
 
   apps/admin:
     dependencies:
+      '@lms/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
       '@lms/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -69,6 +72,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@lms/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
       '@lms/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -189,6 +195,24 @@ importers:
         specifier: ^2.0.5
         version: 2.1.9(@types/node@20.19.43)(jsdom@25.0.1)
 
+  packages/i18n:
+    devDependencies:
+      '@lms/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@lms/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/react':
+        specifier: ^18.3.3
+        version: 18.3.31
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      vitest:
+        specifier: ^2.0.5
+        version: 2.1.9(@types/node@20.19.43)(jsdom@25.0.1)
+
   packages/logger:
     dependencies:
       pino:
@@ -214,6 +238,10 @@ importers:
         version: link:../tsconfig
 
   packages/ui:
+    dependencies:
+      '@lms/i18n':
+        specifier: workspace:*
+        version: link:../i18n
     devDependencies:
       '@lms/eslint-config':
         specifier: workspace:*

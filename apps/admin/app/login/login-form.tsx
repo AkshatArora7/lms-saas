@@ -10,10 +10,14 @@ import {
   Input,
   Stack,
 } from "@lms/ui";
+import { useTranslations } from "@lms/i18n";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import type { Brand } from "@lms/ui";
+import type { MessageKey } from "@lms/i18n";
+
+import { AppLocaleSwitcher } from "../lib/locale-switcher";
 
 /**
  * Flagship white-label admin sign-in. A full-height split screen: an
@@ -33,6 +37,13 @@ const loginCss = `
   flex-direction: column;
   min-height: 100vh;
   min-width: 0;
+  position: relative;
+}
+.login-locale {
+  position: absolute;
+  top: var(--lms-space-3);
+  inset-inline-end: var(--lms-space-3);
+  z-index: 2;
 }
 .login-brand-compact {
   display: flex;
@@ -224,9 +235,9 @@ const loginCss = `
 }
 `;
 
-const HIGHLIGHTS = [
+const HIGHLIGHTS: Array<{ labelKey: MessageKey; icon: React.ReactNode }> = [
   {
-    label: "Manage courses, users, and org units",
+    labelKey: "auth.adminHighlightManage",
     icon: (
       <svg fill="none" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="8" cy="9" r="2.4" stroke="currentColor" strokeWidth="1.6" />
@@ -246,7 +257,7 @@ const HIGHLIGHTS = [
     ),
   },
   {
-    label: "Configure branding and single sign-on",
+    labelKey: "auth.adminHighlightConfigure",
     icon: (
       <svg fill="none" viewBox="0 0 24 24" aria-hidden="true">
         <path
@@ -266,7 +277,7 @@ const HIGHLIGHTS = [
     ),
   },
   {
-    label: "Track engagement with built-in reports",
+    labelKey: "auth.adminHighlightReports",
     icon: (
       <svg fill="none" viewBox="0 0 24 24" aria-hidden="true">
         <path
@@ -288,6 +299,7 @@ const HIGHLIGHTS = [
 
 export default function LoginForm({ brand }: { brand: Brand }) {
   const router = useRouter();
+  const { t } = useTranslations();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -310,8 +322,8 @@ export default function LoginForm({ brand }: { brand: Brand }) {
       const data = await res.json().catch(() => ({}));
       setError(
         data.error === "invalid_credentials"
-          ? "Email or password is incorrect."
-          : (data.message ?? "Sign in failed. Please try again."),
+          ? t("auth.invalidCredentials")
+          : (data.message ?? t("auth.genericError")),
       );
       setBusy(false);
     }
@@ -320,6 +332,11 @@ export default function LoginForm({ brand }: { brand: Brand }) {
   return (
     <main className="login-split">
       <style>{loginCss}</style>
+
+      {/* Language switcher — available pre-auth (cookie-only persistence) */}
+      <div className="login-locale">
+        <AppLocaleSwitcher />
+      </div>
 
       {/* Compact brand header — phone only */}
       <div className="login-brand-compact">
@@ -337,23 +354,20 @@ export default function LoginForm({ brand }: { brand: Brand }) {
 
         <div className="login-showcase__lead">
           <h2 className="login-showcase__headline">{brand.tagline}</h2>
-          <p className="login-showcase__tagline">
-            Run your organization from one console — courses, people, branding,
-            and the insights to keep everything on track.
-          </p>
+          <p className="login-showcase__tagline">{t("auth.adminHeadline")}</p>
           <ul className="login-highlights">
             {HIGHLIGHTS.map((item) => (
-              <li key={item.label}>
+              <li key={item.labelKey}>
                 <span className="login-highlight__icon">{item.icon}</span>
-                <span className="login-highlight__label">{item.label}</span>
+                <span className="login-highlight__label">
+                  {t(item.labelKey)}
+                </span>
               </li>
             ))}
           </ul>
         </div>
 
-        <p className="login-showcase__footnote">
-          Secure, tenant-isolated administration for every brand.
-        </p>
+        <p className="login-showcase__footnote">{t("auth.adminFootnote")}</p>
       </div>
 
       {/* Form panel */}
@@ -362,14 +376,12 @@ export default function LoginForm({ brand }: { brand: Brand }) {
           <form action="/api/auth/login" method="post" onSubmit={onSubmit}>
             <Stack gap={5}>
               <div className="login-welcome">
-                <h1 className="login-title">Welcome back</h1>
-                <p className="login-subtitle">
-                  Sign in to the administration console.
-                </p>
+                <h1 className="login-title">{t("auth.welcomeBack")}</h1>
+                <p className="login-subtitle">{t("auth.adminSubtitle")}</p>
               </div>
 
               <Stack gap={3}>
-                <Field htmlFor="email" label="Email" required>
+                <Field htmlFor="email" label={t("auth.email")} required>
                   <Input
                     aria-describedby={error ? "login-error" : undefined}
                     aria-invalid={error ? true : undefined}
@@ -379,7 +391,7 @@ export default function LoginForm({ brand }: { brand: Brand }) {
                   />
                 </Field>
 
-                <Field htmlFor="password" label="Password" required>
+                <Field htmlFor="password" label={t("auth.password")} required>
                   <Input
                     aria-describedby={error ? "login-error" : undefined}
                     aria-invalid={error ? true : undefined}
@@ -397,7 +409,7 @@ export default function LoginForm({ brand }: { brand: Brand }) {
               ) : null}
 
               <Button disabled={busy} fullWidth type="submit">
-                {busy ? "Signing in…" : "Sign in"}
+                {busy ? t("auth.signingIn") : t("auth.signIn")}
               </Button>
 
               <p aria-live="polite" className="login-sr-only" role="status">
@@ -407,12 +419,10 @@ export default function LoginForm({ brand }: { brand: Brand }) {
               <Divider />
 
               <Button fullWidth href="/api/auth/sso/start" variant="secondary">
-                Sign in with your school account
+                {t("auth.ssoButton")}
               </Button>
 
-              <p className="login-hint">
-                Demo admin: admin@demo.school · password123
-              </p>
+              <p className="login-hint">{t("auth.adminDemoHint")}</p>
             </Stack>
           </form>
         </Card>

@@ -102,6 +102,9 @@ export const componentCss = `
 .lms-topbar__brand { display: flex; align-items: center; gap: var(--lms-space-2); min-width: 0; text-decoration: none; color: inherit; }
 .lms-topbar__name { font-weight: 700; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--lms-accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
 .lms-topbar__actions { display: flex; align-items: center; gap: var(--lms-space-2); flex-wrap: wrap; }
+.lms-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.lms-locale-switcher { display: inline-flex; flex-direction: column; gap: var(--lms-space-1); min-width: 0; }
+.lms-locale-switcher__select { width: auto; min-width: 0; max-width: 100%; }
 .lms-nav__link { display: inline-flex; align-items: center; color: var(--lms-text-muted); text-decoration: none; padding: var(--lms-space-2) var(--lms-space-3); border-radius: var(--lms-radius-sm); transition: background 150ms cubic-bezier(0.2,0,0,1), color 150ms cubic-bezier(0.2,0,0,1); }
 .lms-nav__link:hover { color: var(--lms-text); background: var(--lms-surface-2); }
 .lms-nav__link[aria-current="page"] { color: var(--lms-accent); background: var(--lms-accent-soft); }

@@ -627,6 +627,8 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 - **Backlog source of truth:** [`docs/backlog/`](docs/backlog) — `backlog.json`
   (24 epics) → GitHub issues/labels/milestones via
   [`scripts/github/seed-backlog.ps1`](scripts/github/seed-backlog.ps1) (idempotent).
+- **Start here (contributing):** [`CONTRIBUTING.md`](CONTRIBUTING.md) — the
+  contributor quick-loop; defers to `AGENTS.md` for the authoritative rules.
 - **Rules for contributors / AI agents:** [`AGENTS.md`](AGENTS.md) — story-first
   workflow, isolation guardrails, and the multi-agent delegation model.
 - **Features by audience:** [`docs/FEATURES.md`](docs/FEATURES.md) — what the

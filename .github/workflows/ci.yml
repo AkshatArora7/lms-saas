@@ -31,6 +31,8 @@ jobs:
       JWT_SECRET: ci-test-secret-key-please-rotate
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -56,6 +58,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Repo rules (RLS + commits)
+        run: pnpm check:rules && pnpm test:checks
 
       - name: Generate Prisma client
         run: pnpm db:generate

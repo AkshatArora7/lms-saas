@@ -17,6 +17,7 @@
     "down:clean": "docker compose down -v",
     "ps": "docker compose ps",
     "logs": "docker compose logs -f",
+    "smoke": "node scripts/smoke.mjs",
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",

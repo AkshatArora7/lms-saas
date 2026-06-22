@@ -34,6 +34,7 @@ const schema = z.object({
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),
+  GROQ_MODEL: z.string().default("llama-3.3-70b-versatile"),
 
   // Rate limiting (gateway). Default per-tenant budget per fixed window; the
   // gateway resolves the effective limit per tenant (extensible by plan). Backed

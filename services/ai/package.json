@@ -19,7 +19,8 @@
     "@lms/events": "workspace:*",
     "@lms/logger": "workspace:*",
     "@lms/types": "workspace:*",
-    "fastify": "^4.28.1"
+    "fastify": "^4.28.1",
+    "groq-sdk": "^0.7.0"
   },
   "devDependencies": {
     "@lms/eslint-config": "workspace:*",

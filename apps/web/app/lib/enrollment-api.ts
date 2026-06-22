@@ -28,6 +28,8 @@ export interface Enrollment {
   role: string;
   status: EnrollmentStatus;
   enrolledAt: string;
+  displayName?: string | null;
+  email?: string | null;
 }
 
 /** Roles an instructor can assign from the roster console. */

@@ -48,6 +48,10 @@ const rosterCss = `
   margin: 0;
   overflow-wrap: anywhere;
 }
+.ros-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
 .ros-list {
   display: flex;
   flex-direction: column;
@@ -185,7 +189,13 @@ export default async function CourseRoster({
                     <Card>
                       <div className="ros-row">
                         <Stack gap={1}>
-                          <p className="ros-name">{enrollment.userId}</p>
+                          <p className="ros-name">
+                            {enrollment.displayName ?? enrollment.userId}
+                          </p>
+                          <p className="ros-meta">
+                            {enrollment.email ? `${enrollment.email} · ` : ""}
+                            <span className="ros-id">{enrollment.userId}</span>
+                          </p>
                           <p className="ros-meta">
                             Enrolled{" "}
                             {new Date(

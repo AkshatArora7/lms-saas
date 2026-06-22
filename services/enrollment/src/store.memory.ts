@@ -13,6 +13,15 @@ import type {
 /** The demo tenant the local dev seed and the web BFFs agree on. */
 export const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
 
+/**
+ * Shape accepted by `seed`. The Prisma store resolves `displayName`/`email` via
+ * a LEFT JOIN on `app_user`; the memory store has no such table, so callers may
+ * model the resolved name/email as data alongside the enrollment (defaulting to
+ * null when omitted, matching an unmatched LEFT JOIN row).
+ */
+export type SeedEnrollment = Omit<EnrollmentRecord, "displayName" | "email"> &
+  Partial<Pick<EnrollmentRecord, "displayName" | "email">>;
+
 /** Roles a tenant is assumed to have; mirrors the seeded per-tenant role set. */
 export const KNOWN_ROLES: readonly string[] = [
   "learner",
@@ -38,8 +47,12 @@ export class MemoryEnrollmentStore implements EnrollmentStore {
     private readonly knownRoles: readonly string[] = KNOWN_ROLES,
   ) {}
 
-  seed(enrollment: EnrollmentRecord): void {
-    this.enrollments.push(enrollment);
+  seed(enrollment: SeedEnrollment): void {
+    this.enrollments.push({
+      displayName: null,
+      email: null,
+      ...enrollment,
+    });
   }
 
   async createEnrollment(
@@ -65,6 +78,10 @@ export class MemoryEnrollmentStore implements EnrollmentStore {
       role: input.role,
       status: "active",
       enrolledAt: this.now().toISOString(),
+      // The memory store has no app_user table; created rows have no resolved
+      // user, so name/email are null (only seeded rows can carry them).
+      displayName: null,
+      email: null,
     };
     this.enrollments.push(enrollment);
     return { ok: true, enrollment };
@@ -171,6 +188,8 @@ export function createSeededMemoryStore(
     role: "learner",
     status: "active",
     enrolledAt: new Date("2026-01-05T00:00:00.000Z").toISOString(),
+    displayName: "Ada Lovelace",
+    email: "ada.lovelace@demo.edu",
   });
   store.seed({
     id: "demo-alg-enr-2",
@@ -180,6 +199,8 @@ export function createSeededMemoryStore(
     role: "learner",
     status: "active",
     enrolledAt: new Date("2026-01-06T00:00:00.000Z").toISOString(),
+    displayName: "Alan Turing",
+    email: "alan.turing@demo.edu",
   });
   store.seed({
     id: "demo-alg-enr-3",
@@ -189,6 +210,8 @@ export function createSeededMemoryStore(
     role: "teaching_assistant",
     status: "active",
     enrolledAt: new Date("2026-01-07T00:00:00.000Z").toISOString(),
+    displayName: "Grace Hopper",
+    email: "grace.hopper@demo.edu",
   });
   return store;
 }

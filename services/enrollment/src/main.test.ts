@@ -170,6 +170,47 @@ describe("enrollments", () => {
     expect((theirs.json() as { roster: unknown[] }).roster).toEqual([]);
   });
 
+  it("resolves displayName/email in the roster while keeping userId for actions", async () => {
+    const app = buildTestApp(createSeededMemoryStore());
+    const res = await app.inject({
+      method: "GET",
+      url: "/sections/alg-101/roster",
+      headers: HEADERS,
+    });
+    expect(res.statusCode).toBe(200);
+    const { roster } = res.json() as {
+      roster: {
+        userId: string;
+        displayName: string | null;
+        email: string | null;
+      }[];
+    };
+    const ada = roster.find((r) => r.userId === "ada.lovelace");
+    expect(ada).toBeDefined();
+    // Name join surfaces the resolved name + email...
+    expect(ada).toMatchObject({
+      displayName: "Ada Lovelace",
+      email: "ada.lovelace@demo.edu",
+    });
+    // ...and the user id remains available for id-based actions.
+    expect(ada!.userId).toBe("ada.lovelace");
+  });
+
+  it("returns null displayName/email when the user is unresolved (LEFT JOIN)", async () => {
+    const app = buildTestApp();
+    await enroll(app);
+    const res = await app.inject({
+      method: "GET",
+      url: "/sections/section-a/roster",
+      headers: HEADERS,
+    });
+    const { roster } = res.json() as {
+      roster: { displayName: string | null; email: string | null }[];
+    };
+    expect(roster).toHaveLength(1);
+    expect(roster[0]).toMatchObject({ displayName: null, email: null });
+  });
+
   it("returns 404 for a missing enrollment", async () => {
     const app = buildTestApp();
     const res = await app.inject({

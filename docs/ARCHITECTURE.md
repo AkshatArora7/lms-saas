@@ -50,7 +50,7 @@ events: domain services → outbox (Postgres) → relay (per-tenant drain) → t
 | 4  | user-org       | Profiles + org-unit hierarchy (OneRoster orgs/users/sessions)         | Postgres (read-heavy)|
 | 5  | enrollment     | Enrollments, section roles, lifecycle (OneRoster enrollments)         | Postgres            |
 | 6  | course         | Courses, templates, sections, terms, copy                             | Postgres            |
-| 7  | content        | Modules/lessons/topics, SCORM/xAPI, H5P-style                         | JSONB + Blob        |
+| 7  | content        | Modules/lessons/topics, rich pages (versioned), SCORM/xAPI, H5P-style | JSONB + Blob        |
 | 8  | assignment     | Assignments, submissions, late policy, plagiarism hooks               | Postgres + Blob     |
 | 9  | assessment     | Quizzes, question banks, QTI, attempts, auto-grade                    | JSONB (write-heavy) |
 | 10 | grading        | Gradebook line items, schemes, final grades (OneRoster + AGS)         | Postgres            |

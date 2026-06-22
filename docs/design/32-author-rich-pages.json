@@ -1,0 +1,338 @@
+{
+  "$grounding": "Grounded in: docs/design/ui-dual-tone-tokens.json (admin tone tokens), apps/admin/app/lib/ui.tsx (AppShell/icons wrappers, tone='admin'), apps/admin/app/lib/branding.ts (per-tenant accent flows via --lms-accent; never hard-coded), apps/admin/app/courses/page.tsx + courses/[id]/edit/page.tsx (existing list + form + non-admin gating + .lms-table-wrap region pattern), handshake feat-content-author-rich-pages.md §4 D5 (7 routes) + D6 (admin authoring screen scope). All tokens are REUSED from the admin tone; NO new palette invented. Net-new pattern (RichTextEditor + accessible toolbar) is flagged in openQuestions — everything else reuses existing @lms/ui components.",
+  "screens": [
+    {
+      "screen": "Course Pages — list",
+      "story": "#32",
+      "goal": "A teacher reviews the rich pages they have authored for a course, sees each page's draft/published status at a glance, and starts a new page or opens one to edit.",
+      "primaryUsers": ["instructor", "org_admin"],
+      "route": "/courses/[id]/pages",
+      "informationHierarchy": [
+        "Page title (links to editor) — what the page is",
+        "Status (draft vs published) — is it live to learners",
+        "Last updated timestamp + version count — freshness / activity",
+        "Per-row actions (Edit, Publish if draft)",
+        "Primary action: New page",
+        "Course context (which course these pages belong to) in PageHeader subtitle"
+      ],
+      "wiresTo": "GET /courses/:courseId/pages (route 2 → { pages: PageSummary[] })",
+      "states": ["loading", "empty", "list", "error/service-offline", "permission-denied (non-admin)"]
+    },
+    {
+      "screen": "Page editor — create & edit",
+      "story": "#32",
+      "goal": "A teacher writes and formats rich content with a keyboard-operable toolbar, embeds media/files via signed upload, saves as a draft, and publishes — with a version history they can inspect.",
+      "primaryUsers": ["instructor", "org_admin"],
+      "route": "/courses/[id]/pages/new  and  /pages/[pageId]/edit",
+      "informationHierarchy": [
+        "Status indicator (Draft / Published / Unsaved changes) — the single most important orientation cue",
+        "The editing canvas (rich-text body) — where the work happens",
+        "Formatting toolbar (above canvas, sticky)",
+        "Title + slug fields (identity of the page)",
+        "Primary actions: Save draft / Publish + their save status (saving / saved / error)",
+        "Version history (secondary, in an aside on desktop / collapsible panel on phone)"
+      ],
+      "wiresTo": "POST /courses/:courseId/pages (1), GET /pages/:id (3), PATCH /pages/:id (4 — body ⇒ new draft version), POST /pages/:id/publish (5), GET /pages/:id/versions (6), GET /pages/:id/versions/:versionId (7), POST /uploads (existing signed-upload for media embed, architect D4)",
+      "states": ["loading", "create-empty", "editing-draft", "saving", "saved", "save-error", "published", "unsaved-changes", "upload-in-progress", "upload-error", "version-viewing", "permission-denied (non-admin)", "not-found (404)"]
+    }
+  ],
+  "designTokens": {
+    "$note": "All values are the existing ADMIN tone from docs/design/ui-dual-tone-tokens.json, exposed at runtime as --lms-* CSS vars. accent is the TENANT accent via --lms-accent (fallback admin #0E5FAE / admin branding.ts #6a8cff) — never hard-code. Reference vars, not literals, in the build.",
+    "color": {
+      "bg": "var(--lms-bg) /* #F1F4F8 */",
+      "surface": "var(--lms-surface) /* #FFFFFF */",
+      "surface2": "var(--lms-surface-2) /* #E9EDF3 — toolbar/aside fill */",
+      "surface2Hover": "var(--lms-surface-2-hover) /* #E1E7EF */",
+      "border": "var(--lms-border) /* #D4DBE5 */",
+      "borderStrong": "var(--lms-border-strong) /* #B7C1CF — control + canvas boundary */",
+      "text": "var(--lms-text) /* #0F1B2D */",
+      "muted": "var(--lms-text-muted) /* #516074 */",
+      "subtle": "var(--lms-text-subtle) /* #73808F — placeholders/captions only */",
+      "accent": "var(--lms-accent) /* TENANT accent; never hard-coded */",
+      "accentSoft": "var(--lms-accent-soft) /* active toolbar button + active nav fill */",
+      "danger": "var(--lms-danger) /* #C2261B */",
+      "success": "var(--lms-success) /* #0B7A52 */",
+      "warning": "var(--lms-warning) /* #8A5A00 — draft status */",
+      "focusRing": "var(--lms-focus) /* #1D5FD6, 3px solid, offset 2px */"
+    },
+    "typography": {
+      "fontFamily": "var(--lms-font-family) /* tenant font, else system-ui fallback */",
+      "scale": { "xs": "12px", "sm": "14px", "base": "16px", "lg": "18px", "xl": "20px", "2xl": "24px" },
+      "weight": { "regular": 400, "medium": 500, "semibold": 600, "bold": 700 },
+      "lineHeight": { "tight": 1.2, "snug": 1.35, "normal": 1.5 },
+      "editorBody": "16px / 1.5; headings inside the canvas follow the h1->h4 ramp from the token spec so authored content matches rendered learner content"
+    },
+    "space": { "scale": [0, 4, 8, 12, 16, 24, 32, 48, 64], "unit": "px", "$map": "--lms-space-1..8 (4,8,12,16,24,32,48,64)" },
+    "radius": { "sm": "var(--lms-radius-sm) /* sharp 4px default */", "md": "var(--lms-radius-md) /* 6px */", "lg": "var(--lms-radius-lg) /* 10px */", "pill": "999px" },
+    "shadow": {
+      "sm": "var(--lms-shadow-sm) /* 0 1px 2px rgba(15,27,45,.08) */",
+      "md": "var(--lms-shadow-md)",
+      "lg": "var(--lms-shadow-lg) /* used for the slug/help nothing-heavy; sticky toolbar uses sm */"
+    },
+    "zIndex": { "base": 0, "dropdown": 100, "stickyToolbar": 150, "overlay": 200, "modal": 300, "toast": 400 }
+  },
+  "layout": {
+    "grid": {
+      "phone": { "columns": 4, "gutter": 16, "margin": 16 },
+      "tablet": { "columns": 8, "gutter": 24, "margin": 24 },
+      "desktop": { "columns": 12, "gutter": 24, "margin": 32 }
+    },
+    "containerMaxWidth": "1200px (inherited from AppShell .lms-shell__main)",
+    "regions": ["header (AppShell topbar: brand + SignOutButton)", "main (PageHeader + editor/list)", "aside (version history — desktop only; collapses into main flow on tablet/phone)"],
+    "editorComposition": {
+      "desktop": "Two-column: main editor column (minmax(0,1fr)) + version-history aside (~320px fixed) via CSS grid; aside is a sibling <aside> landmark, sticky-top below the toolbar.",
+      "tablet": "Single column; version history becomes a full-width collapsible <details>/disclosure Card below the editor actions.",
+      "phone": "Single column, stacked; toolbar wraps to multiple rows but stays sticky; version history is a collapsible disclosure at the bottom. No element exceeds viewport width at 360px."
+    }
+  },
+  "breakpoints": {
+    "phone": "<=600px",
+    "tablet": "601-1024px",
+    "desktop": ">=1025px",
+    "approach": "mobile-first, fluid between breakpoints; min-width:0 + overflow-wrap:anywhere on text cells; the page list uses the existing .lms-table-wrap role=region scroll container so columns are never silently clipped; editor canvas and toolbar never overflow horizontally at 360px (toolbar wraps, canvas is fluid width)"
+  },
+  "components": [
+    {
+      "name": "PageHeader (reused @lms/ui)",
+      "purpose": "Title + subtitle + actions slot at top of both screens; consistent with courses screens.",
+      "anatomy": ["h1 title", "subtitle (course context)", "actions slot (status Chip on editor / New page Button on list)"],
+      "content": "List: title 'Pages' subtitle 'Author rich content pages for {Course title}. Drafts stay private until you publish.' · Editor: title 'New page' or 'Edit page' subtitle the page title; actions = status Chip.",
+      "variants": ["list", "editor"],
+      "states": ["default"],
+      "responsive": { "phone": "title + actions stack", "tablet": "inline", "desktop": "inline" },
+      "interactions": "n/a (container)",
+      "a11y": { "role": "heading region", "label": "page title is the h1", "keyboard": "n/a", "minTouchTarget": "n/a" }
+    },
+    {
+      "name": "PagesTable (reuse .lms-table + .lms-table-wrap region pattern from courses/page.tsx)",
+      "purpose": "List the course's pages, scannable, with status and actions; data-dense admin tone.",
+      "anatomy": [
+        "div.lms-table-wrap role=region aria-label='Course pages' tabIndex=0",
+        "table.lms-table",
+        "thead th scope=col: Page | Status | Updated | Actions",
+        "tbody rows: title (link, color var(--lms-accent), weight 600) + slug muted meta; status Chip; relative/absolute updated time; action Buttons (Edit secondary sm; Publish primary sm if draft)"
+      ],
+      "content": "Row example — title 'Course syllabus and grading policy', slug '/course-syllabus-and-grading-policy', status 'Draft', updated 'Updated 2 hours ago', actions Edit / Publish.",
+      "variants": ["draft-row", "published-row"],
+      "states": ["default", "row-hover (bg var(--lms-surface-2-hover))", "row-focus-within (outline 2px var(--lms-focus) offset -2px)"],
+      "responsive": {
+        "phone": "first column min-width 200px inside the horizontal-scroll region; never silent overflow",
+        "tablet": "condensed; may hide the slug meta line",
+        "desktop": "full table, sticky thead"
+      },
+      "interactions": "Title is an <a> to the editor; action Buttons are real buttons/links; whole row not clickable (SR clarity per token Table a11y note).",
+      "a11y": { "role": "table in a labelled scrollable region", "label": "aria-label='Course pages'; th scope=col", "keyboard": "Tab through links/buttons; region is focusable so keyboard users can scroll it", "minTouchTarget": "44x44px action buttons" }
+    },
+    {
+      "name": "StatusIndicator (reuse Chip @lms/ui)",
+      "purpose": "Show the page's lifecycle state without relying on color alone (text + tone).",
+      "anatomy": ["Chip with text label"],
+      "content": "'Draft' (tone warning), 'Published' (tone success), 'Unsaved changes' (tone neutral/warning) in editor header.",
+      "variants": ["draft (tone=warning)", "published (tone=success)", "unsaved (tone=warning, text 'Unsaved changes')"],
+      "states": ["default"],
+      "responsive": { "phone": "sits under title in PageHeader actions", "tablet": "inline", "desktop": "inline" },
+      "interactions": "static",
+      "a11y": { "role": "status text", "label": "meaning carried by the text, not color (WCAG noColorOnly)", "keyboard": "n/a", "minTouchTarget": "n/a" }
+    },
+    {
+      "name": "TitleSlugFields (reuse Field + Input @lms/ui)",
+      "purpose": "Set page identity; slug auto-derives from title (architect D5 route 1) but is editable.",
+      "anatomy": ["Field label 'Title' required → Input", "Field label 'URL slug' → Input with leading '/' prefix affordance + help text 'Auto-generated from the title. Letters, numbers and hyphens only.'"],
+      "content": "Title placeholder none (label-driven); slug shows derived value e.g. 'course-syllabus-and-grading-policy'.",
+      "variants": ["create (slug live-derives as you type until manually edited)", "edit (slug pre-filled)"],
+      "states": ["default", "focus-visible (3px focus ring)", "invalid (border var(--lms-danger), aria-invalid, error text via aria-describedby — e.g. 'A page with this slug already exists in this course.')", "disabled (while saving)"],
+      "responsive": { "phone": "stacked full-width", "tablet": "title full-width, slug full-width", "desktop": "two-column grid (minmax(0,1fr) minmax(0,1fr)) like asg-grid-2" },
+      "interactions": "Title input drives slug until the user edits slug manually; both validate on blur and on submit.",
+      "a11y": { "role": "textbox", "label": "explicit <label> per Field; slug error referenced by aria-describedby; aria-invalid on error", "keyboard": "standard text entry", "minTouchTarget": "44px min-height inputs" }
+    },
+    {
+      "name": "RichTextEditor (NET-NEW — flagged in openQuestions)",
+      "purpose": "Accessible WYSIWYG editing surface producing sanitized HTML stored as page_version.body (architect D3). frontend-dev picks the library; this spec fixes the a11y + visual contract.",
+      "anatomy": [
+        "FormattingToolbar (sticky, role=toolbar) — see separate component",
+        "EditingCanvas — role=textbox aria-multiline=true contenteditable region, bg var(--lms-surface), 1px border var(--lms-border-strong), radius var(--lms-radius-sm), padding var(--lms-space-4), min-height ~360px, body 16px/1.5",
+        "MediaEmbed dialog/menu (triggered from toolbar 'Insert media' button)"
+      ],
+      "content": "Empty canvas placeholder (subtle, via aria-label not a fake value): 'Start writing your page. Use the toolbar to format text, add headings, lists, links, and media.' Real authored example: an <h2> 'Week 1 — Getting started', a paragraph, a bulleted list, and an embedded image.",
+      "variants": ["editable", "read-only (when viewing a historical version — canvas aria-readonly=true, toolbar hidden/disabled)"],
+      "states": [
+        "default (editable)",
+        "focus-visible (3px var(--lms-focus) ring on the canvas, offset 2px)",
+        "empty (placeholder visible, accessible via aria-describedby help text — not placeholder text masquerading as content)",
+        "loading (skeleton .lms-skeleton block where canvas will be)",
+        "upload-in-progress (inline progress note 'Uploading image…' near insertion point; non-blocking)",
+        "upload-error (inline Alert tone=danger 'Upload failed. Try again.')",
+        "read-only (version view)"
+      ],
+      "responsive": {
+        "phone": "canvas full-width, min-height shorter (~240px); toolbar wraps above it and stays sticky",
+        "tablet": "full-width canvas, toolbar single/double row",
+        "desktop": "canvas fills main column; aside history beside it"
+      },
+      "interactions": "Standard text editing; keyboard shortcuts mirror toolbar (Ctrl/Cmd+B bold, Ctrl/Cmd+I italic, Ctrl/Cmd+K link). Pasting strips disallowed HTML (sanitize on input — security-agent gate per D3).",
+      "a11y": {
+        "role": "textbox (aria-multiline=true) with an accessible name 'Page content' and aria-describedby pointing at the format help + status",
+        "label": "labelled 'Page content'; toolbar is associated as the region's controls",
+        "keyboard": "Editor is reachable by Tab; toolbar uses roving tabindex (see toolbar); Escape from a toolbar menu/dialog returns focus to the canvas at the prior caret position",
+        "minTouchTarget": "n/a for canvas; controls 44px"
+      }
+    },
+    {
+      "name": "FormattingToolbar (NET-NEW — accessible toolbar; flagged in openQuestions)",
+      "purpose": "Keyboard-operable formatting controls for the editor (WCAG 2.2 AA — AC #1).",
+      "anatomy": [
+        "div role=toolbar aria-label='Text formatting' aria-controls=<canvas id>",
+        "Grouped buttons: [Bold, Italic, Underline] | [H2, H3, Paragraph] | [Bulleted list, Numbered list] | [Link, Insert media/file] | [Undo, Redo]",
+        "Each button: 36px (--sm) icon button with min 44x44 hit area via padding, inline-SVG icon (aria-hidden) + visually-hidden text label, aria-pressed for toggle states",
+        "sticky: position sticky, top 0 within scroll context, bg var(--lms-surface-2), border-bottom 1px var(--lms-border-strong), z-index 150"
+      ],
+      "content": "Tooltip/label text: 'Bold', 'Italic', 'Underline', 'Heading 2', 'Heading 3', 'Paragraph', 'Bulleted list', 'Numbered list', 'Insert link', 'Insert media or file', 'Undo', 'Redo'.",
+      "variants": ["default", "compact (phone: groups wrap, separators become row breaks)"],
+      "states": [
+        "button-default",
+        "button-hover (bg var(--lms-surface-2-hover))",
+        "button-focus-visible (3px var(--lms-focus) ring offset 2px)",
+        "button-active/pressed (aria-pressed=true; bg var(--lms-accent-soft); color var(--lms-accent))",
+        "button-disabled (e.g. Undo with no history — aria-disabled, opacity .5)"
+      ],
+      "responsive": { "phone": "wraps to 2-3 rows, full toolbar width; sticky", "tablet": "1-2 rows", "desktop": "single row" },
+      "interactions": "Roving tabindex: ONE tab stop for the whole toolbar; Left/Right Arrow move between buttons, Home/End jump to first/last, Enter/Space activate, Escape moves focus back to the canvas. Toggle buttons reflect caret state via aria-pressed.",
+      "a11y": {
+        "role": "toolbar",
+        "label": "aria-label='Text formatting'; each control has a text name (visually-hidden span or aria-label); toggles use aria-pressed; group separators are decorative (aria-hidden)",
+        "keyboard": "WAI-ARIA Toolbar pattern — single tab stop + arrow-key navigation; never a tab-trap; Escape returns to canvas",
+        "minTouchTarget": "44x44px effective hit area (icon 36px + padding)"
+      }
+    },
+    {
+      "name": "MediaEmbedControl (reuses existing signed-upload flow — architect D4)",
+      "purpose": "Embed an image, video, or file by uploading via POST /uploads and inserting the returned blobUrl inline in the HTML (<img>/<video>/<a>).",
+      "anatomy": [
+        "Toolbar 'Insert media or file' button → opens a small dialog/menu (role=dialog, focus-trapped, Escape closes)",
+        "File picker (<input type=file> with accessible label) + accepted-types help",
+        "On image: required Field 'Alt text (describe the image)' — enforce non-empty for <img> to keep authored content accessible",
+        "Progress + result: 'Uploading…' → inserts node at caret; on file (non-image) inserts a labelled <a> with the filename"
+      ],
+      "content": "Dialog title 'Insert media or file'; help 'Images, video, PDFs and documents. Max size per your plan.'; alt-text help 'Required for images so screen-reader users understand them.'",
+      "variants": ["image", "video", "file/document"],
+      "states": ["idle", "selecting", "uploading (progress, cancel available)", "success (node inserted, focus returns to canvas)", "error (Alert tone=danger 'Upload failed. Check the file and try again.', retry)"],
+      "responsive": { "phone": "dialog is full-width sheet-style, content scrolls, never overflows", "tablet": "centered dialog ~480px", "desktop": "centered dialog ~480px" },
+      "interactions": "Open via toolbar button or Ctrl/Cmd+Shift+M; focus moves into dialog; Escape cancels and returns focus to canvas; on success the inserted media is selected for easy follow-up.",
+      "a11y": {
+        "role": "dialog (aria-modal=true, aria-labelledby title)",
+        "label": "labelled controls; image alt-text field is required and validated",
+        "keyboard": "focus trapped while open, Escape closes, focus restored to invoking caret",
+        "minTouchTarget": "44x44px"
+      }
+    },
+    {
+      "name": "EditorActionBar (reuse Button @lms/ui + asg-actionbar layout)",
+      "purpose": "Save draft / Publish, with save status feedback.",
+      "anatomy": [
+        "Right-aligned action row (border-top, like asg-actionbar): [Cancel ghost] [Save draft secondary] [Publish primary]",
+        "Inline save-status text/region (aria-live=polite) left of the buttons: 'Saving…' → 'Saved · just now' → on failure an Alert tone=danger"
+      ],
+      "content": "Buttons 'Cancel', 'Save draft', 'Publish'. Status: 'All changes saved', 'Saving…', 'Couldn't save — retry'. Publish confirm copy (if confirm step kept): 'Publishing makes this page visible to learners in the course.'",
+      "variants": ["create (Publish disabled until first save creates the page)", "edit-draft", "edit-published (Save draft creates a new draft version; Publish promotes it)"],
+      "states": [
+        "idle",
+        "saving (Save/Publish buttons show busy + aria-busy, disabled to prevent double-submit)",
+        "saved (status region announces 'All changes saved', timestamp)",
+        "save-error (Alert tone=danger + retry; buttons re-enabled)",
+        "publishing",
+        "published (status Chip flips to Published; success Alert 'Page published.')"
+      ],
+      "responsive": { "phone": "buttons stretch full-width (asg-actionbar stretch rule); status sits above them", "tablet": "inline right-aligned", "desktop": "inline right-aligned" },
+      "interactions": "Save draft → PATCH /pages/:id (body ⇒ new draft version) or POST create on first save. Publish → POST /pages/:id/publish (latest draft). Disable buttons during in-flight requests; never silent failure.",
+      "a11y": {
+        "role": "group of buttons + aria-live=polite status region",
+        "label": "status changes announced politely; errors via role=alert",
+        "keyboard": "buttons in logical tab order after the editor; Enter/Space activate",
+        "minTouchTarget": "44x44px"
+      }
+    },
+    {
+      "name": "VersionHistoryPanel (reuse Card + Stack + Chip; list semantics)",
+      "purpose": "Show all versions newest-first and let the teacher view a historical version (architect D5 routes 6 + 7).",
+      "anatomy": [
+        "aside aria-labelledby='version-history-heading' (desktop) / <details> disclosure (tablet/phone)",
+        "h2 'Version history'",
+        "ordered list (<ol>) newest-first; each item: 'Version {n}' + state Chip (Draft/Published) + author + relative timestamp + a 'View' Button (secondary sm)",
+        "Current/published version marked with an accent dot + visually-hidden 'current' text"
+      ],
+      "content": "Item example: 'Version 3 · Draft · by A. Teacher · 2 hours ago · [View]'. Empty (brand-new unsaved page): 'No versions yet. Save a draft to create version 1.' Loading: 3 .lms-skeleton rows.",
+      "variants": ["desktop-aside", "mobile-disclosure", "read-only-viewing (a version is open in the canvas; banner 'Viewing version 2 (read-only). [Back to draft]')"],
+      "states": ["loading", "empty", "list", "error ('Couldn't load history. Retry.')", "viewing-historical"],
+      "responsive": {
+        "phone": "collapsible <details> at bottom of page; summary is a 44px button",
+        "tablet": "collapsible <details>, full width below actions",
+        "desktop": "sticky aside ~320px beside the editor"
+      },
+      "interactions": "'View' loads GET /pages/:id/versions/:versionId into the canvas read-only with a clear banner + 'Back to current draft'. (Restore is an architect-noted follow-up, NOT in #32 scope — see openQuestions.)",
+      "a11y": {
+        "role": "complementary (aside) / disclosure (details); the list is an <ol>",
+        "label": "aside labelled by its heading; each 'View' button names its version e.g. 'View version 3'",
+        "keyboard": "disclosure summary toggles with Enter/Space and reflects aria-expanded; View buttons in tab order",
+        "minTouchTarget": "44x44px"
+      }
+    },
+    {
+      "name": "EmptyState (reuse @lms/ui EmptyState + content icon)",
+      "purpose": "Pages-list empty state with a clear first action.",
+      "anatomy": ["inline-SVG 'content' icon (document) aria-hidden", "title", "description", "primary action Button"],
+      "content": "title 'No pages yet', description 'Create your first page to share rich materials with learners in this course.', action 'New page'.",
+      "variants": ["default"],
+      "states": ["default"],
+      "responsive": { "phone": "centered, full-width", "tablet": "centered", "desktop": "centered" },
+      "interactions": "action navigates to /courses/[id]/pages/new",
+      "a11y": { "role": "region", "label": "title is a heading; icon aria-hidden", "keyboard": "action button focusable", "minTouchTarget": "44x44px" }
+    },
+    {
+      "name": "PermissionDenied / ServiceOffline / NotFound (reuse Alert @lms/ui)",
+      "purpose": "Cover gating + error flows consistent with courses screens.",
+      "anatomy": ["PageHeader 'Not authorized' / 'Page unavailable'", "Alert tone warning/danger with real copy"],
+      "content": "Non-admin: 'You are signed in as {user}, but your account does not hold a teaching or administrator role, so page authoring is unavailable.' (tone=warning) · Service offline: 'The content service is unavailable. Start it (CONTENT_STORE=memory pnpm dev in services/content) to author pages here.' (tone=warning) · 404: 'This page no longer exists or was moved.' (tone=warning) · Save error: 'Couldn't save your changes. Check your connection and try again.' (tone=danger, role=alert).",
+      "variants": ["permission-denied", "service-offline", "not-found", "save-error"],
+      "states": ["default"],
+      "responsive": { "phone": "full-width", "tablet": "full-width", "desktop": "full-width within container" },
+      "interactions": "save-error offers retry; others are terminal with a back link",
+      "a11y": { "role": "status (warning info) / alert (danger)", "label": "meaning in text + inline-SVG icon, never color alone", "keyboard": "back/retry links focusable", "minTouchTarget": "44x44px" }
+    }
+  ],
+  "flows": [
+    "Happy path (create): /courses/[id]/pages → New page → type title (slug auto-derives) → write in canvas, format via toolbar, embed an image with required alt text → Save draft (POST create → status 'Saved', version 1 appears in history) → continue editing → Save draft (PATCH → new draft version 2) → Publish (POST publish → status Chip 'Published', success Alert).",
+    "Happy path (edit published): open a published page → Save draft creates a new draft version (page stays published to learners until re-publish) → Publish promotes the new draft.",
+    "Empty (list): no pages → EmptyState with 'New page' action.",
+    "Empty (editor history): brand-new unsaved page → history shows 'No versions yet. Save a draft to create version 1.'",
+    "Loading: list shows skeleton rows; editor shows skeleton canvas + skeleton history.",
+    "Saving / saved: aria-live status announces 'Saving…' then 'All changes saved'; buttons disabled while in-flight.",
+    "Save error: Alert tone=danger role=alert with retry; buttons re-enabled; no data loss (canvas content retained).",
+    "Upload (media embed): Insert media → pick file → (image) enter alt text → uploading progress → inserted inline; on failure inline Alert + retry.",
+    "Version viewing: View version N → canvas loads read-only with banner + 'Back to current draft'.",
+    "Permission denied (non-admin): PageHeader 'Not authorized' + warning Alert; no page data fetched/leaked.",
+    "Not found: GET /pages/:id 404 → 'Page unavailable' + back link.",
+    "Reduced motion: toolbar/canvas transitions and any skeleton shimmer respect prefers-reduced-motion."
+  ],
+  "accessibility": {
+    "wcag": "2.2 AA",
+    "contrastMin": "4.5:1 body text / 3:1 large text, UI components & focus ring (admin tone verified in token spec: text 16.9:1, muted 6.6:1, focus 3.9-4.6:1)",
+    "focusOrder": "logical DOM order — back link → PageHeader → title → slug → toolbar (single tab stop) → canvas → action bar → version history; visible :focus-visible 3px var(--lms-focus) ring offset 2px on every interactive element",
+    "richTextEditor": "canvas is role=textbox aria-multiline=true with accessible name 'Page content'; placeholder guidance via aria-describedby (not fake content); pasted/typed HTML is sanitized to an allow-list (security-agent DoD gate, architect D3)",
+    "toolbar": "WAI-ARIA Toolbar pattern: role=toolbar, single tab stop, Left/Right/Home/End arrow navigation, Enter/Space activate, Escape returns to canvas, aria-pressed on toggles, aria-controls→canvas, each control has a text name",
+    "mediaEmbed": "image embeds REQUIRE alt text (enforced) so authored content stays accessible; dialog is aria-modal with focus trap + Escape + focus restoration",
+    "status": "save status in an aria-live=polite region; errors via role=alert; lifecycle conveyed by Chip TEXT + tone (never color alone)",
+    "motion": "respect prefers-reduced-motion — disable transforms/shimmer, keep instant color state changes and static focus ring",
+    "semantics": "AppShell header/main landmarks; version history is an <aside>/<details>; list of versions is an <ol>; h1 page title → h2 section/aside headings; native controls labelled via Field; aria only where native won't do",
+    "touchTargets": "44x44px minimum for all controls including toolbar icon buttons (36px icon + padding)",
+    "noColorOnly": "Draft/Published/Unsaved status always carries a text label in addition to tone"
+  },
+  "openQuestions": [
+    "NET-NEW PATTERN: there is no rich-text editor in @lms/ui today. frontend-dev should choose a well-maintained accessible editor (e.g. TipTap/ProseMirror or a contenteditable wrapper) that supports the WAI-ARIA Toolbar pattern and produces clean HTML; visual chrome (toolbar, canvas) must use the --lms-* admin tokens above, NOT the library's default theme. Confirm whether to also add a reusable .lms-editor to @lms/ui or keep it admin-local for now (recommend admin-local for #32, promote later).",
+    "HTML SANITIZATION (security-agent DoD gate, architect D3/D4): body is stored as raw HTML server-side and NOT sanitized in the backend. The editor must sanitize on input AND the rendering path must sanitize on output. Confirm the allow-list (tags: p,h2,h3,h4,ul,ol,li,a,strong,em,u,img,video,blockquote,br; attrs: href,src,alt,title; strip script/style/event handlers).",
+    "AUTH ROLE: courses screens gate on isAdmin(session). Story #32 says 'As a teacher'. Confirm the role check for page authoring — does an instructor/teacher role pass the admin-app gate, or is authoring admin-only for now? Copy assumes 'teaching or administrator role'. Needs product confirmation (affects the permission-denied message + gate).",
+    "AUTO-SAVE vs MANUAL: design specifies explicit Save draft (matches D5 PATCH = new version on body change). Confirm we do NOT auto-save (auto-save would spawn a new immutable page_version on every keystroke/interval — version bloat, architect flagged unbounded growth). Recommend manual Save draft for #32.",
+    "PUBLISH CONFIRMATION: should Publish show a confirm step ('makes this page visible to learners')? Recommended yes for a destructive-ish/visibility action, but adds a modal. Confirm with product.",
+    "RESTORE a version: architect noted restore (POST .../restore) as a deferred follow-up, NOT in #32 DoD. This design provides View-only of historical versions. Confirm restore stays out of scope for #32.",
+    "createdBy is null from the backend (service-builder note: header resolver carries no user id) — the version history 'author' column may show 'Unknown' until user identity is threaded. Confirm acceptable for #32 or whether author display is required (would need a backend follow-up)."
+  ]
+}

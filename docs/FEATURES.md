@@ -145,6 +145,8 @@ students are doing.*
   so material unlocks in order or when prerequisites are met.
 - **Add any content** — text, files, embeds, interactive (H5P-style), **video**,
   and **SCORM/xAPI** packages — with automatic **completion tracking**.
+- **Author rich pages in-platform** with an **accessible WYSIWYG editor**: embed
+  media and files, save **versioned drafts**, and publish when ready.
 
 ### Assignments and assessments
 

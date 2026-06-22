@@ -2,18 +2,24 @@ import { randomUUID } from "node:crypto";
 
 import type { TenantContext } from "@lms/types";
 
-import type {
-  ContentStore,
-  CreateTopicResult,
-  ModuleDetail,
-  ModuleRecord,
-  NewModuleInput,
-  NewReleaseConditionInput,
-  NewTopicInput,
-  ReleaseConditionRecord,
-  TopicRecord,
-  UpdateModuleInput,
-  UpdateTopicInput,
+import {
+  slugify,
+  type ContentStore,
+  type CreateTopicResult,
+  type ModuleDetail,
+  type ModuleRecord,
+  type NewModuleInput,
+  type NewPageInput,
+  type NewReleaseConditionInput,
+  type NewTopicInput,
+  type PageDetail,
+  type PageRecord,
+  type PageVersionRecord,
+  type ReleaseConditionRecord,
+  type TopicRecord,
+  type UpdateModuleInput,
+  type UpdatePageInput,
+  type UpdateTopicInput,
 } from "./store.js";
 
 export const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
@@ -26,6 +32,8 @@ export class MemoryContentStore implements ContentStore {
   private modules: ModuleRecord[] = [];
   private topics: TopicRecord[] = [];
   private releases: ReleaseConditionRecord[] = [];
+  private pages: PageRecord[] = [];
+  private pageVersions: PageVersionRecord[] = [];
 
   constructor(
     private readonly generateId: () => string = randomUUID,
@@ -190,5 +198,150 @@ export class MemoryContentStore implements ContentStore {
       (r) => !(r.id === id && r.tenantId === ctx.tenantId),
     );
     return this.releases.length < before;
+  }
+
+  // --- Rich pages (#32) ----------------------------------------------------
+
+  /** Versions for a page, newest version_number first. */
+  private versionsOf(tenantId: string, pageId: string): PageVersionRecord[] {
+    return this.pageVersions
+      .filter((v) => v.tenantId === tenantId && v.pageId === pageId)
+      .sort((a, b) => b.versionNumber - a.versionNumber);
+  }
+
+  /** Current version = latest draft if any, else the published version. */
+  private currentVersionOf(page: PageRecord): PageVersionRecord | null {
+    const versions = this.versionsOf(page.tenantId, page.id);
+    const latestDraft = versions.find((v) => v.state === "draft");
+    if (latestDraft) return latestDraft;
+    if (page.publishedVersionId) {
+      return versions.find((v) => v.id === page.publishedVersionId) ?? null;
+    }
+    return null;
+  }
+
+  async createPage(
+    ctx: TenantContext,
+    courseId: string,
+    input: NewPageInput,
+  ): Promise<PageRecord> {
+    const ts = this.now().toISOString();
+    const page: PageRecord = {
+      id: this.generateId(),
+      tenantId: ctx.tenantId,
+      courseId,
+      title: input.title,
+      slug: input.slug ? slugify(input.slug) : slugify(input.title),
+      status: "draft",
+      publishedVersionId: null,
+      createdBy: null,
+      createdAt: ts,
+      updatedAt: ts,
+    };
+    this.pages.push(page);
+    const version: PageVersionRecord = {
+      id: this.generateId(),
+      tenantId: ctx.tenantId,
+      pageId: page.id,
+      versionNumber: 1,
+      body: input.body ?? "",
+      state: "draft",
+      createdBy: null,
+      createdAt: ts,
+    };
+    this.pageVersions.push(version);
+    return page;
+  }
+
+  async listPages(
+    ctx: TenantContext,
+    courseId: string,
+  ): Promise<PageRecord[]> {
+    return this.pages
+      .filter((p) => p.tenantId === ctx.tenantId && p.courseId === courseId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async getPage(ctx: TenantContext, id: string): Promise<PageDetail | null> {
+    const page = this.pages.find(
+      (p) => p.id === id && p.tenantId === ctx.tenantId,
+    );
+    if (!page) return null;
+    return { ...page, currentVersion: this.currentVersionOf(page) };
+  }
+
+  async updatePage(
+    ctx: TenantContext,
+    id: string,
+    input: UpdatePageInput,
+  ): Promise<PageRecord | null> {
+    const page = this.pages.find(
+      (p) => p.id === id && p.tenantId === ctx.tenantId,
+    );
+    if (!page) return null;
+    if (input.title !== undefined) page.title = input.title;
+    if (input.slug !== undefined) page.slug = slugify(input.slug);
+    if (input.body !== undefined) {
+      // Never mutate an existing version — append a new draft version.
+      const maxNumber = this.versionsOf(page.tenantId, page.id).reduce(
+        (max, v) => Math.max(max, v.versionNumber),
+        0,
+      );
+      this.pageVersions.push({
+        id: this.generateId(),
+        tenantId: ctx.tenantId,
+        pageId: page.id,
+        versionNumber: maxNumber + 1,
+        body: input.body,
+        state: "draft",
+        createdBy: null,
+        createdAt: this.now().toISOString(),
+      });
+    }
+    page.updatedAt = this.now().toISOString();
+    return page;
+  }
+
+  async publishPage(
+    ctx: TenantContext,
+    id: string,
+    versionId?: string,
+  ): Promise<PageRecord | null> {
+    const page = this.pages.find(
+      (p) => p.id === id && p.tenantId === ctx.tenantId,
+    );
+    if (!page) return null;
+    const versions = this.versionsOf(page.tenantId, page.id);
+    const target = versionId
+      ? versions.find((v) => v.id === versionId)
+      : versions.find((v) => v.state === "draft");
+    if (!target) return null;
+    target.state = "published";
+    page.status = "published";
+    page.publishedVersionId = target.id;
+    page.updatedAt = this.now().toISOString();
+    return page;
+  }
+
+  async listPageVersions(
+    ctx: TenantContext,
+    pageId: string,
+  ): Promise<PageVersionRecord[]> {
+    return this.versionsOf(ctx.tenantId, pageId);
+  }
+
+  async getPageVersion(
+    ctx: TenantContext,
+    pageId: string,
+    versionId: string,
+  ): Promise<PageVersionRecord | null> {
+    return (
+      this.pageVersions.find(
+        (v) =>
+          v.id === versionId &&
+          v.pageId === pageId &&
+          v.tenantId === ctx.tenantId,
+      ) ?? null
+    );
   }
 }

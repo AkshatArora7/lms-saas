@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import type { StandardRole } from "@lms/types";
 
 /**
  * Server-only auth helpers for the admin console. Mirrors the learner app's BFF
@@ -24,8 +25,20 @@ export const SSO_STATE_COOKIE = "lms_admin_sso_state";
 export const SSO_PROVIDER_ID =
   process.env.SSO_PROVIDER_ID ?? "22222222-2222-2222-2222-222222222222";
 
-/** Roles permitted to use the admin console. */
-export const ADMIN_ROLES = ["org_admin", "super_admin"];
+/**
+ * Roles permitted to use the admin console, typed against the stable
+ * {@link StandardRole} key union from `@lms/types` (mirrors the analytics authz
+ * convention in `services/analytics/src/store.ts`). Typing the privileged
+ * constant — not the wire `Session.roles` — keeps the admin set stable and
+ * compile-checked without changing who is an admin. Runtime membership stays
+ * exactly `{org_admin, super_admin}`.
+ */
+export const SUPER_ADMIN_ROLE: StandardRole = "super_admin";
+export const ORG_ADMIN_ROLE: StandardRole = "org_admin";
+export const ADMIN_ROLES: readonly StandardRole[] = [
+  SUPER_ADMIN_ROLE,
+  ORG_ADMIN_ROLE,
+];
 
 export const cookieBase = {
   httpOnly: true,
@@ -43,7 +56,12 @@ export interface Session {
 }
 
 export function isAdmin(session: Session): boolean {
-  return session.roles.some((r) => ADMIN_ROLES.includes(r));
+  // Mirror the analytics authz convention (`store.ts:575-576`): test the
+  // wire-shape `string[]` against the typed privileged constants. `string[]`
+  // `.includes()` accepts a `StandardRole` arg (assignable to `string`), which
+  // typechecks where `ADMIN_ROLES.includes(r: string)` would not. Runtime is
+  // identical — membership stays exactly `{org_admin, super_admin}`.
+  return ADMIN_ROLES.some((role) => session.roles.includes(role));
 }
 
 /**

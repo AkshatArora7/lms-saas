@@ -36,6 +36,20 @@ const schema = z.object({
   GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().default("llama-3.3-70b-versatile"),
 
+  // Observability / distributed tracing (#83). Optional + tolerant: the OTel
+  // preload (@lms/observability/register) reads RAW process.env before config
+  // loads, so these exist here only for documentation + typed access by app
+  // code. Empty-string is tolerated (docker-compose passes empty defaults for
+  // the optional endpoint/headers) and the endpoint is NOT validated as a URL
+  // (vendors vary on scheme/path), so this never breaks boot.
+  OTEL_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
+  OTEL_EXPORTER_OTLP_HEADERS: z.string().optional(),
+  OTEL_SERVICE_NAME: z.string().optional(),
+
   // Rate limiting (gateway). Default per-tenant budget per fixed window; the
   // gateway resolves the effective limit per tenant (extensible by plan). Backed
   // by Upstash Redis when its creds are set, else an in-process limiter.

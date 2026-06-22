@@ -24,7 +24,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [calendar](calendar.md) | 4013 | Postgres | `calendar_event`, `bell_schedule`, `schedule_period`, `timetable_entry` |
 | [rubric](rubric.md) | 4014 | Postgres | `rubric`, `rubric_criterion`, `rubric_level`, `competency`, `learning_objective`, `objective_alignment` |
 | [analytics](analytics.md) | 4015 | Postgres | `caliper_event`, `engagement_summary`, `xapi_statement` |
-| [reporting](reporting.md) | 4016 | read replicas | - |
+| [reporting](reporting.md) | 4016 | Postgres + JSONB | `report_definition`, `report_run` |
 | [ai](ai.md) | 4017 | pgvector + JSONB | `ai_embedding`, `ai_chat`, `ai_message` |
 | [lti](lti.md) | 4018 | Postgres + Redis | `lti_registration`, `lti_deployment` |
 | [sis](sis.md) | 4019 | Postgres | `sis_sync`, `sis_id_map` |
@@ -92,8 +92,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `quiz.attempt.started` | assessment | calendar |
 | `quiz.attempt.submitted` | assessment | analytics |
 | `quiz.graded` | assessment | grading |
-| `report.completed` | reporting | - |
-| `report.requested` | - | reporting |
 | `role.created` | identity | - |
 | `role.deleted` | identity | - |
 | `role.updated` | identity | - |
@@ -138,7 +136,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | calendar | notification, user-org |
 | rubric | analytics, grading |
 | analytics | notification, reporting |
-| reporting | - |
+| reporting | course, enrollment |
 | ai | content |
 | lti | grading, identity, user-org |
 | sis | course, enrollment, user-org |

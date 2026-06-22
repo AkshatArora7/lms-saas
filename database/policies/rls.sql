@@ -35,7 +35,8 @@ DECLARE
     'attendance_code','attendance_session','attendance_record',
     'self_registration_policy','self_registration_request',
     'submission_annotation','assignment_group','assignment_group_member',
-    'parental_consent','search_document','guardian_relationship'
+    'parental_consent','search_document','guardian_relationship',
+    'report_definition','report_run'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

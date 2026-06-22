@@ -34,6 +34,8 @@
     "db:migrate": "pnpm --filter @lms/db migrate:deploy",
     "db:migrate:dev": "pnpm --filter @lms/db migrate:dev",
     "db:seed": "pnpm --filter @lms/db seed",
+    "db:check-drift": "node scripts/db/check-drift.mjs",
+    "db:verify-rls": "node scripts/db/verify-rls.mjs",
     "clean": "turbo run clean && rimraf node_modules"
   },
   "devDependencies": {
@@ -41,6 +43,7 @@
     "@lms/eslint-config": "workspace:*",
     "@types/node": "^20.14.0",
     "eslint": "^9.39.0",
+    "pg": "^8.13.0",
     "prettier": "^3.3.3",
     "rimraf": "^6.0.1",
     "turbo": "^2.1.0",

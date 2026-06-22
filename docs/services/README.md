@@ -26,7 +26,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [analytics](analytics.md) | 4015 | Postgres | `caliper_event`, `engagement_summary`, `xapi_statement` |
 | [reporting](reporting.md) | 4016 | Postgres + JSONB | `report_definition`, `report_run` |
 | [ai](ai.md) | 4017 | pgvector + JSONB | `ai_embedding`, `ai_chat`, `ai_message` |
-| [lti](lti.md) | 4018 | Postgres + Redis | `lti_registration`, `lti_deployment` |
+| [lti](lti.md) | 4018 | Postgres | `lti_registration`, `lti_deployment`, `lti_launch_session` |
 | [sis](sis.md) | 4019 | Postgres | `sis_sync`, `sis_id_map` |
 | [video](video.md) | 4020 | Blob + JSONB | `video_asset` |
 | [search](search.md) | 4021 | Postgres (pg_trgm/vector) | `search_document` |
@@ -75,7 +75,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `grade.released` | - | notification |
 | `grading.final.calculated` | grading | - |
 | `grading.graded` | grading | notification |
-| `grading.graded (AGS score passback)` | - | lti |
 | `grading.graded (reflect status)` | - | assignment |
 | `guardian.linked` | user-org | - |
 | `guardian.revoked` | user-org | - |
@@ -83,8 +82,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `identity.role.revoked` | identity | - |
 | `identity.user.authenticated` | identity | - |
 | `learning.event_captured` | analytics | - |
-| `lti.deeplink.created` | lti | - |
-| `lti.tool.launched` | lti | - |
 | `notification.failed` | notification | - |
 | `notification.sent` | notification | - |
 | `orgunit.created` | user-org | - |
@@ -138,7 +135,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | analytics | notification, reporting |
 | reporting | course, enrollment |
 | ai | content |
-| lti | grading, identity, user-org |
+| lti | identity |
 | sis | course, enrollment, user-org |
 | video | - |
 | search | content, course, discussion |

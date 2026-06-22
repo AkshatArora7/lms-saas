@@ -759,6 +759,25 @@ CREATE TABLE IF NOT EXISTS lti_deployment (
   UNIQUE (registration_id, deployment_id)
 );
 
+-- OIDC third-party-login state/nonce store for LTI 1.3 Resource Link launches.
+-- Minted at /lti/login, atomically burned (single-use) at /lti/launch for
+-- replay protection: an UPDATE ... SET consumed_at = now() WHERE consumed_at IS
+-- NULL AND expires_at > now() guarantees each (state, nonce) is used at most once.
+CREATE TABLE IF NOT EXISTS lti_launch_session (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  registration_id uuid NOT NULL REFERENCES lti_registration(id) ON DELETE CASCADE,
+  state           text NOT NULL,
+  nonce           text NOT NULL,
+  target_link_uri text,
+  lti_message_hint text,
+  consumed_at     timestamptz,
+  expires_at      timestamptz NOT NULL,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, state)
+);
+CREATE INDEX IF NOT EXISTS ix_lti_launch_session_lookup ON lti_launch_session(tenant_id, state);
+
 CREATE TABLE IF NOT EXISTS sis_sync (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id   uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,

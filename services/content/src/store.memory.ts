@@ -12,10 +12,15 @@ import {
   type NewPageInput,
   type NewReleaseConditionInput,
   type NewTopicInput,
+  type NewScormPackageInput,
   type PageDetail,
   type PageRecord,
   type PageVersionRecord,
   type ReleaseConditionRecord,
+  type SaveScormAttemptInput,
+  type SaveScormAttemptResult,
+  type ScormAttemptRecord,
+  type ScormPackageRecord,
   type TopicRecord,
   type UpdateModuleInput,
   type UpdatePageInput,
@@ -34,6 +39,8 @@ export class MemoryContentStore implements ContentStore {
   private releases: ReleaseConditionRecord[] = [];
   private pages: PageRecord[] = [];
   private pageVersions: PageVersionRecord[] = [];
+  private scormPackages: ScormPackageRecord[] = [];
+  private scormAttempts: ScormAttemptRecord[] = [];
 
   constructor(
     private readonly generateId: () => string = randomUUID,
@@ -341,6 +348,109 @@ export class MemoryContentStore implements ContentStore {
           v.id === versionId &&
           v.pageId === pageId &&
           v.tenantId === ctx.tenantId,
+      ) ?? null
+    );
+  }
+
+  // --- SCORM (#31) ---------------------------------------------------------
+
+  async createScormPackage(
+    ctx: TenantContext,
+    input: NewScormPackageInput,
+  ): Promise<ScormPackageRecord> {
+    const pkg: ScormPackageRecord = {
+      id: this.generateId(),
+      tenantId: ctx.tenantId,
+      topicId: input.topicId ?? null,
+      version: input.version,
+      title: input.title,
+      launchHref: input.launchHref,
+      masteryScore: input.masteryScore,
+      blobUrl: input.blobUrl,
+      manifest: input.manifest,
+    };
+    this.scormPackages.push(pkg);
+    return pkg;
+  }
+
+  async getScormPackage(
+    ctx: TenantContext,
+    id: string,
+  ): Promise<ScormPackageRecord | null> {
+    return (
+      this.scormPackages.find(
+        (p) => p.id === id && p.tenantId === ctx.tenantId,
+      ) ?? null
+    );
+  }
+
+  async saveScormAttempt(
+    ctx: TenantContext,
+    packageId: string,
+    input: SaveScormAttemptInput,
+  ): Promise<SaveScormAttemptResult> {
+    const pkg = this.scormPackages.find(
+      (p) => p.id === packageId && p.tenantId === ctx.tenantId,
+    );
+    if (!pkg) return { ok: false, reason: "package_not_found" };
+    const now = this.now().toISOString();
+    const existing = this.scormAttempts.find(
+      (a) =>
+        a.tenantId === ctx.tenantId &&
+        a.packageId === packageId &&
+        a.learnerId === input.learnerId,
+    );
+    if (existing) {
+      existing.completionStatus =
+        input.completionStatus ?? existing.completionStatus;
+      existing.successStatus = input.successStatus ?? existing.successStatus;
+      existing.scoreScaled =
+        input.scoreScaled !== undefined ? input.scoreScaled : existing.scoreScaled;
+      existing.scoreRaw =
+        input.scoreRaw !== undefined ? input.scoreRaw : existing.scoreRaw;
+      existing.lessonStatus =
+        input.lessonStatus !== undefined
+          ? input.lessonStatus
+          : existing.lessonStatus;
+      existing.sessionTime =
+        input.sessionTime !== undefined
+          ? input.sessionTime
+          : existing.sessionTime;
+      existing.totalTime =
+        input.totalTime !== undefined ? input.totalTime : existing.totalTime;
+      existing.updatedAt = now;
+      return { ok: true, attempt: existing };
+    }
+    const attempt: ScormAttemptRecord = {
+      id: this.generateId(),
+      tenantId: ctx.tenantId,
+      packageId,
+      learnerId: input.learnerId,
+      completionStatus: input.completionStatus ?? "unknown",
+      successStatus: input.successStatus ?? "unknown",
+      scoreScaled: input.scoreScaled ?? null,
+      scoreRaw: input.scoreRaw ?? null,
+      lessonStatus: input.lessonStatus ?? null,
+      sessionTime: input.sessionTime ?? null,
+      totalTime: input.totalTime ?? null,
+      attemptedAt: now,
+      updatedAt: now,
+    };
+    this.scormAttempts.push(attempt);
+    return { ok: true, attempt };
+  }
+
+  async getScormAttempt(
+    ctx: TenantContext,
+    packageId: string,
+    learnerId: string,
+  ): Promise<ScormAttemptRecord | null> {
+    return (
+      this.scormAttempts.find(
+        (a) =>
+          a.tenantId === ctx.tenantId &&
+          a.packageId === packageId &&
+          a.learnerId === learnerId,
       ) ?? null
     );
   }

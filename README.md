@@ -408,9 +408,11 @@ tenant-isolated via RLS; marking emits events to `notification` and `analytics`.
 Standards conformance is how an LMS wins institutional procurement — it's built in
 from the start:
 
-- **LTI 1.3 / Advantage** — the platform is both an LTI **Platform** (embed
-  external tools) and **Tool** (be embedded in a school portal): OIDC login, **AGS**
-  grade passback, **NRPS** roster, **Deep Linking 2.0**, **Dynamic Registration**.
+- **LTI 1.3** — be embedded in a school portal as an LTI **Tool**: **OIDC
+  third-party login + Resource Link launch** (validate the platform-signed
+  id_token against its JWKS, map LTI roles, mint a tenant session) ship today;
+  **AGS** grade passback, **NRPS** roster, **Deep Linking 2.0**, and **Dynamic
+  Registration** are on the roadmap.
 - **OneRoster 1.2** — sync rosters both ways with the school SIS (consumer +
   provider) with `sourcedId` mapping and delta sync.
 - **Caliper / xAPI** — standardized learning-activity events into the analytics

@@ -52,7 +52,7 @@ First-party auth and token issuance (local password login, rotating refresh toke
 
 ## Notes
 
-RBAC is tenant-scoped (RLS). LTI 1.3 login handshakes are delegated to the `lti` service which calls back here for claims.
+RBAC is tenant-scoped (RLS). LTI 1.3 launches are handled by the `lti` service, which mints the LMS session itself via `@lms/auth` (shared signing secret) rather than calling back here.
 
 ## Cross-cutting
 

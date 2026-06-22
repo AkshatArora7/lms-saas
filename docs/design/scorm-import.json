@@ -1,0 +1,230 @@
+{
+  "$grounding": "Grounded in: docs/design/ui-dual-tone-tokens.json (ADMIN tone tokens — this screen lives in apps/admin), apps/admin/app/lib/ui.tsx (AppShell/ThemeStyle bound to tone='admin'; ContentIcon for the empty state), apps/admin/app/lib/branding.ts (per-tenant accent via --lms-accent; admin fallback #6a8cff — never hard-coded), apps/admin/app/courses/new/page.tsx (the canonical admin create-form: AppShell + ghost back Button + PageHeader + isAdmin gate + warning Alert + Card.asg-form-card with .asg-section / .asg-grid-2 / .asg-actionbar scoped CSS + Field/Input/Textarea + server action submit), apps/admin/app/pages/page-editor.tsx (client-component + scoped-CSS + WAI-ARIA toolbar/contenteditable conventions, sanitize-html, aria-live status), apps/admin/app/api/uploads/route.ts + lib/pages-api signUpload (the SIGNED-UPLOAD BFF: POST /api/uploads {filename,contentType,sizeBytes} -> 201 {upload:{uploadUrl,blobUrl}}; client PUTs bytes to uploadUrl then uses blobUrl), and handshake feat-scorm-import-play.md §4.F route POST /scorm/packages + §4.H security guards + §6 follow-ups. ALL tokens REUSED from the admin tone; NO new palette. The only net-new behaviour (client-side .zip read to extract imsmanifest.xml + paste fallback) is flagged in openQuestions; everything else reuses existing @lms/ui components and the established admin form chrome.",
+  "screen": "Import SCORM package (admin)",
+  "story": "#31",
+  "goal": "An org admin uploads a SCORM .zip and gets a launchable package created: they upload the archive via the existing signed-URL flow, provide the imsmanifest.xml (auto-extracted from the .zip client-side, or pasted/uploaded as a fallback), submit to create the package, and see the parsed result (title, SCORM version, launch href, mastery score) or a clear, recoverable error.",
+  "primaryUsers": ["org_admin", "super_admin"],
+  "route": "/scorm/import  (admin app; sits alongside /courses, /pages — links from a course's content section when topicId is provided as a query param)",
+  "informationHierarchy": [
+    "Primary outcome: a launchable SCORM package was created (success summary card is the loudest thing once import succeeds)",
+    "The two inputs that produce it, in order: (1) the .zip archive, (2) the imsmanifest.xml (auto-extracted from the .zip, shown read-only; editable/pasteable as a fallback)",
+    "Submit affordance: 'Import package' + its busy/disabled state",
+    "Errors when parsing fails: which of invalid_manifest / no_launchable_resource / unsafe_href, in plain language, with what to do",
+    "Optional context: the destination topic/course (topicId) shown as read-only context when arriving from a course",
+    "Honest scope note: byte-level unzip + serving the package's runtime assets server-side is a documented follow-up — this screen imports the manifest + the archive's blobUrl"
+  ],
+  "wiresTo": "Step A (archive): POST /api/uploads { filename, contentType:'application/zip', sizeBytes } -> 201 { upload: { uploadUrl, blobUrl } }; client PUTs the .zip bytes to uploadUrl (existing signed-upload flow, application/zip already allow-listed). Step B (manifest): client reads imsmanifest.xml out of the selected .zip in-browser (or admin pastes/uploads it). Step C (import): a new admin BFF route POST /api/scorm/packages (re-checks isAdmin, forwards x-tenant-id) -> content service POST /scorm/packages { manifestXml, topicId?, blobUrl } -> 201 { package: { id, version, title, launchHref, masteryScore, blobUrl } } | 400 { error: 'invalid_manifest' | 'no_launchable_resource' | 'unsafe_href', message }.",
+  "states": ["loading (RSC gate)", "empty/initial (no archive yet)", "archive-selected (manifest extracted, preview shown)", "uploading-archive (signed PUT in flight)", "importing (POST /scorm/packages in flight)", "success (parsed package summary)", "error-invalid-manifest", "error-no-launchable-resource", "error-unsafe-href", "error-upload-failed", "error-service-offline", "permission-denied (non-admin)"],
+  "designTokens": {
+    "$note": "ADMIN tone from docs/design/ui-dual-tone-tokens.json, exposed at runtime as --lms-* vars via ThemeStyle tone='admin'. accent is the TENANT accent via --lms-accent (admin fallback #6a8cff / token fallback #0E5FAE). Reference vars, never literals, in the build.",
+    "color": {
+      "bg": "var(--lms-bg) /* #F1F4F8 */",
+      "surface": "var(--lms-surface) /* #FFFFFF */",
+      "surface2": "var(--lms-surface-2) /* #E9EDF3 — read-only manifest preview / code area fill */",
+      "border": "var(--lms-border) /* #D4DBE5 */",
+      "borderStrong": "var(--lms-border-strong) /* #B7C1CF — input + dropzone boundary */",
+      "text": "var(--lms-text) /* #0F1B2D */",
+      "muted": "var(--lms-text-muted) /* #516074 — hints, parsed-field captions */",
+      "subtle": "var(--lms-text-subtle) /* #73808F — placeholders only */",
+      "accent": "var(--lms-accent) /* TENANT accent; never hard-coded */",
+      "accentSoft": "var(--lms-accent-soft) /* active dropzone fill */",
+      "danger": "var(--lms-danger) /* #C2261B — parse/upload errors */",
+      "success": "var(--lms-success) /* #0B7A52 — package created */",
+      "warning": "var(--lms-warning) /* #8A5A00 — permission-denied / follow-up scope note */",
+      "focusRing": "var(--lms-focus) /* #1D5FD6, 3px solid, offset 2px */"
+    },
+    "typography": {
+      "fontFamily": "var(--lms-font-family) /* tenant font, else system-ui fallback */",
+      "scale": { "xs": "12px", "sm": "14px", "base": "16px", "lg": "18px", "xl": "20px", "2xl": "24px" },
+      "weight": { "regular": 400, "medium": 500, "semibold": 600, "bold": 700 },
+      "lineHeight": { "tight": 1.2, "snug": 1.35, "normal": 1.5 },
+      "mono": "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace — ONLY for the read-only manifest XML preview and the launch href value; everything else uses the tenant font"
+    },
+    "space": { "scale": [0, 4, 8, 12, 16, 24, 32, 48, 64], "unit": "px", "$map": "--lms-space-1..8 (4,8,12,16,24,32,48,64); reuse the courses/new .asg-* rhythm (form gap space-5, field gap space-4)" },
+    "radius": { "sm": "var(--lms-radius-sm) /* admin sharp 4px */", "md": "var(--lms-radius-md) /* 6px — cards */", "lg": "var(--lms-radius-lg) /* 10px */", "pill": "999px" },
+    "shadow": { "sm": "var(--lms-shadow-sm)", "md": "var(--lms-shadow-md)", "lg": "var(--lms-shadow-lg)" },
+    "zIndex": { "base": 0, "dropdown": 100, "overlay": 200, "modal": 300, "toast": 400 }
+  },
+  "layout": {
+    "grid": {
+      "phone": { "columns": 4, "gutter": 16, "margin": 16 },
+      "tablet": { "columns": 8, "gutter": 24, "margin": 24 },
+      "desktop": { "columns": 12, "gutter": 24, "margin": 32 }
+    },
+    "containerMaxWidth": "1200px (AppShell .lms-shell__main); the import form itself caps at ~760px for comfortable single-column reading, centered in main",
+    "regions": ["header (AppShell topbar: brand + SignOutButton)", "main (ghost back Button -> PageHeader -> form Card / success Card)"],
+    "composition": {
+      "desktop": "Single centered column ~760px. One Card.asg-form-card holds two stacked .asg-section blocks: 'Package archive' (dropzone) then 'Manifest' (read-only preview + paste fallback). .asg-actionbar pins Cancel + Import package bottom-right. On success the form Card is replaced by a ParsedPackageSummary Card (definition list of parsed fields) + a 'Done' / 'Import another' action row.",
+      "tablet": "Same single column, full container width minus margins.",
+      "phone": "Single column, full-width; dropzone, preview, and action buttons all stretch full-width (reuse .asg-actionbar stretch rule). No element exceeds viewport width at 360px; the XML preview scrolls within its own bordered region, never the page."
+    }
+  },
+  "breakpoints": {
+    "phone": "<=600px",
+    "tablet": "601-1024px",
+    "desktop": ">=1025px",
+    "approach": "mobile-first, fluid between breakpoints. The manifest XML preview uses overflow:auto + white-space:pre inside a bordered, role=region tabIndex=0 scroll container so long lines never push the page wide; all other text uses overflow-wrap:anywhere. Nothing overflows horizontally at 360px."
+  },
+  "components": [
+    {
+      "name": "BackLink (reuse Button variant=ghost size=sm, like courses/new .asg-back)",
+      "purpose": "Return to the originating context (course content section or SCORM list).",
+      "anatomy": ["ghost Button with leading arrow glyph"],
+      "content": "'<- Back to course content' when arriving with a topicId; otherwise '<- Back to courses'.",
+      "variants": ["from-course", "standalone"],
+      "states": ["default", "hover (bg var(--lms-surface-2))", "focus-visible (3px var(--lms-focus) ring offset 2px)"],
+      "responsive": { "phone": "self-start, not full-width", "tablet": "self-start", "desktop": "self-start" },
+      "interactions": "navigates back; real <a> via Button href",
+      "a11y": { "role": "link", "label": "text label is the name; arrow glyph is decorative text", "keyboard": "Tab/Enter", "minTouchTarget": "44x44px" }
+    },
+    {
+      "name": "PageHeader (reuse @lms/ui)",
+      "purpose": "Orient the admin and state scope honestly.",
+      "anatomy": ["h1 title", "subtitle"],
+      "content": "title 'Import SCORM package' · subtitle 'Upload a SCORM 1.2 or 2004 archive and we'll read its manifest to create a launchable package. Serving the package's runtime files is coming soon — for now this records the manifest and the uploaded archive.'",
+      "variants": ["default"],
+      "states": ["default"],
+      "responsive": { "phone": "title wraps", "tablet": "inline", "desktop": "inline" },
+      "interactions": "n/a",
+      "a11y": { "role": "heading", "label": "title is the h1", "keyboard": "n/a", "minTouchTarget": "n/a" }
+    },
+    {
+      "name": "ArchiveDropzone (NET-NEW small client control — uses native <input type=file accept='.zip,application/zip'>)",
+      "purpose": "Select the SCORM .zip, immediately read imsmanifest.xml out of it in-browser, and (on submit) request a signed URL + PUT the bytes.",
+      "anatomy": [
+        "Field label 'SCORM package (.zip)' required",
+        "A labelled drop target: bordered (1px var(--lms-border-strong), radius var(--lms-radius-sm)) region, min-height ~120px, dashed border in idle, that wraps a real <input type=file> (visually styled, not hidden from AT — label is the click target)",
+        "Idle copy: 'Drop your SCORM .zip here or choose a file. We'll read imsmanifest.xml automatically.'",
+        "Selected state: filename + human size + a 'Replace file' button; if extraction succeeded a small success note 'Found imsmanifest.xml', if not an inline warning 'Couldn't find imsmanifest.xml in this archive — paste it below.'"
+      ],
+      "content": "Help text: 'SCORM 1.2 or 2004. Max size per your plan. The archive is uploaded as-is; we don't unzip its assets server-side yet.'",
+      "variants": ["idle", "drag-over (border var(--lms-accent), bg var(--lms-accent-soft))", "file-selected-manifest-found", "file-selected-manifest-missing"],
+      "states": ["default", "drag-over", "focus-visible (3px var(--lms-focus) ring on the input/label)", "uploading (progress text + aria-busy)", "upload-error (inline Alert tone=danger + retry)", "disabled (while importing)"],
+      "responsive": { "phone": "full-width, min-height 100px, copy wraps", "tablet": "full-width", "desktop": "full-width within the ~760px form" },
+      "interactions": "Click/Enter/Space on the label opens the OS picker; drag-and-drop also accepts a file but the visible <button>/<input> is the accessible path (drag is an enhancement, never the only way). On selection the file is read client-side (zip entry imsmanifest.xml) to populate the manifest preview. Bytes are NOT uploaded until submit, to avoid orphan uploads on abandoned imports.",
+      "a11y": { "role": "the native file input is the control; the dropzone is its styled label", "label": "explicit <label for> = 'SCORM package (.zip)'; selection result announced via an aria-live=polite status near the field", "keyboard": "fully operable via the native input (Tab to it, Enter/Space opens picker); drag-drop is additive only", "minTouchTarget": "44px min label/button height" }
+    },
+    {
+      "name": "ManifestPreviewAndFallback (Field + read-only preview + Textarea fallback)",
+      "purpose": "Show the imsmanifest.xml that will be parsed (read-only when auto-extracted) and allow paste/edit as a fallback when extraction fails or the admin only has the XML.",
+      "anatomy": [
+        "Field label 'imsmanifest.xml' required",
+        "When auto-extracted: a read-only preview — div role=region aria-label='Manifest XML (read-only)' tabIndex=0, bg var(--lms-surface-2), 1px var(--lms-border-strong), radius var(--lms-radius-sm), monospace 14px, max-height ~280px, overflow:auto, white-space:pre — plus an 'Edit / paste a different manifest' disclosure that swaps in the Textarea",
+        "Fallback / edit mode: a Textarea (reuse @lms/ui Textarea, monospace, rows ~12) the admin can paste into",
+        "Help text under the field"
+      ],
+      "content": "Help (auto): 'Read from your archive. This is what we'll parse to find the launch page and mastery score.' · Help (paste): 'Paste the contents of imsmanifest.xml. Max 1 MB. We don't process DTDs or external entities for security.'",
+      "variants": ["read-only (auto-extracted)", "paste/edit (fallback or manual)"],
+      "states": ["empty (no manifest yet — preview hidden, paste prompt shown)", "populated-readonly", "editing", "focus-visible (3px var(--lms-focus) ring)", "invalid (aria-invalid + danger border when import returns invalid_manifest)", "disabled (while importing)"],
+      "responsive": { "phone": "full-width; preview max-height ~200px; horizontal scroll INSIDE the region only", "tablet": "full-width", "desktop": "full-width within the form" },
+      "interactions": "Disclosure toggles read-only preview <-> editable Textarea (aria-expanded). On import error the relevant field gets aria-invalid + error text via aria-describedby (e.g. for invalid_manifest / unsafe_href).",
+      "a11y": { "role": "read-only preview is a labelled focusable scroll region; edit mode is a labelled <textarea>", "label": "Field <label> 'imsmanifest.xml'; preview region aria-label; errors via aria-describedby + aria-invalid", "keyboard": "preview region is focusable so keyboard users can scroll it; Textarea standard entry; disclosure toggles with Enter/Space", "minTouchTarget": "44px controls" }
+    },
+    {
+      "name": "DestinationContext (read-only, only when arriving with a topicId)",
+      "purpose": "Show which course/topic the package will attach to, without inventing a topic picker the platform can't yet drive from here.",
+      "anatomy": ["small captioned read-only row: 'Adding to' + topic/course label (or the topicId if no label is resolvable)"],
+      "content": "'Adding to: {Course title} - {Topic title}' (or 'Adding to topic {topicId}' if only the id is known).",
+      "variants": ["with-topic", "no-topic (component omitted — package created unattached, see openQuestions)"],
+      "states": ["default"],
+      "responsive": { "phone": "full-width caption row", "tablet": "inline", "desktop": "inline" },
+      "interactions": "static",
+      "a11y": { "role": "text", "label": "labelled caption; not an input", "keyboard": "n/a", "minTouchTarget": "n/a" }
+    },
+    {
+      "name": "ImportActionBar (reuse Button @lms/ui + .asg-actionbar layout)",
+      "purpose": "Submit the import; provide busy + error feedback.",
+      "anatomy": [
+        "Right-aligned row (border-top): [Cancel ghost] [Import package primary]",
+        "Inline status region (aria-live=polite) left of the buttons: 'Uploading archive...' -> 'Creating package...' ; failures surface as a top-of-form Alert role=alert"
+      ],
+      "content": "Buttons 'Cancel', 'Import package'. Status: 'Uploading archive...', 'Reading manifest and creating package...'. Import disabled until BOTH a .zip is selected AND a non-empty manifest exists.",
+      "variants": ["default", "submitting"],
+      "states": [
+        "idle (Import enabled once inputs valid)",
+        "submitting (Import shows busy + aria-busy, both buttons disabled to prevent double-submit)",
+        "error (buttons re-enabled; Alert above the form names the failure)"
+      ],
+      "responsive": { "phone": "buttons stretch full-width (.asg-actionbar stretch rule); status above them", "tablet": "inline right-aligned", "desktop": "inline right-aligned" },
+      "interactions": "On submit: (1) POST /api/uploads to get a signed URL, PUT the .zip; (2) POST /api/scorm/packages with { manifestXml, topicId?, blobUrl }. On 201 swap to ParsedPackageSummary; on 400 map error -> the matching field/Alert.",
+      "a11y": { "role": "button group + aria-live=polite status; errors via role=alert", "label": "status announced politely; never silent failure", "keyboard": "logical order after the manifest field; Enter/Space activate", "minTouchTarget": "44x44px" }
+    },
+    {
+      "name": "ParsedPackageSummary (reuse Card + Stack + Badge/Chip; success state)",
+      "purpose": "Confirm the package was created and show exactly what was parsed, so the admin can verify before learners launch it.",
+      "anatomy": [
+        "success Alert tone=success role=status 'SCORM package created.'",
+        "Card with an h2 'Parsed package' and a definition list (<dl>): Title, SCORM version (Badge '1.2' / '2004'), Launch page (launchHref, monospace, overflow-wrap), Mastery score (e.g. '80% (0.8)' or 'Not specified'), Archive (blobUrl, truncated/monospace, with a 'copy' affordance)",
+        "action row: [View / launch as learner -> opens the learner play surface for this package] [Import another -> resets the form]"
+      ],
+      "content": "Example — Title 'Workplace Safety Fundamentals', version '1.2', Launch page 'shared/launchpage.html', Mastery score '80% (0.80)', Archive '.../scorm/ws-safety.zip'. Mastery absent: 'Not specified in the manifest.'",
+      "variants": ["default"],
+      "states": ["default"],
+      "responsive": { "phone": "dl stacks term-over-detail; values wrap/scroll, never overflow", "tablet": "two-column dl", "desktop": "two-column dl (term | value)" },
+      "interactions": "'View / launch as learner' links to the learner play route for package id; 'Import another' clears state back to initial.",
+      "a11y": { "role": "region; success via role=status; <dl> semantics for term/value pairs", "label": "h2 heading names the region; Badge version carries TEXT not color", "keyboard": "actions focusable in order", "minTouchTarget": "44x44px" }
+    },
+    {
+      "name": "ImportErrorAlert (reuse Alert @lms/ui)",
+      "purpose": "Map each backend 400 reason to plain, recoverable guidance — never raw error codes.",
+      "anatomy": ["Alert tone=danger role=alert at top of form (and field-level aria-invalid where applicable)", "title-ish lead + what-to-do sentence"],
+      "content": {
+        "invalid_manifest": "'We couldn't read this manifest. Check that you uploaded a valid imsmanifest.xml (SCORM 1.2 or 2004) and that it isn't truncated. Files with DTDs or external entities are rejected for security.'",
+        "no_launchable_resource": "'This manifest has no launchable page. SCORM packages need at least one resource with a launch file (an SCO). Re-export the package from your authoring tool and try again.'",
+        "unsafe_href": "'The launch path in this manifest isn't allowed (it points outside the package, e.g. an absolute URL or a path with \"..\"). Re-export the package so its launch file is a relative path inside the archive.'",
+        "upload-failed": "'Uploading the archive failed. Check your connection and the file size, then try Import again. Nothing was created.'",
+        "service-offline": "'The content service is unavailable. Start it (CONTENT_STORE=memory pnpm dev in services/content) to import packages.'"
+      },
+      "variants": ["invalid_manifest", "no_launchable_resource", "unsafe_href", "upload-failed", "service-offline"],
+      "states": ["default"],
+      "responsive": { "phone": "full-width", "tablet": "full-width", "desktop": "full-width within form" },
+      "interactions": "error is dismissible by fixing the input and re-submitting; focus moves to the Alert (or the offending field) on appearance so SR users hear it",
+      "a11y": { "role": "alert (danger)", "label": "meaning in text + inline-SVG danger icon, never color alone; offending field gets aria-invalid + aria-describedby", "keyboard": "Alert receives focus on appearance; offending field reachable", "minTouchTarget": "n/a" }
+    },
+    {
+      "name": "PermissionDenied (reuse courses/new pattern: PageHeader + Alert tone=warning)",
+      "purpose": "Gate the screen by role exactly like the other admin create screens.",
+      "anatomy": ["PageHeader 'Not authorized'", "Alert tone=warning with the signed-in user"],
+      "content": "'You are signed in as {session.userId}, but your account does not hold an administrator role, so importing SCORM packages is unavailable.'",
+      "variants": ["default"],
+      "states": ["default"],
+      "responsive": { "phone": "full-width", "tablet": "full-width", "desktop": "full-width" },
+      "interactions": "terminal; no package data fetched",
+      "a11y": { "role": "status (warning)", "label": "text + inline-SVG warning icon, never color alone", "keyboard": "n/a", "minTouchTarget": "n/a" }
+    }
+  ],
+  "flows": [
+    "Happy path: /scorm/import -> drop a SCORM .zip -> manifest auto-extracted and previewed read-only ('Found imsmanifest.xml') -> Import package -> 'Uploading archive...' (signed PUT) -> 'Creating package...' (POST /scorm/packages) -> 201 -> ParsedPackageSummary (Title / version Badge / launch href / mastery score / archive) + 'View / launch as learner' + 'Import another'.",
+    "Fallback (no manifest in zip / XML only): selection shows 'Couldn't find imsmanifest.xml' -> admin pastes XML into the Textarea fallback -> Import proceeds the same way.",
+    "Empty/initial: no archive yet -> Import disabled; dropzone shows idle copy; manifest section prompts to select an archive or paste XML.",
+    "Loading: RSC gate while session resolves; once mounted the client form is interactive.",
+    "Uploading: aria-live status 'Uploading archive...'; buttons disabled, aria-busy.",
+    "Error invalid_manifest: danger Alert + manifest field aria-invalid with the invalid_manifest copy; focus to Alert.",
+    "Error no_launchable_resource: danger Alert with re-export guidance.",
+    "Error unsafe_href: danger Alert explaining relative-path requirement (ties to security guard §4.H.2).",
+    "Error upload-failed: danger Alert + retry; explicitly 'Nothing was created'.",
+    "Error service-offline: warning copy with the local dev command.",
+    "Permission denied (non-admin): PageHeader 'Not authorized' + warning Alert; nothing fetched/created.",
+    "Reduced motion: dropzone hover/drag transitions and any upload progress shimmer respect prefers-reduced-motion."
+  ],
+  "accessibility": {
+    "wcag": "2.2 AA",
+    "contrastMin": "4.5:1 body text / 3:1 large text, UI components & focus ring (admin tone verified: text 16.9:1, muted 6.6:1, focus 3.9-4.6:1)",
+    "focusOrder": "logical DOM order — back link -> PageHeader -> archive input -> manifest preview/disclosure (or Textarea) -> Cancel -> Import. On error, focus moves to the Alert or the offending field. Visible :focus-visible 3px var(--lms-focus) ring offset 2px on every interactive element.",
+    "fileInput": "real native <input type=file> with an explicit <label>; drag-and-drop is an ADDITIVE enhancement, never the only path; selection outcome announced via aria-live=polite.",
+    "manifestPreview": "read-only XML is a focusable role=region with aria-label so keyboard users can scroll it; it is NOT an editable field masquerading as readonly — paste/edit is a separate, clearly toggled Textarea.",
+    "status": "upload/import progress in an aria-live=polite region; errors via role=alert; success via role=status; SCORM version conveyed by Badge TEXT ('1.2'/'2004'), never color alone.",
+    "motion": "respect prefers-reduced-motion — disable dropzone transforms and progress shimmer; keep instant color state changes and a static focus ring.",
+    "semantics": "AppShell header/main landmarks; single h1 (PageHeader) -> h2 section/summary headings; parsed result is a <dl>; native file input + Textarea labelled via Field; aria only where native won't do.",
+    "touchTargets": "44x44px minimum for the file label, disclosure, Cancel, Import, and summary actions.",
+    "noColorOnly": "version, success, and every error carry a text label (+ inline-SVG icon for alerts) in addition to tone."
+  },
+  "openQuestions": [
+    "NET-NEW: reading imsmanifest.xml out of the selected .zip in-browser needs a small client-side unzip (e.g. fflate / zip.js, ~tiny). frontend-dev to confirm the lightest dependency, OR ship the paste-only fallback first (admin pastes XML) and add auto-extract as a fast-follow. The paste path requires zero new deps and fully satisfies the backend contract today. Recommend: ship paste-first + auto-extract behind the same Field if a dep is approved.",
+    "NEW BFF ROUTE: this screen needs an admin BFF route POST /api/scorm/packages (mirror app/api/uploads/route.ts: re-check isAdmin, forward x-tenant-id to the content service POST /scorm/packages). Confirm route placement + that the existing pages-api/dashboard lib is where the fetch helper should live. frontend-dev builds it; security-agent gates it.",
+    "TOPIC/DESTINATION: topicId is optional in the backend. From a course content section we can pass it via query param; there is no topic PICKER on this screen (the platform can't yet enumerate selectable SCORM topics from here). Confirm: arrive-with-topicId only, else create unattached? (Design assumes read-only DestinationContext when topicId present, omitted otherwise.)",
+    "ROLE GATE: matches courses/new isAdmin(session). Branch feat/admin-signin-role-gating is tightening admin role-gating — confirm SCORM import is org_admin+ (not instructor) for #31, so the permission-denied copy stays accurate.",
+    "FOLLOW-UP (honest scope, per handshake §6): server-side unzip + serving the package's runtime assets (byte-serving launchHref under blobUrl) is NOT in #31. The PageHeader subtitle and dropzone help state this plainly. Confirm the exact wording with product so we don't over-promise.",
+    "MAX SIZE: backend caps manifestXml at 1 MB and .zip size is bounded by upload limits. Surface the real configured .zip max in the dropzone help if it's available to the client; otherwise keep 'Max size per your plan.'"
+  ]
+}

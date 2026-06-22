@@ -107,7 +107,7 @@ build/test you can leave most blank. The ones that matter to actually run things
 | `CONTROL_PLANE_DATABASE_URL` | Tenant registry / silo routing | can equal `DATABASE_URL` locally |
 | `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE` | Token signing/verification | any dev values |
 | `TENANT_MODE`, `DEFAULT_TENANT_TIER` | Tenancy behaviour | leave defaults (`hybrid` / `pool`) |
-| `*_URL` (service ports 4000-4025) | Gateway routing between services | leave defaults |
+| `*_URL` (service ports 4000-4026) | Gateway routing between services | leave defaults |
 
 Feature-specific (only when working on those areas): `NEON_API_KEY`,
 `BLOB_READ_WRITE_TOKEN`, `UPSTASH_*`, `QSTASH_*`, `CIAM_*`, `GROQ_API_KEY`.
@@ -222,10 +222,22 @@ seeded automatically. This mirrors the Postgres used in CI.
 > ```
 >
 > A bare `docker compose up -d` (`pnpm start`) instead **pulls** the owner-built
-> GHCR images and also brings up the full mesh. Either way, **leave the DB URLs
-> in `.env` empty** (`DATABASE_URL` and friends — that is how `.env.example`
-> ships) so the bundled in-compose Postgres is used; only set `DATABASE_URL` to
-> target Supabase/remote. Sign in at <http://localhost:3000> with
+> **private GHCR** images and also brings up the full mesh — but it only works if
+> you have pull access to those images, so collaborators should use
+> `pnpm start:build`. Either way, **leave the DB URLs in `.env` empty**
+> (`DATABASE_URL` and friends — that is how `.env.example` ships) so the bundled
+> in-compose Postgres is used; only set `DATABASE_URL` to target Supabase/remote.
+> If you already run a local Postgres on 5432, set `PG_PORT=5433` so the bundled
+> Postgres (published on `${PG_PORT:-5432}`) doesn't collide. Once it's up,
+> **prove the mesh is wired** with the full-stack smoke check — it probes every
+> needed service's `/health`, does one authenticated gateway round-trip, and
+> checks web + admin render, exiting non-zero on any failure:
+>
+> ```bash
+> pnpm smoke         # node scripts/smoke.mjs — green = the stack works end-to-end
+> ```
+>
+> Sign in at <http://localhost:3000> with
 > `admin@demo.school` / `student@demo.school` (password `password123`). Tear down
 > with `pnpm down` (keep data) or `pnpm down:clean` (wipe + re-seed). Full
 > details: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#run-the-full-app-in-one-command-docker)
@@ -252,7 +264,7 @@ pnpm --filter @lms/integration-tests test
 pnpm dev        # Turborepo runs the apps + services together
 ```
 
-Services listen on ports **4000–4025** (see the `*_URL` entries in `.env`); the
+Services listen on ports **4000–4026** (see the `*_URL` entries in `.env`); the
 `gateway` is the front door at `4000`. Each service exposes `GET /health`.
 
 Run a single workspace instead of everything:

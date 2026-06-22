@@ -1266,3 +1266,41 @@ CREATE TABLE IF NOT EXISTS tenant_admin_delegation (
 );
 CREATE INDEX IF NOT EXISTS ix_tenant_deleg_scope
   ON tenant_admin_delegation(scope_tenant_id);
+
+-- ============================================================================
+-- REPORTING  (report definitions + persisted runs)
+-- ============================================================================
+-- Tenant-scoped report catalog and run history. A report_definition is a stable
+-- built-in report (keyed by `key`, e.g. 'enrollment-summary'); a report_run is a
+-- single execution against existing tenant data, persisting its result jsonb and
+-- row_count. Both isolate on their own tenant_id via the standard RLS policy.
+CREATE TABLE IF NOT EXISTS report_definition (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  key           text NOT NULL,         -- stable definition key, e.g. 'enrollment-summary'
+  name          text NOT NULL,
+  description   text,
+  params_schema jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, key)
+);
+
+CREATE TABLE IF NOT EXISTS report_run (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id      uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  definition_id  uuid NOT NULL REFERENCES report_definition(id) ON DELETE CASCADE,
+  definition_key text NOT NULL,         -- denormalized for convenience/listing
+  requested_by   uuid,                  -- x-user-id of the caller; nullable
+  status         text NOT NULL DEFAULT 'queued'
+                   CHECK (status IN ('queued','running','succeeded','failed')),
+  params         jsonb NOT NULL DEFAULT '{}'::jsonb,
+  result         jsonb,
+  row_count      integer,
+  error          text,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  completed_at   timestamptz
+);
+CREATE INDEX IF NOT EXISTS ix_report_run_tenant_created
+  ON report_run(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_report_run_tenant_definition
+  ON report_run(tenant_id, definition_id);

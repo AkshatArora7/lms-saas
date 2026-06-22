@@ -117,10 +117,6 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | `user.created (auto-provision identity link)` | - | identity |
 | `user.deactivated` | user-org | - |
 | `user.updated` | user-org | - |
-| `video.captioned` | video | - |
-| `video.transcode.requested` | - | video |
-| `video.transcoded` | video | - |
-| `video.uploaded` | video | - |
 
 ## Dependency map (service -> service)
 
@@ -146,7 +142,7 @@ Domain events flow producer -> `event_outbox` -> `relay` (drains per-tenant insi
 | ai | content |
 | lti | grading, identity, user-org |
 | sis | course, enrollment, user-org |
-| video | ai |
+| video | - |
 | search | content, course, discussion |
 | billing | tenant |
 | audit | - |

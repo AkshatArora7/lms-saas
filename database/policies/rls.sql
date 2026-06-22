@@ -25,7 +25,7 @@ DECLARE
     'submission','grade_scheme','grade_category','grade_item','grade','rubric',
     'rubric_criterion','rubric_level','competency','learning_objective',
     'objective_alignment','discussion_forum','discussion_topic',
-    'discussion_post','lti_registration','lti_deployment','sis_sync',
+    'discussion_post','lti_registration','lti_deployment','lti_launch_session','sis_sync',
     'scorm_package','scorm_attempt','xapi_statement','release_condition','intelligent_agent',
     'audit_log','event_outbox','event_inbox','idempotency_key','subscription',
     'academic_session','announcement','calendar_event','notification',

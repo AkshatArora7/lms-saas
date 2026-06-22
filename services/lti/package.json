@@ -19,7 +19,8 @@
     "@lms/events": "workspace:*",
     "@lms/logger": "workspace:*",
     "@lms/types": "workspace:*",
-    "fastify": "^4.28.1"
+    "fastify": "^4.28.1",
+    "jose": "^5.6.3"
   },
   "devDependencies": {
     "@lms/eslint-config": "workspace:*",

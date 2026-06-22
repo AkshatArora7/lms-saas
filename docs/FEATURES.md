@@ -38,7 +38,10 @@ A quick note on the words we use:
 - **Make it look like yours (white-label).** Each school sets its **logo,
   favicon, colours, light/dark theme, a custom web address** (e.g.
   `lms.yourschool.edu`), custom styling and a support email. A district can set a
-  **default look that schools inherit and override** field-by-field.
+  **default look that schools inherit and override** field-by-field. The
+  learner web app applies this per-school branding live — including on a
+  **custom-domain sign-in page**, resolved from the web address before anyone
+  logs in (see [DEPLOYMENT.md](DEPLOYMENT.md#custom-domains-white-label-at-the-edge)).
 - **Keep your rosters in sync automatically.** We sync users, classes and
   enrollments with your **Student Information System** using the **OneRoster 1.2**
   standard — both pulling from and pushing back to your SIS — so you don't

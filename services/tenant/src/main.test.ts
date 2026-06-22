@@ -358,3 +358,97 @@ describe("white-label branding (#89)", () => {
     expect(effective.logoUrl).toBeNull(); // not inherited
   });
 });
+
+describe("custom-domain host -> tenant resolution (#12)", () => {
+  async function bindDomain(
+    app: ReturnType<typeof buildApp>,
+    tenantId: string,
+    customDomain: string,
+  ) {
+    return app.inject({
+      method: "PUT",
+      url: `/tenants/${tenantId}/branding`,
+      payload: { customDomain },
+    });
+  }
+
+  it("resolves a bound custom domain to its owning tenant id (200)", async () => {
+    const { app } = buildTestApp();
+    await bindDomain(app, TENANT_A, "lms.school.edu");
+    const res = await app.inject({
+      method: "GET",
+      url: `/tenants/by-domain/${encodeURIComponent("lms.school.edu")}`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ tenantId: TENANT_A });
+  });
+
+  it("matches case-insensitively (LMS.SCHOOL.EDU -> lms.school.edu)", async () => {
+    const { app } = buildTestApp();
+    await bindDomain(app, TENANT_A, "lms.school.edu");
+    const res = await app.inject({
+      method: "GET",
+      url: `/tenants/by-domain/${encodeURIComponent("LMS.SCHOOL.EDU")}`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().tenantId).toBe(TENANT_A);
+  });
+
+  it("returns ONLY the tenant id (no branding fields leaked)", async () => {
+    const { app } = buildTestApp();
+    await app.inject({
+      method: "PUT",
+      url: `/tenants/${TENANT_A}/branding`,
+      payload: {
+        customDomain: "brand.school.edu",
+        displayName: "Secret School",
+        primaryColor: "#0B5FFF",
+        supportEmail: "help@school.edu",
+      },
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: `/tenants/by-domain/${encodeURIComponent("brand.school.edu")}`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(Object.keys(res.json())).toEqual(["tenantId"]);
+  });
+
+  it("404s when no tenant is bound to the host", async () => {
+    const { app } = buildTestApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/tenants/by-domain/${encodeURIComponent("unclaimed.example.com")}`,
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: "not_found" });
+  });
+
+  it("400s on an empty/blank host", async () => {
+    const { app } = buildTestApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/tenants/by-domain/${encodeURIComponent("   ")}`,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("does not bleed across domains — two domains resolve to two tenants", async () => {
+    const { app } = buildTestApp();
+    await bindDomain(app, TENANT_A, "a.school.edu");
+    await bindDomain(app, TENANT_B, "b.school.edu");
+
+    const a = await app.inject({
+      method: "GET",
+      url: `/tenants/by-domain/${encodeURIComponent("a.school.edu")}`,
+    });
+    const b = await app.inject({
+      method: "GET",
+      url: `/tenants/by-domain/${encodeURIComponent("b.school.edu")}`,
+    });
+    expect(a.json().tenantId).toBe(TENANT_A);
+    expect(b.json().tenantId).toBe(TENANT_B);
+    expect(a.json().tenantId).not.toBe(b.json().tenantId);
+  });
+});

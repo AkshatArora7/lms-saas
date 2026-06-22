@@ -5,6 +5,7 @@ import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { videoBlobKey, validateUpload, type BlobSigner } from "./blob.js";
+import type { CourseAccessPolicy } from "./access.js";
 import type { Captioner } from "./captioner.js";
 import type { PipelineRunner } from "./pipeline.js";
 import {
@@ -49,6 +50,12 @@ export interface VideoRouteDeps {
    */
   resolveCaller: (req: FastifyRequest) => Caller;
   blobSigner: BlobSigner;
+  /**
+   * Course-scoped read gate (#319, ADR-0031): decides whether a caller may
+   * read/stream a video associated with a `course_id`. Runs under the same
+   * tenant RLS connection (or an offline Fake in tests).
+   */
+  courseAccessPolicy: CourseAccessPolicy;
   transcoder: Transcoder;
   captioner: Captioner;
   pipeline: PipelineRunner;
@@ -117,15 +124,17 @@ function toResponse(video: VideoRecord): Record<string, unknown> {
     renditions: video.renditions,
     captions: video.captions,
     durationSeconds: video.durationSeconds,
+    courseId: video.courseId,
     createdAt: video.createdAt,
   };
 }
 
 /**
  * Register the video surface: signed uploads, asset CRUD, the transcode
- * pipeline trigger, and manual caption edits. Reads are tenant-member (RLS the
- * access boundary); writes require an uploader role (create/upload) or
- * owner/admin (transcode/captions).
+ * pipeline trigger, and manual caption edits. Reads are tenant-member by
+ * default (RLS the access boundary); videos carrying a `course_id` are further
+ * gated to enrolled/teaching/admin callers (#319). Writes require an uploader
+ * role (create/upload) or owner/admin (transcode/captions).
  */
 export function registerVideoRoutes(
   app: FastifyInstance,
@@ -183,6 +192,7 @@ export function registerVideoRoutes(
     const body = (req.body ?? {}) as {
       title?: unknown;
       sourceBlobUrl?: unknown;
+      courseId?: unknown;
     };
     if (!isNonEmptyString(body.title)) {
       return badRequest(reply, "title is required.");
@@ -190,10 +200,14 @@ export function registerVideoRoutes(
     if (!isNonEmptyString(body.sourceBlobUrl)) {
       return badRequest(reply, "sourceBlobUrl is required.");
     }
+    if (body.courseId !== undefined && !isNonEmptyString(body.courseId)) {
+      return badRequest(reply, "courseId must be a non-empty string when set.");
+    }
     const video = await deps.store.createVideo(ctx, {
       title: body.title.trim(),
       sourceBlobUrl: body.sourceBlobUrl.trim(),
       ownerId: caller.userId,
+      courseId: isNonEmptyString(body.courseId) ? body.courseId.trim() : null,
     });
     // Kick off transcode→caption. The default runner is fire-and-forget; the
     // injected sync runner (tests) awaits so the asset is already `ready`.
@@ -202,11 +216,16 @@ export function registerVideoRoutes(
     return reply.code(201).send({ video: toResponse(current) });
   });
 
-  // --- List / read (any tenant member, RLS-scoped) -----------------------
+  // --- List / read (tenant member; course-scoped videos gated) -----------
   app.get("/videos", async (req, reply) => {
     const ctx = resolveTenantOr400(deps, req, reply);
     if (!ctx) return reply;
-    const videos = await deps.store.listVideos(ctx);
+    const caller = resolveCallerOr401(deps, req, reply);
+    if (!caller) return reply;
+    // The store returns only videos this caller may read: null-course videos
+    // for any member, plus course-scoped ones they are enrolled in / teach /
+    // admin (DB-side filter — ADR-0031 §D).
+    const videos = await deps.store.listVideos(ctx, caller);
     return reply.code(200).send({ videos: videos.map(toResponse) });
   });
 
@@ -215,6 +234,20 @@ export function registerVideoRoutes(
     if (!ctx) return reply;
     const video = await deps.store.getVideo(ctx, req.params.id);
     if (!video) return notFound(reply, "Video not found.");
+    // Course-scoped videos (course_id set) are the playback authz surface:
+    // require an authenticated caller, then the enrollment/teaching/admin gate.
+    // Deny = 404 (existence-hiding, indistinguishable from cross-tenant/missing
+    // — ADR-0031 §D), so a forbidden caller never receives the stream URLs.
+    if (video.courseId !== null) {
+      const caller = resolveCallerOr401(deps, req, reply);
+      if (!caller) return reply;
+      const allowed = await deps.courseAccessPolicy.canRead(
+        ctx,
+        video.courseId,
+        caller,
+      );
+      if (!allowed) return notFound(reply, "Video not found.");
+    }
     return reply.code(200).send({ video: toResponse(video) });
   });
 

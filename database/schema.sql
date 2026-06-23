@@ -1182,6 +1182,17 @@ CREATE TABLE IF NOT EXISTS ai_message (
 );
 CREATE INDEX IF NOT EXISTS ix_ai_message_chat ON ai_message(chat_id, created_at);
 
+CREATE TABLE IF NOT EXISTS ai_usage (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id      uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  window_date    date NOT NULL,         -- UTC calendar day
+  request_count  integer NOT NULL DEFAULT 0,
+  token_estimate bigint NOT NULL DEFAULT 0,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, window_date)
+);
+
 -- ============================================================================
 -- ANALYTICS  (Caliper/xAPI Learning Record Store + read models)
 -- ============================================================================

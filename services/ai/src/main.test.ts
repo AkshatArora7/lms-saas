@@ -31,6 +31,11 @@ const config = {
   DATABASE_URL: "postgres://user:pass@localhost:5432/lms_test",
   GROQ_MODEL: "llama-3.3-70b-versatile",
   GROQ_MAX_TOKENS: 1024,
+  AI_CHAT_RATE_LIMIT_MAX: 120,
+  AI_CHAT_USER_RATE_LIMIT_MAX: 30,
+  AI_CHAT_RATE_LIMIT_WINDOW_SECONDS: 60,
+  AI_CHAT_DAILY_TENANT_REQUEST_CEILING: 2000,
+  AI_CHAT_DAILY_TENANT_TOKEN_CEILING: 0,
 } as unknown as AppConfig;
 
 const TENANT_A: TenantContext = {

@@ -1,4 +1,5 @@
 import type { AppConfig } from "@lms/config";
+import type { RateLimiter, RateLimitResult } from "@lms/ratelimit";
 import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -28,6 +29,8 @@ export interface AiRouteDeps {
   resolveTenant: (req: FastifyRequest) => TenantContext;
   embedder: Embedder;
   chat: ChatModel;
+  /** Fixed-window limiter for the per-user/per-tenant chat rate limits (#309). */
+  limiter: RateLimiter;
 }
 
 function resolveTenantOr400(
@@ -57,6 +60,28 @@ function badRequest(reply: FastifyReply, message: string): FastifyReply {
 
 function notFound(reply: FastifyReply, message: string): FastifyReply {
   return reply.code(404).send({ error: "not_found", message });
+}
+
+/**
+ * Send a 429 `rate_limited` response, mirroring the gateway's header style
+ * (`RateLimit-Limit`/`RateLimit-Remaining`/`Retry-After`). `result` is the
+ * breached limiter outcome; `scope` distinguishes per-user vs per-tenant in the
+ * human-readable message while keeping `error: "rate_limited"` stable.
+ */
+function rateLimited(
+  reply: FastifyReply,
+  result: RateLimitResult,
+  scope: string,
+): FastifyReply {
+  void reply.header("RateLimit-Limit", String(result.limit));
+  void reply.header("RateLimit-Remaining", String(result.remaining));
+  return reply
+    .header("Retry-After", String(result.retryAfterSeconds))
+    .code(429)
+    .send({
+      error: "rate_limited",
+      message: `AI chat rate limit exceeded (${scope}). Retry after the window resets.`,
+    });
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -150,6 +175,42 @@ export function registerAiRoutes(app: FastifyInstance, deps: AiRouteDeps): void 
       return badRequest(reply, "message is too long.");
     }
 
+    // Rate limits + cost ceiling (#309). Enforced AFTER cheap validation but
+    // BEFORE any embed/retrieve/Groq work (those cost money + latency). Per-user
+    // first so one user can't drain the whole tenant budget, then per-tenant,
+    // then the durable per-UTC-day spend ceiling.
+    const windowSeconds = deps.config.AI_CHAT_RATE_LIMIT_WINDOW_SECONDS;
+    const userResult = await deps.limiter.check(
+      `ai:chat:user:${ctx.tenantId}:${userId}`,
+      deps.config.AI_CHAT_USER_RATE_LIMIT_MAX,
+      windowSeconds,
+    );
+    if (!userResult.allowed) {
+      return rateLimited(reply, userResult, "per-user");
+    }
+    const tenantResult = await deps.limiter.check(
+      `ai:chat:tenant:${ctx.tenantId}`,
+      deps.config.AI_CHAT_RATE_LIMIT_MAX,
+      windowSeconds,
+    );
+    if (!tenantResult.allowed) {
+      return rateLimited(reply, tenantResult, "per-tenant");
+    }
+
+    const windowDate = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
+    const usage = await deps.store.getTenantDailyUsage(ctx, windowDate);
+    const requestCeiling = deps.config.AI_CHAT_DAILY_TENANT_REQUEST_CEILING;
+    const tokenCeiling = deps.config.AI_CHAT_DAILY_TENANT_TOKEN_CEILING;
+    if (
+      (requestCeiling > 0 && usage.requestCount >= requestCeiling) ||
+      (tokenCeiling > 0 && usage.tokenEstimate >= tokenCeiling)
+    ) {
+      return reply.code(429).send({
+        error: "cost_exceeded",
+        message: "Daily AI usage ceiling reached for this tenant.",
+      });
+    }
+
     // Resolve (and authorize) the chat, or create a new one for this caller.
     let chatId: string;
     if (isNonEmptyString(body.chatId)) {
@@ -191,6 +252,14 @@ export function registerAiRoutes(app: FastifyInstance, deps: AiRouteDeps): void 
       content: answer,
       citations,
     });
+
+    // Record worst-case token spend for the tenant's daily ceiling — only after
+    // a successful completion (we never charge a tenant for a failed request).
+    await deps.store.incrementTenantDailyUsage(
+      ctx,
+      windowDate,
+      deps.config.GROQ_MAX_TOKENS,
+    );
 
     return reply.code(200).send({ chatId, answer, citations });
   });

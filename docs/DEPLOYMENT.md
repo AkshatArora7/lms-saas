@@ -358,6 +358,10 @@ real deployment.
 > IPv4-only or serverless networks, use the Supabase **connection pooler**
 > (Supavisor) URL — `...pooler.supabase.com:6543?pgbouncer=true`.
 
+See [docs/RUNBOOK-prod-db-roles.md](RUNBOOK-prod-db-roles.md) for the prod
+provisioning + verification steps (create `app_user`, apply `database/roles.sql`,
+set the DSNs, and verify cross-tenant isolation on the live DB).
+
 ### Images: GHCR by default, build-from-source override
 
 A bare `docker compose up -d` (`pnpm start`) defaults the gateway, the 26

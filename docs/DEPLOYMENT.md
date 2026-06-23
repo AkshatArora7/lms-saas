@@ -103,6 +103,60 @@ Point your container host at these images (one app per service) with the same en
 contract (`.env.example`). Scale workers (enrollment, notification, video) on
 queue depth.
 
+## Production service exposure (internal-only)
+
+**Policy.** In production only **three** services are publicly reachable: the
+**gateway** (`:4000`), the **web** app (`:3000`) and the **admin** console
+(`:3001`). Every domain microservice (`identity` … `relay`) **and** the
+datastores (`postgres`, `redis`) stay on the internal network with **no
+published host ports** — they are reachable only service-to-service by DNS name
+(e.g. `http://identity:4001`).
+
+**Why this matters ([ADR-0027](ADR-0027-trusted-identity-headers.md)).** The
+gateway is the **single trust boundary**: it strips any client-supplied
+`x-user-id` / `x-user-roles` / `x-tenant-id` headers and re-stamps them from the
+verified JWT claims. If a domain service were directly reachable on an untrusted
+network, a caller could **spoof those identity headers** and bypass
+authentication/authorization. Keeping every domain service internal-only closes
+that header-spoofing vector — there is no public path that skips the gateway.
+
+**How to run production (compose host).** Layer the prod override on the
+canonical compose file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+```
+
+`docker-compose.prod.yml` resets `ports` to an empty list for every service
+**except** gateway/web/admin and adds an informational `expose:` of each
+service's own internal port (self-documentation only — intra-bridge reachability
+does not require it). Because Compose **merges `ports` lists by appending**, a
+plain `ports: []` would *not* drop the base publish; the override uses the
+Compose **`!override`** tag (`ports: !override []`), which **requires Docker
+Compose v2.24+** to force the empty list to fully replace the inherited value.
+On older Compose the tag is unknown and the host ports would remain published —
+verify your Compose version (`docker compose version`) before relying on this
+override.
+
+> **Forgetting the second `-f` silently leaves all ports public.** The two-file
+> command is the production contract; the base `docker-compose.yml` alone is
+> dev-only (next paragraph).
+
+**Dev is intentionally different.** Running `docker compose up -d` with the base
+file alone keeps every service's `40xx` host port published for direct local
+inspection. That is a deliberate dev-only convenience on a trusted local network
+— see the *Local vs prod exposure* note in the local-development section below.
+
+**Relationship to the Fly private mesh.** On the managed production target
+(Fly.io) east-west traffic already stays private over the **6PN WireGuard mesh +
+`.internal` DNS** with zero public hops (see *Container host decision* →
+*Networking* below). The `docker-compose.prod.yml` override is the equivalent
+control for **compose-based / self-hosted container hosts** that lack that
+private mesh. There are **no Kubernetes/Helm manifests** in this repo, so these
+two mechanisms — the Fly private mesh and the compose override — are the entire
+production exposure story; nothing else needs to change.
+
 ## Container host decision
 
 > **Decided 2026-06-22 (SPIKE [#85]):** **Fly.io is the primary container host.

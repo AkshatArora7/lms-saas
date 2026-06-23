@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # One-shot demo seeder image (issue #266). Builds the pnpm workspace, builds
 # @lms/auth (the password-hashing path the Prisma login verifies against),
 # generates the Prisma client, then runs the dedicated idempotent demo seed
@@ -15,9 +16,24 @@ RUN apt-get update \
 RUN corepack enable
 WORKDIR /app
 
-FROM base AS build
-COPY . .
-RUN pnpm install --frozen-lockfile
+# manifests: extract ONLY package manifests + lockfile so the deps layer is reused
+# across source-only changes (node_modules already excluded by .dockerignore).
+FROM base AS manifests
+COPY . /tmp/ctx
+RUN cd /tmp/ctx \
+ && find . -type f \( -name package.json -o -name pnpm-lock.yaml -o -name pnpm-workspace.yaml \) -print \
+    | xargs -I{} cp --parents {} /app/
+
+# deps: install the full workspace from manifests only, with a cached pnpm store.
+FROM base AS deps
+COPY --from=manifests /app ./
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile
+
+# build: bring in ONLY shared packages (no services/), then build the seed deps.
+FROM deps AS build
+COPY tsconfig.base.json ./
+COPY packages ./packages
 # @lms/auth → dist (hashPassword); @lms/db → generated Prisma client.
 RUN pnpm --filter @lms/auth... build
 RUN pnpm --filter @lms/db generate

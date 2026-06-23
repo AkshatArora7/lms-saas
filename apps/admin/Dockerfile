@@ -1,12 +1,29 @@
+# syntax=docker/dockerfile:1
 # Multi-stage build for the admin app (Next.js standalone, pnpm workspace).
 FROM node:20-slim AS base
 ENV PNPM_HOME=/pnpm PATH=$PNPM_HOME:$PATH
 RUN corepack enable
 WORKDIR /app
 
-FROM base AS build
-COPY . .
-RUN pnpm install --frozen-lockfile
+# manifests: extract ONLY package manifests + lockfile so the deps layer is reused
+# across source-only changes (node_modules already excluded by .dockerignore).
+FROM base AS manifests
+COPY . /tmp/ctx
+RUN cd /tmp/ctx \
+ && find . -type f \( -name package.json -o -name pnpm-lock.yaml -o -name pnpm-workspace.yaml \) -print \
+    | xargs -I{} cp --parents {} /app/
+
+# deps: install the full workspace from manifests only, with a cached pnpm store.
+FROM base AS deps
+COPY --from=manifests /app ./
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile
+
+# build: bring in ONLY shared packages + this app's source, then build.
+FROM deps AS build
+COPY tsconfig.base.json ./
+COPY packages ./packages
+COPY apps/admin ./apps/admin
 # @lms/admin depends only on @lms/ui + @lms/types (no @lms/db / Prisma), so no
 # `pnpm --filter @lms/db generate` step is needed. The `...` includes workspace
 # deps, so @lms/ui is compiled before the Next build.

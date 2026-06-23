@@ -530,7 +530,10 @@ supported, credential-free path.** The second (pull prebuilt GHCR images) is
 > slow today — speed-up tracked in #299.
 
 > **First run builds ~29 images** (26 services + seed + web + admin) and can take
-> a while; later runs are cached and fast.
+> a while; later runs are cached and fast. The images use BuildKit cache mounts
+> so the pnpm store is shared across all images on a cold build and **warm
+> rebuilds are incremental — only services whose source changed are rebuilt**.
+> See [Build performance](docs/DEPLOYMENT.md#build-performance-local-build-from-source) (#299).
 
 **Prerequisite:** Docker Desktop installed and running. That's the only
 requirement for the build-from-source path — no external accounts.

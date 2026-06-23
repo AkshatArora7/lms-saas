@@ -321,7 +321,10 @@ pnpm ps         # container status   ·   pnpm logs   # tail logs
 ```
 
 > **First run builds ~29 images** on the build-from-source path (26 services +
-> seed + web + admin) and can take a while; later runs are cached.
+> seed + web + admin) and can take a while; later runs are cached. The images use
+> BuildKit cache mounts so the pnpm store is shared across all images cold and
+> **warm rebuilds only rebuild the services whose source changed** — see
+> [Build performance](#build-performance-local-build-from-source) (#299).
 
 ### Database: bundled Postgres by default, Supabase opt-in
 
@@ -415,6 +418,49 @@ The lightweight Postgres + Redis stack used by the integration tests lives in
 docker compose -f docker-compose.infra.yml up -d
 docker compose -f docker-compose.infra.yml down -v
 ```
+
+## Build performance (local build-from-source)
+
+The build-from-source path (`pnpm start:build`) builds ~29–30 images. The
+service Dockerfiles are structured for **BuildKit cache reuse** so neither a cold
+nor a warm build pays the full cost again. Two mechanisms do the work (#299):
+
+1. **One pnpm store, shared across every image (cold builds).** Each
+   Dockerfile mounts a shared BuildKit cache for the pnpm store
+   (`--mount=type=cache,id=pnpm-store,target=/pnpm/store`). The **first** image
+   to build populates that store; **every later image reuses it**, so their
+   `pnpm install` resolves from the local store with **zero network**. In a
+   measured run on one Windows dev machine (after `docker builder prune -af`),
+   the first image (gateway) took ~242s; the next image's install then dropped
+   from ~40s to ~21s (~47% faster, **550 packages reused, 0 downloaded**) purely
+   from the shared store. Instead of 30 independent full installs, the mesh pays
+   for the dependency download **once**.
+
+2. **Warm rebuilds only rebuild the services whose source changed.** The
+   Dockerfiles install dependencies **manifest-first** (copy lockfile +
+   `package.json`s, `pnpm install`, *then* copy source) and use **scoped
+   per-service `COPY`** instead of `COPY . .`. A source-only edit therefore no
+   longer busts the dependency-install layer: the changed service's
+   `pnpm install` stage stays **CACHED** and only the later stages
+   (`COPY` + `prisma generate` + `tsc`) re-run (~57s in measurement), while a
+   service whose source did not change is **fully cached and finishes in
+   seconds** (~6s, all stages cached).
+
+> The cold figures above are **representative per-image measurements** on a
+> single Windows dev machine, not a precise end-to-end wall-clock for all 30
+> images — the full cold mesh build was intentionally not run end-to-end. They
+> illustrate the per-image mechanism (shared store reuse, install-layer caching),
+> not a guaranteed total build time.
+
+**BuildKit is required** for the cache mounts to take effect. It is the default
+on Docker Desktop and Compose v2, and each Dockerfile pins the BuildKit frontend
+with a `# syntax=docker/dockerfile:1` directive, so no extra flags are needed.
+The `.dockerignore` still excludes `**/node_modules` (Windows pnpm-junction
+safety), so builds stay clean-context correct.
+
+> **Future optimization (tracked, not yet shipped):** a shared base image (L5)
+> and `turbo prune` per-service contexts (L6) would cut cold build time further;
+> they are deferred follow-ups to #299.
 
 ## Local development (hot reload)
 

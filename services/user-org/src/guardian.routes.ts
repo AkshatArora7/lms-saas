@@ -180,6 +180,44 @@ export function registerGuardianRoutes(
     },
   );
 
+  // 2b. List a student's ACTIVE + consent-satisfied guardians (the inverse of
+  //     the guardian->children authorized direction). Consent is re-derived live
+  //     via the same gate as activation, so a later consent/relationship revoke
+  //     removes a guardian from the fan-out immediately. Deny-by-default: if the
+  //     gating consent is not satisfied, returns []. Backs the attendance
+  //     notification fan-out (#101).
+  app.get<{ Params: { studentId: string } }>(
+    "/students/:studentId/guardians/authorized",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      if (!UUID_RE.test(req.params.studentId)) {
+        return badRequest(reply, "studentId must be a uuid.");
+      }
+      const active = (
+        await deps.store.listGuardiansForStudent(ctx, req.params.studentId)
+      ).filter((r) => r.status === "active");
+      if (active.length === 0) {
+        return reply.code(200).send({ guardians: [] });
+      }
+      const { consentSatisfied } = await gateFor(
+        deps,
+        ctx,
+        req.params.studentId,
+        GUARDIAN_CONSENT_CATEGORY,
+      );
+      if (!consentSatisfied) {
+        return reply.code(200).send({ guardians: [] });
+      }
+      return reply.code(200).send({
+        guardians: active.map((r) => ({
+          guardianUserId: r.guardianUserId,
+          relationship: r.relationship,
+        })),
+      });
+    },
+  );
+
   // 3. List a guardian's students.
   app.get<{ Params: { guardianId: string } }>(
     "/guardians/:guardianId/students",

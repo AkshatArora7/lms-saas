@@ -588,3 +588,144 @@ describe("guardian relationships (#24)", () => {
     expect(authorize.statusCode).toBe(200);
   });
 });
+
+// #101: the inverse, consent-filtered direction that backs the attendance
+// notification fan-out — a student's ACTIVE + consent-satisfied guardians only.
+describe("student → authorized guardians (#101)", () => {
+  async function activateLink(app: ReturnType<typeof build>) {
+    const link = (await createLink(app)).json().relationship;
+    await app.inject({
+      method: "POST",
+      url: "/compliance/consents",
+      headers: H,
+      payload: grantDirectory(STUDENT),
+    });
+    await app.inject({
+      method: "POST",
+      url: `/guardians/${link.id}/activate`,
+      headers: H,
+    });
+    return link;
+  }
+
+  function authorized(app: ReturnType<typeof build>, headers = H, student = STUDENT) {
+    return app.inject({
+      method: "GET",
+      url: `/students/${student}/guardians/authorized`,
+      headers,
+    });
+  }
+
+  it("returns an active + consented guardian", async () => {
+    const app = build();
+    await activateLink(app);
+    const res = await authorized(app);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().guardians).toEqual([
+      { guardianUserId: GUARDIAN, relationship: "guardian" },
+    ]);
+  });
+
+  it("excludes a pending (not-yet-active) guardian", async () => {
+    const app = build();
+    await createLink(app); // pending only — never activated
+    const res = await authorized(app);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().guardians).toEqual([]);
+  });
+
+  it("excludes a revoked guardian", async () => {
+    const app = build();
+    const link = await activateLink(app);
+    await app.inject({
+      method: "POST",
+      url: `/guardians/${link.id}/revoke`,
+      headers: H,
+    });
+    const res = await authorized(app);
+    expect(res.json().guardians).toEqual([]);
+  });
+
+  it("returns [] when a minor's gating consent is not satisfied", async () => {
+    const app = build();
+    // Active link, but the underlying consent is never granted for the minor:
+    // create the link and force it active via the store, no consent on file.
+    const link = (await createLink(app)).json().relationship;
+    // Record a pending (not granted) consent for an under-13 student.
+    await app.inject({
+      method: "POST",
+      url: "/compliance/consents",
+      headers: H,
+      payload: {
+        subjectUserId: STUDENT,
+        ageBand: "under_13",
+        consentType: "directory_information",
+        status: "pending",
+      },
+    });
+    // Grant + activate, then revoke the consent so the link is active but the
+    // gate is unsatisfied (deny-by-default).
+    const consent = await app.inject({
+      method: "POST",
+      url: "/compliance/consents",
+      headers: H,
+      payload: grantDirectory(STUDENT),
+    });
+    await app.inject({
+      method: "POST",
+      url: `/guardians/${link.id}/activate`,
+      headers: H,
+    });
+    await app.inject({
+      method: "POST",
+      url: `/compliance/consents/${consent.json().consent.id}/revoke`,
+      headers: H,
+    });
+    const res = await authorized(app);
+    expect(res.json().guardians).toEqual([]);
+  });
+
+  it("returns an adult student's active guardian without a granted consent", async () => {
+    const app = build();
+    const link = (await createLink(app)).json().relationship;
+    // Adult age band → not consent-gated by construction.
+    await app.inject({
+      method: "POST",
+      url: "/compliance/consents",
+      headers: H,
+      payload: {
+        subjectUserId: STUDENT,
+        ageBand: "adult",
+        consentType: "directory_information",
+        status: "pending",
+      },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/guardians/${link.id}/activate`,
+      headers: H,
+    });
+    const res = await authorized(app);
+    expect(res.json().guardians).toEqual([
+      { guardianUserId: GUARDIAN, relationship: "guardian" },
+    ]);
+  });
+
+  it("isolates by tenant — another tenant sees no guardians", async () => {
+    const app = build();
+    await activateLink(app);
+    const theirs = await authorized(app, OTHER_H);
+    expect(theirs.json().guardians).toEqual([]);
+  });
+
+  it("400s on a non-uuid studentId and a missing tenant", async () => {
+    const app = build();
+    expect((await authorized(app, H, "nope")).statusCode).toBe(400);
+    const noTenant = await app.inject({
+      method: "GET",
+      url: `/students/${STUDENT}/guardians/authorized`,
+    });
+    expect(noTenant.statusCode).toBe(400);
+    expect(noTenant.json().error).toBe("tenant_required");
+  });
+});

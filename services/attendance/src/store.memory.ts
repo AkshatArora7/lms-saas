@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 
 import type { TenantContext } from "@lms/types";
 
-import { attendanceEvent, type AttendanceEvent } from "./events.js";
+import {
+  attendanceEvent,
+  recipientsFor,
+  type AttendanceEvent,
+} from "./events.js";
+import { MemoryStudentGuardiansResolver } from "./guardians.memory.js";
+import type { StudentGuardiansResolver } from "./guardians.js";
 import {
   DEFAULT_ATTENDANCE_CODES,
   type AttendanceCategory,
@@ -35,7 +41,11 @@ export class MemoryAttendanceStore implements AttendanceStore {
   private records: AttendanceRecordRecord[] = [];
   private emitted: AttendanceEvent[] = [];
 
-  constructor(private readonly generateId: () => string = randomUUID) {}
+  constructor(
+    private readonly generateId: () => string = randomUUID,
+    /** Resolves a student's notifiable guardians; defaults to none (#101). */
+    private readonly guardians: StudentGuardiansResolver = new MemoryStudentGuardiansResolver(),
+  ) {}
 
   private codeCategory(
     tenantId: string,
@@ -182,16 +192,24 @@ export class MemoryAttendanceStore implements AttendanceStore {
     );
     if (!session) return null;
     session.status = "finalized";
-    // Emit a flagged event for each absent/tardy record in the session.
+    // Emit a flagged event for each absent/tardy record in the session. The
+    // recipient list is the learner plus their active+consented guardians,
+    // resolved per record through the port (#101) and deduped.
     for (const r of this.records.filter((x) => x.sessionId === id)) {
       const category = this.codeCategory(ctx.tenantId, r.code);
       if (category === "absent" || category === "tardy") {
+        const gs = await this.guardians.resolveGuardians(ctx, r.userId);
+        const recipientIds = recipientsFor(
+          r.userId,
+          gs.map((g) => g.guardianUserId),
+        );
         this.emitted.push(
-          attendanceEvent(id, session.orgUnitId, {
-            userId: r.userId,
-            code: r.code,
-            category,
-          }),
+          attendanceEvent(
+            id,
+            session.orgUnitId,
+            { userId: r.userId, code: r.code, category },
+            recipientIds,
+          ),
         );
       }
     }
@@ -284,8 +302,9 @@ export class MemoryAttendanceStore implements AttendanceStore {
 /** Build a MemoryAttendanceStore pre-seeded with default codes for the demo tenant. */
 export function createSeededMemoryStore(
   generateId: () => string = randomUUID,
+  guardians: StudentGuardiansResolver = new MemoryStudentGuardiansResolver(),
 ): MemoryAttendanceStore {
-  const store = new MemoryAttendanceStore(generateId);
+  const store = new MemoryAttendanceStore(generateId, guardians);
   void store.seedDefaultCodes({
     tenantId: DEMO_TENANT_ID,
     tier: "pool",

@@ -21,7 +21,8 @@
     "@lms/observability": "workspace:*",
     "@lms/types": "workspace:*",
     "fastify": "^4.28.1",
-    "groq-sdk": "^0.7.0"
+    "groq-sdk": "^0.7.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@lms/eslint-config": "workspace:*",

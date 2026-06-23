@@ -169,8 +169,18 @@ comes from the gateway-stamped trusted `x-user-id`
 ## Future work (non-blocking follow-ups)
 
 - **Prompt-injection hardening / `max_tokens`** on the Groq completion call.
-- **Per-tenant rate limiting** on the chat endpoint (LLM cost control), beyond
-  the gateway's generic limiter.
+- ~~**Per-tenant rate limiting** on the chat endpoint (LLM cost control), beyond
+  the gateway's generic limiter.~~ **Done (#309):** `/chat` now enforces a
+  per-user then per-tenant fixed-window rate limit via the shared
+  `@lms/ratelimit` package (in-process `MemoryRateLimiter` fallback,
+  Upstash-optional) returning **429 `rate_limited`**, plus a durable per-tenant
+  per-UTC-day usage ceiling tracked in the tenant-scoped, RLS-isolated `ai_usage`
+  table (request count + worst-case token estimate) returning **429
+  `cost_exceeded`** *before* any embed/retrieval/Groq call. Configurable via
+  `packages/config`: `AI_CHAT_USER_RATE_LIMIT_MAX` (30),
+  `AI_CHAT_RATE_LIMIT_MAX` (120), `AI_CHAT_RATE_LIMIT_WINDOW_SECONDS` (60),
+  `AI_CHAT_DAILY_TENANT_REQUEST_CEILING` (2000), and
+  `AI_CHAT_DAILY_TENANT_TOKEN_CEILING` (0 = token ceiling disabled).
 - **`ivfflat` index** on `ai_embedding.embedding` (`vector_cosine_ops`, mirroring
   `search_document`) — retrieval is a seq scan today; correct but unindexed at
   demo scale.

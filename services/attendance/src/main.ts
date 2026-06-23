@@ -22,11 +22,13 @@ import Fastify, {
   type FastifyRequest,
 } from "fastify";
 
+import { createHttpGuardianChildrenResolver } from "./guardian-resolver.http.js";
 import { createHttpStudentGuardiansResolver } from "./guardians.http.js";
 import type { StudentGuardiansResolver } from "./guardians.js";
 import {
   registerAttendanceRoutes,
   type AttendanceRouteDeps,
+  type Caller,
 } from "./routes.js";
 import { createSeededMemoryStore } from "./store.memory.js";
 import { createPrismaStore } from "./store.prisma.js";
@@ -45,6 +47,8 @@ export interface BuildAppOptions {
    * Ignored when `store` is supplied (the store already has its resolver).
    */
   guardiansResolver?: StudentGuardiansResolver;
+  resolveCaller?: AttendanceRouteDeps["resolveCaller"];
+  guardianResolver?: AttendanceRouteDeps["guardianResolver"];
 }
 
 /**
@@ -65,6 +69,30 @@ function headerTenantResolver(
       tier: config.DEFAULT_TENANT_TIER,
       databaseUrl: config.DATABASE_URL,
     };
+  };
+}
+
+/**
+ * Default caller resolution for the guardian-scoped view (#190): the
+ * gateway/BFF stamps the verified identity as `x-user-id`. Throws when it is
+ * absent so the guardian routes fail closed with 401. The guardian is NEVER a
+ * client-supplied param — only this trusted header identifies the caller.
+ */
+function headerCallerResolver(): (req: FastifyRequest) => Caller {
+  return (req) => {
+    const userId = req.headers["x-user-id"];
+    if (typeof userId !== "string" || userId.length === 0) {
+      throw new Error("missing x-user-id");
+    }
+    const rolesHeader = req.headers["x-user-roles"];
+    const raw = Array.isArray(rolesHeader)
+      ? rolesHeader.join(",")
+      : (rolesHeader ?? "");
+    const roles = raw
+      .split(",")
+      .map((r) => r.trim())
+      .filter((r) => r.length > 0);
+    return { userId, roles };
   };
 }
 
@@ -94,6 +122,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     config,
     store: options.store ?? createPrismaStore(randomUUID, guardiansResolver),
     resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
+    resolveCaller: options.resolveCaller ?? headerCallerResolver(),
+    guardianResolver:
+      options.guardianResolver ??
+      createHttpGuardianChildrenResolver({
+        // Guardian relationship + consent authority lives in user-org, reached
+        // through the gateway (same convention as tenant's offboarding ports).
+        gatewayUrl: process.env.GATEWAY_URL ?? "http://gateway:4000",
+      }),
   });
 
   return app;

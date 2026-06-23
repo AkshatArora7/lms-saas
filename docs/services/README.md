@@ -25,7 +25,7 @@ See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [MULTI_TENANCY.md](../MULTI_TEN
 | [rubric](rubric.md) | 4014 | Postgres | `rubric`, `rubric_criterion`, `rubric_level`, `competency`, `learning_objective`, `objective_alignment` |
 | [analytics](analytics.md) | 4015 | Postgres | `caliper_event`, `engagement_summary`, `xapi_statement` |
 | [reporting](reporting.md) | 4016 | Postgres + JSONB | `report_definition`, `report_run` |
-| [ai](ai.md) | 4017 | pgvector + JSONB | `ai_embedding`, `ai_chat`, `ai_message` |
+| [ai](ai.md) | 4017 | pgvector + JSONB | `ai_embedding`, `ai_chat`, `ai_message`, `ai_usage` |
 | [lti](lti.md) | 4018 | Postgres | `lti_registration`, `lti_deployment`, `lti_launch_session` |
 | [sis](sis.md) | 4019 | Postgres | `sis_sync`, `sis_id_map` |
 | [video](video.md) | 4020 | Blob + JSONB | `video_asset` |

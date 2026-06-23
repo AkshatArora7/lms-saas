@@ -103,6 +103,60 @@ Point your container host at these images (one app per service) with the same en
 contract (`.env.example`). Scale workers (enrollment, notification, video) on
 queue depth.
 
+## Production service exposure (internal-only)
+
+**Policy.** In production only **three** services are publicly reachable: the
+**gateway** (`:4000`), the **web** app (`:3000`) and the **admin** console
+(`:3001`). Every domain microservice (`identity` … `relay`) **and** the
+datastores (`postgres`, `redis`) stay on the internal network with **no
+published host ports** — they are reachable only service-to-service by DNS name
+(e.g. `http://identity:4001`).
+
+**Why this matters ([ADR-0027](ADR-0027-trusted-identity-headers.md)).** The
+gateway is the **single trust boundary**: it strips any client-supplied
+`x-user-id` / `x-user-roles` / `x-tenant-id` headers and re-stamps them from the
+verified JWT claims. If a domain service were directly reachable on an untrusted
+network, a caller could **spoof those identity headers** and bypass
+authentication/authorization. Keeping every domain service internal-only closes
+that header-spoofing vector — there is no public path that skips the gateway.
+
+**How to run production (compose host).** Layer the prod override on the
+canonical compose file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+```
+
+`docker-compose.prod.yml` resets `ports` to an empty list for every service
+**except** gateway/web/admin and adds an informational `expose:` of each
+service's own internal port (self-documentation only — intra-bridge reachability
+does not require it). Because Compose **merges `ports` lists by appending**, a
+plain `ports: []` would *not* drop the base publish; the override uses the
+Compose **`!override`** tag (`ports: !override []`), which **requires Docker
+Compose v2.24+** to force the empty list to fully replace the inherited value.
+On older Compose the tag is unknown and the host ports would remain published —
+verify your Compose version (`docker compose version`) before relying on this
+override.
+
+> **Forgetting the second `-f` silently leaves all ports public.** The two-file
+> command is the production contract; the base `docker-compose.yml` alone is
+> dev-only (next paragraph).
+
+**Dev is intentionally different.** Running `docker compose up -d` with the base
+file alone keeps every service's `40xx` host port published for direct local
+inspection. That is a deliberate dev-only convenience on a trusted local network
+— see the *Local vs prod exposure* note in the local-development section below.
+
+**Relationship to the Fly private mesh.** On the managed production target
+(Fly.io) east-west traffic already stays private over the **6PN WireGuard mesh +
+`.internal` DNS** with zero public hops (see *Container host decision* →
+*Networking* below). The `docker-compose.prod.yml` override is the equivalent
+control for **compose-based / self-hosted container hosts** that lack that
+private mesh. There are **no Kubernetes/Helm manifests** in this repo, so these
+two mechanisms — the Fly private mesh and the compose override — are the entire
+production exposure story; nothing else needs to change.
+
 ## Container host decision
 
 > **Decided 2026-06-22 (SPIKE [#85]):** **Fly.io is the primary container host.
@@ -267,7 +321,10 @@ pnpm ps         # container status   ·   pnpm logs   # tail logs
 ```
 
 > **First run builds ~29 images** on the build-from-source path (26 services +
-> seed + web + admin) and can take a while; later runs are cached.
+> seed + web + admin) and can take a while; later runs are cached. The images use
+> BuildKit cache mounts so the pnpm store is shared across all images cold and
+> **warm rebuilds only rebuild the services whose source changed** — see
+> [Build performance](#build-performance-local-build-from-source) (#299).
 
 ### Database: bundled Postgres by default, Supabase opt-in
 
@@ -286,10 +343,16 @@ external setup**.
 To point the whole mesh at Supabase (or any external Postgres), set
 `DATABASE_URL` in `.env` (gitignored; Compose reads it automatically for
 `${VAR}` interpolation); `DIRECT_URL` and `CONTROL_PLANE_DATABASE_URL` fall back
-to it. A remote deploy also needs the **least-privilege runtime app role** split
-from the migration/owner role — the **two-role model** that makes
-`FORCE ROW LEVEL SECURITY` actually enforce; see
-[ADR-0026](ADR-0026-runtime-app-role-rls-enforcement.md) and `SETUP.md` §5.
+to it. A remote deploy also wants the **three-role model** that makes
+`FORCE ROW LEVEL SECURITY` actually enforce (#290 + #291; see
+[ADR-0026](ADR-0026-runtime-app-role-rls-enforcement.md) and `SETUP.md` §5):
+`MIGRATION_DATABASE_URL` → the privileged **owner/migrator** role (`lms`; DDL +
+seeds only, never runtime), `DATABASE_URL` → the least-privilege **runtime app**
+role (`app_user`, `NOSUPERUSER NOBYPASSRLS`, SELECT-only on the control-plane
+tables), and `CONTROL_PLANE_DATABASE_URL` → the dedicated **control-plane** role
+(`control_plane_user`, `NOSUPERUSER NOBYPASSRLS` with a narrow control-plane
+write set) — set it explicitly for a hardened deploy rather than letting it fall
+back to the `app_user` `DATABASE_URL`.
 `JWT_SECRET` and `GROQ_API_KEY` are likewise sourced from `.env` — the in-compose
 `JWT_SECRET` fallback is a **dev-only** placeholder, so set a real one before any
 real deployment.
@@ -298,21 +361,31 @@ real deployment.
 > IPv4-only or serverless networks, use the Supabase **connection pooler**
 > (Supavisor) URL — `...pooler.supabase.com:6543?pgbouncer=true`.
 
-### Images: GHCR by default, build-from-source override
+See [docs/RUNBOOK-prod-db-roles.md](RUNBOOK-prod-db-roles.md) for the prod
+provisioning + verification steps (create `app_user`, apply `database/roles.sql`,
+set the DSNs, and verify cross-tenant isolation on the live DB).
 
-A bare `docker compose up -d` (`pnpm start`) defaults the gateway, the 26
+### Images: build-from-source is the supported collaborator path; GHCR pull is owner/CI-only
+
+`pnpm start` (a bare `docker compose up -d`) defaults the gateway, the 26
 services, `web` and `admin` to the owner-built GHCR images
-`ghcr.io/akshatarora7/lms-saas/<name>:latest` and **pulls** them on first run —
-which requires access to those (private) images.
+`ghcr.io/akshatarora7/lms-saas/<name>:latest` and **pulls** them on first run.
+This path is **owner/CI-only**: it requires access to those **private** images,
+so **collaborators should not use it**.
 
-Collaborators who can't pull GHCR — or who want to run the **current source** —
-build every image locally with the **`docker-compose.build.yml` override**:
+**Collaborators (and anyone running the current source) use this — it is the
+supported, credential-free path:** build every image locally with the
+**`docker-compose.build.yml` override**:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 # shortcut:
 pnpm start:build
 ```
+
+See [ADR-0034](ADR-0034-collaborator-run-path.md) for the recorded decision
+(images stay private; build-from-source is the supported path; cold-build speed
+is tracked in #299).
 
 The override adds **only** a `build:` block (context `.` + each service's
 existing `services/<name>/Dockerfile`) to all 29 buildable services (26
@@ -345,6 +418,49 @@ The lightweight Postgres + Redis stack used by the integration tests lives in
 docker compose -f docker-compose.infra.yml up -d
 docker compose -f docker-compose.infra.yml down -v
 ```
+
+## Build performance (local build-from-source)
+
+The build-from-source path (`pnpm start:build`) builds ~29–30 images. The
+service Dockerfiles are structured for **BuildKit cache reuse** so neither a cold
+nor a warm build pays the full cost again. Two mechanisms do the work (#299):
+
+1. **One pnpm store, shared across every image (cold builds).** Each
+   Dockerfile mounts a shared BuildKit cache for the pnpm store
+   (`--mount=type=cache,id=pnpm-store,target=/pnpm/store`). The **first** image
+   to build populates that store; **every later image reuses it**, so their
+   `pnpm install` resolves from the local store with **zero network**. In a
+   measured run on one Windows dev machine (after `docker builder prune -af`),
+   the first image (gateway) took ~242s; the next image's install then dropped
+   from ~40s to ~21s (~47% faster, **550 packages reused, 0 downloaded**) purely
+   from the shared store. Instead of 30 independent full installs, the mesh pays
+   for the dependency download **once**.
+
+2. **Warm rebuilds only rebuild the services whose source changed.** The
+   Dockerfiles install dependencies **manifest-first** (copy lockfile +
+   `package.json`s, `pnpm install`, *then* copy source) and use **scoped
+   per-service `COPY`** instead of `COPY . .`. A source-only edit therefore no
+   longer busts the dependency-install layer: the changed service's
+   `pnpm install` stage stays **CACHED** and only the later stages
+   (`COPY` + `prisma generate` + `tsc`) re-run (~57s in measurement), while a
+   service whose source did not change is **fully cached and finishes in
+   seconds** (~6s, all stages cached).
+
+> The cold figures above are **representative per-image measurements** on a
+> single Windows dev machine, not a precise end-to-end wall-clock for all 30
+> images — the full cold mesh build was intentionally not run end-to-end. They
+> illustrate the per-image mechanism (shared store reuse, install-layer caching),
+> not a guaranteed total build time.
+
+**BuildKit is required** for the cache mounts to take effect. It is the default
+on Docker Desktop and Compose v2, and each Dockerfile pins the BuildKit frontend
+with a `# syntax=docker/dockerfile:1` directive, so no extra flags are needed.
+The `.dockerignore` still excludes `**/node_modules` (Windows pnpm-junction
+safety), so builds stay clean-context correct.
+
+> **Future optimization (tracked, not yet shipped):** a shared base image (L5)
+> and `turbo prune` per-service contexts (L6) would cut cold build time further;
+> they are deferred follow-ups to #299.
 
 ## Local development (hot reload)
 

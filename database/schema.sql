@@ -1132,6 +1132,8 @@ CREATE TABLE IF NOT EXISTS ai_embedding (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS ix_ai_embedding_tenant ON ai_embedding(tenant_id, course_id);
+CREATE INDEX IF NOT EXISTS ix_ai_embedding_embedding
+  ON ai_embedding USING ivfflat (embedding vector_cosine_ops);
 
 -- Global tenant-scoped search read model (keyword pg_trgm + semantic pgvector).
 -- One denormalized row per indexable entity (course, content_topic, app_user, ...).
@@ -1179,6 +1181,17 @@ CREATE TABLE IF NOT EXISTS ai_message (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS ix_ai_message_chat ON ai_message(chat_id, created_at);
+
+CREATE TABLE IF NOT EXISTS ai_usage (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id      uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  window_date    date NOT NULL,         -- UTC calendar day
+  request_count  integer NOT NULL DEFAULT 0,
+  token_estimate bigint NOT NULL DEFAULT 0,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, window_date)
+);
 
 -- ============================================================================
 -- ANALYTICS  (Caliper/xAPI Learning Record Store + read models)

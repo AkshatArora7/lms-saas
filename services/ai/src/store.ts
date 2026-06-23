@@ -100,6 +100,33 @@ export interface AiStore {
 
   /** List messages for a chat (oldest first). */
   listMessages(ctx: TenantContext, chatId: string): Promise<MessageRecord[]>;
+
+  /**
+   * Read a tenant's accumulated AI usage for a UTC day (`windowDate` =
+   * `YYYY-MM-DD`). Returns `{ requestCount: 0, tokenEstimate: 0 }` when there is
+   * no row yet. Used by the `/chat` cost ceiling (check-before-spend).
+   */
+  getTenantDailyUsage(
+    ctx: TenantContext,
+    windowDate: string,
+  ): Promise<TenantDailyUsage>;
+
+  /**
+   * Increment a tenant's usage for a UTC day by one request and `tokens`
+   * (worst-case estimate), creating the row on first hit. UPSERTs on
+   * `(tenant_id, window_date)` so the counter is monotonic and never duplicated.
+   */
+  incrementTenantDailyUsage(
+    ctx: TenantContext,
+    windowDate: string,
+    tokens: number,
+  ): Promise<void>;
+}
+
+/** A tenant's accumulated AI chat usage within one UTC day. */
+export interface TenantDailyUsage {
+  requestCount: number;
+  tokenEstimate: number;
 }
 
 /**

@@ -23,17 +23,37 @@ is a single codebase and a no-code migration path.
    `ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY` with a `tenant_isolation`
    policy on every tenant table. The policy compares `tenant_id` to the
    request-scoped GUC `app.tenant_id`.
-3. **Least-privilege connection role.** Runtime tenant isolation only holds if
+3. **Least-privilege connection roles.** Runtime tenant isolation only holds if
    the connecting role **cannot bypass RLS** — Postgres exempts SUPERUSER, table
    **owners**, and `BYPASSRLS` roles from policies *even under* `FORCE ROW LEVEL
-   SECURITY`. So this repo uses a **two-role model** (see
+   SECURITY`. So this repo uses a **three-role model** (#290 + #291; see
    [`database/roles.sql`](../database/roles.sql) and
-   [ADR-0026](ADR-0026-runtime-app-role-rls-enforcement.md)): a privileged
-   **owner/migrator** role (`lms` in compose) runs `schema.sql`, `rls.sql`,
-   `roles.sql` and the seed, while every backend service connects at runtime as
-   `app_user` — `NOSUPERUSER NOBYPASSRLS`, non-owner, CRUD-only — which **is**
-   subject to `tenant_isolation`. This non-bypassing role is the safety net that
-   "catches the cases your code misses".
+   [ADR-0026](ADR-0026-runtime-app-role-rls-enforcement.md)):
+
+   | Role | DSN | Privilege envelope |
+   | ---- | --- | ------------------ |
+   | **owner / migrator** (`lms` in compose) | `MIGRATION_DATABASE_URL` | SUPERUSER + table owner, RLS-exempt by design. Runs `schema.sql`, `rls.sql`, `roles.sql` and the seed — **never** runtime traffic. |
+   | **control-plane** (`control_plane_user`) | `CONTROL_PLANE_DATABASE_URL` | `NOSUPERUSER NOBYPASSRLS`, non-owner. `SELECT` on every table plus a narrow write set — `INSERT/UPDATE/DELETE` on `tenant`, `tenant_admin_delegation`, `tenant_silo_migration` and `INSERT` on `event_outbox`. The principal behind `@lms/db.controlPlane()`. |
+   | **runtime app** (`app_user`) | `DATABASE_URL` | `NOSUPERUSER NOBYPASSRLS`, non-owner. Full CRUD on every tenant-scoped table (incl. `event_outbox`), but **SELECT-only** on all five control-plane tables (`tenant`, `plan`, `permission`, `tenant_admin_delegation`, `tenant_silo_migration`). Used by every backend service per request. |
+
+   Both runtime roles (`control_plane_user`, `app_user`) are `NOSUPERUSER
+   NOBYPASSRLS` non-owners, so they **are** subject to `tenant_isolation`. This
+   non-bypassing pair is the safety net that "catches the cases your code misses".
+
+   > See [docs/RUNBOOK-prod-db-roles.md](RUNBOOK-prod-db-roles.md) for the prod
+   > provisioning + verification steps (provision the app role on Supabase, apply
+   > `database/roles.sql`, set the DSNs, and verify cross-tenant isolation live).
+
+   **Two complementary isolation mechanisms.** Tenant-scoped tables carry
+   `tenant_id` and are protected by `FORCE ROW LEVEL SECURITY` keyed on
+   `app.tenant_id` (above). The five **control-plane** tables are deliberately
+   *not* in `rls.sql`'s `tenant_tables` loop — they are global registries/catalogs
+   — so their isolation is enforced by **GRANTs instead**: `app_user` can only
+   read them, and the only writer is the `tenant` service via `controlPlane()`
+   (which reads `CONTROL_PLANE_DATABASE_URL ?? DATABASE_URL`, connecting as
+   `control_plane_user`). Because `control_plane_user` is `NOBYPASSRLS`, even its
+   one tenant-scoped write — the transactional `event_outbox` INSERT inside
+   `provisionTenant` — stays subject to the FORCE'd `tenant_isolation` policy.
 
 ### How the GUC is set
 

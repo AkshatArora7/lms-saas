@@ -235,6 +235,37 @@ export const enMessages = {
     emptyTitle: "No attendance recorded yet",
     emptyBody: "Once your sessions are recorded, your attendance history will appear here.",
   },
+  guardianAttendance: {
+    title: "Children's attendance",
+    subtitle: "Attendance for your linked students, newest first.",
+    selectChild: "Select a student",
+    viewChild: "View attendance for {name}",
+    childFallbackName: "Student",
+    childMeta: "{name} · {relationship}",
+    relationshipParent: "Parent",
+    relationshipGuardian: "Guardian",
+    relationshipChild: "Child",
+    relationshipOther: "Other",
+    noChildrenTitle: "No linked students",
+    noChildrenBody:
+      "There are no students linked to your account yet. If you expect to see your child here, contact your school to set up access.",
+    emptyHistoryTitle: "No attendance recorded yet",
+    emptyHistoryBody:
+      "Once {name}'s sessions are recorded, attendance will appear here.",
+    emptyHistoryBodyFallback:
+      "Once this student's sessions are recorded, attendance will appear here.",
+    childrenError:
+      "We couldn't load your linked students right now. Please try again shortly.",
+    historyError:
+      "We couldn't load attendance for {name} right now. Please try again shortly.",
+    historyErrorFallback:
+      "We couldn't load attendance for this student right now. Please try again shortly.",
+    statusPresent: "Present",
+    statusAbsent: "Absent",
+    statusTardy: "Tardy",
+    statusExcused: "Excused",
+    sessionFallback: "Session",
+  },
   roster: {
     backToTeaching: "← Back to teaching",
     notAuthorizedTitle: "Not authorized",

@@ -13,6 +13,7 @@
  */
 import { loadConfig, type AppConfig } from "@lms/config";
 import { createLogger } from "@lms/logger";
+import { createRateLimiter } from "@lms/ratelimit";
 import type { TenantContext } from "@lms/types";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 
@@ -32,6 +33,7 @@ export interface BuildAppOptions {
   resolveTenant?: AiRouteDeps["resolveTenant"];
   embedder?: AiRouteDeps["embedder"];
   chat?: AiRouteDeps["chat"];
+  limiter?: AiRouteDeps["limiter"];
 }
 
 /**
@@ -79,6 +81,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
     embedder: options.embedder ?? makeEmbedder(),
     chat: options.chat ?? makeChatModel(config),
+    limiter: options.limiter ?? createRateLimiter(config),
   });
 
   return app;

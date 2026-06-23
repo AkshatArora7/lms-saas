@@ -27,6 +27,11 @@
 #   http://localhost:3001  admin console
 #   http://localhost:4000  gateway (authenticated /api/:service/*)
 # Every service is also published on its own 40xx port for direct inspection.
+# This per-service publishing is DEV-ONLY. For production, layer the override
+# `docker-compose.prod.yml` (docker compose -f docker-compose.yml -f
+# docker-compose.prod.yml up -d) to keep all domain services + postgres + redis
+# internal-only — only gateway/web/admin stay public (see docs/DEPLOYMENT.md /
+# ADR-0027: gateway is the single trust boundary for identity headers).
 #
 # Tear down:  docker compose down   (add -v to also wipe the Postgres volume)
 #
@@ -42,19 +47,33 @@ x-common-env: &common-env
   NODE_ENV: production
   TENANT_MODE: ${TENANT_MODE:-hybrid}
   DEFAULT_TENANT_TIER: ${DEFAULT_TENANT_TIER:-pool}
-  # Two-role DB model (#286 / ADR-0026): RUNTIME services connect as the
-  # least-privilege `app_user` (NOSUPERUSER NOBYPASSRLS, non-owner) so Postgres
-  # FORCE RLS is enforced. The privileged owner/migrator role `lms` is used ONLY
-  # by initdb (schema+rls+roles) and the one-shot `seed` service (which overrides
-  # DATABASE_URL below). Override DATABASE_URL in .env (e.g. a Supabase pooler URL
-  # for IPv4, pointed at a least-priv role) to point the whole mesh at Supabase.
+  # Three-role DB model (#286 / #290 / #291, ADR-0026): RUNTIME per-request
+  # services connect as the least-privilege `app_user` (NOSUPERUSER NOBYPASSRLS,
+  # non-owner) via DATABASE_URL so Postgres FORCE RLS is enforced — and app_user
+  # is SELECT-only on the five control-plane tables. CONTROL-PLANE writes (tenant
+  # provisioning, admin delegation, silo saga + the in-tx event_outbox row) flow
+  # through the dedicated `control_plane_user` role via CONTROL_PLANE_DATABASE_URL
+  # (also NOSUPERUSER NOBYPASSRLS, so its outbox INSERT stays RLS-subject). The
+  # privileged owner/migrator role `lms` is used ONLY by initdb (schema+rls+roles)
+  # and the one-shot `seed` service (which overrides DATABASE_URL below). Override
+  # any of these in .env (e.g. a Supabase pooler URL for IPv4, pointed at the
+  # matching least-priv role) to point the whole mesh at Supabase.
   DATABASE_URL: ${DATABASE_URL:-postgresql://app_user:app_user@postgres:5432/lms}
   DIRECT_URL: ${DIRECT_URL:-postgresql://app_user:app_user@postgres:5432/lms}
-  CONTROL_PLANE_DATABASE_URL: ${CONTROL_PLANE_DATABASE_URL:-postgresql://app_user:app_user@postgres:5432/lms}
+  CONTROL_PLANE_DATABASE_URL: ${CONTROL_PLANE_DATABASE_URL:-postgresql://control_plane_user:control_plane_user@postgres:5432/lms}
   JWT_SECRET: ${JWT_SECRET:-local-compose-dev-secret-change-me-please}
   JWT_ISSUER: ${JWT_ISSUER:-https://auth.lms.local}
   JWT_AUDIENCE: ${JWT_AUDIENCE:-lms-api}
   GROQ_API_KEY: ${GROQ_API_KEY:-}
+  # Distributed tracing (#83): preload the OTel SDK into every service. No-op
+  # unless OTEL_ENABLED=true AND an OTLP endpoint is set (see @lms/observability).
+  # Empty-string defaults for the optional URL/headers are read raw by the
+  # preload and treated as "unset" — they never reach @lms/config's URL zod.
+  NODE_OPTIONS: ${NODE_OPTIONS:---require @lms/observability/register}
+  OTEL_ENABLED: ${OTEL_ENABLED:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+  OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
 
 x-svc-healthcheck: &svc-healthcheck
   test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:'+(process.env.PORT||'4000')+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
@@ -138,6 +157,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4000
+      OTEL_SERVICE_NAME: gateway
       SERVICE_URL_IDENTITY: http://identity:4001
       SERVICE_URL_TENANT: http://tenant:4002
       SERVICE_URL_USER_ORG: http://user-org:4003
@@ -180,6 +200,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4001
+      OTEL_SERVICE_NAME: identity
       # DB-backed sign-in: with the demo seed applied (see the `seed` service),
       # login flows through the RLS-scoped Prisma store — app_user +
       # user_credential, roles via role_assignment→role→role_permission. The
@@ -204,6 +225,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4002
+      OTEL_SERVICE_NAME: tenant
     depends_on:
       postgres:
         condition: service_healthy
@@ -221,6 +243,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4003
+      OTEL_SERVICE_NAME: user-org
     depends_on:
       postgres:
         condition: service_healthy
@@ -238,6 +261,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4004
+      OTEL_SERVICE_NAME: enrollment
     depends_on:
       postgres:
         condition: service_healthy
@@ -255,6 +279,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4005
+      OTEL_SERVICE_NAME: course
     depends_on:
       postgres:
         condition: service_healthy
@@ -272,6 +297,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4006
+      OTEL_SERVICE_NAME: content
     depends_on:
       postgres:
         condition: service_healthy
@@ -289,6 +315,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4007
+      OTEL_SERVICE_NAME: assignment
     depends_on:
       postgres:
         condition: service_healthy
@@ -306,6 +333,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4008
+      OTEL_SERVICE_NAME: assessment
     depends_on:
       postgres:
         condition: service_healthy
@@ -323,6 +351,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4009
+      OTEL_SERVICE_NAME: grading
     depends_on:
       postgres:
         condition: service_healthy
@@ -340,6 +369,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4010
+      OTEL_SERVICE_NAME: discussion
     depends_on:
       postgres:
         condition: service_healthy
@@ -357,6 +387,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4011
+      OTEL_SERVICE_NAME: announcement
     depends_on:
       postgres:
         condition: service_healthy
@@ -374,6 +405,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4012
+      OTEL_SERVICE_NAME: notification
     depends_on:
       postgres:
         condition: service_healthy
@@ -391,6 +423,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4013
+      OTEL_SERVICE_NAME: calendar
     depends_on:
       postgres:
         condition: service_healthy
@@ -408,6 +441,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4014
+      OTEL_SERVICE_NAME: rubric
     depends_on:
       postgres:
         condition: service_healthy
@@ -425,6 +459,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4015
+      OTEL_SERVICE_NAME: analytics
     depends_on:
       postgres:
         condition: service_healthy
@@ -442,6 +477,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4016
+      OTEL_SERVICE_NAME: reporting
     depends_on:
       postgres:
         condition: service_healthy
@@ -459,6 +495,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4017
+      OTEL_SERVICE_NAME: ai
     depends_on:
       postgres:
         condition: service_healthy
@@ -476,6 +513,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4018
+      OTEL_SERVICE_NAME: lti
     depends_on:
       postgres:
         condition: service_healthy
@@ -493,6 +531,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4019
+      OTEL_SERVICE_NAME: sis
     depends_on:
       postgres:
         condition: service_healthy
@@ -510,6 +549,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4020
+      OTEL_SERVICE_NAME: video
     depends_on:
       postgres:
         condition: service_healthy
@@ -527,6 +567,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4021
+      OTEL_SERVICE_NAME: search
     depends_on:
       postgres:
         condition: service_healthy
@@ -544,6 +585,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4022
+      OTEL_SERVICE_NAME: billing
     depends_on:
       postgres:
         condition: service_healthy
@@ -561,6 +603,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4023
+      OTEL_SERVICE_NAME: audit
     depends_on:
       postgres:
         condition: service_healthy
@@ -578,6 +621,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4024
+      OTEL_SERVICE_NAME: mobile-bff
       GATEWAY_URL: http://gateway:4000
     depends_on:
       postgres:
@@ -598,6 +642,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4025
+      OTEL_SERVICE_NAME: attendance
     depends_on:
       postgres:
         condition: service_healthy
@@ -622,6 +667,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4026
+      OTEL_SERVICE_NAME: relay
       NOTIFICATION_EVENTS_URL: http://notification:4012/events
       RELAY_POLL_INTERVAL_MS: ${RELAY_POLL_INTERVAL_MS:-5000}
     depends_on:

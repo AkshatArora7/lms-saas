@@ -1,14 +1,26 @@
 import type { AppConfig } from "@lms/config";
+import type { RateLimiter, RateLimitResult } from "@lms/ratelimit";
 import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 
-import { buildGroundedMessages, type ChatModel } from "./chat.js";
+import {
+  buildGroundedMessages,
+  buildQuestionGenMessages,
+  parseQuestionDrafts,
+  QUESTION_DIFFICULTIES,
+  QUESTION_DRAFT_KINDS,
+  type ChatModel,
+  type QuestionGenParams,
+} from "./chat.js";
 import type { Embedder } from "./embedder.js";
 import { chunkText, type AiStore, type Citation } from "./store.js";
 
 const CONTENT_SOURCE_TYPE = "content_topic";
 const RETRIEVAL_K = 5;
 const CHAT_FEATURE = "tutor";
+/** Reject student messages longer than this before any embed/retrieve/model call. */
+const MAX_MESSAGE_CHARS = 4000;
 
 export interface AiRouteDeps {
   config: AppConfig;
@@ -17,6 +29,8 @@ export interface AiRouteDeps {
   resolveTenant: (req: FastifyRequest) => TenantContext;
   embedder: Embedder;
   chat: ChatModel;
+  /** Fixed-window limiter for the per-user/per-tenant chat rate limits (#309). */
+  limiter: RateLimiter;
 }
 
 function resolveTenantOr400(
@@ -48,9 +62,44 @@ function notFound(reply: FastifyReply, message: string): FastifyReply {
   return reply.code(404).send({ error: "not_found", message });
 }
 
+/**
+ * Send a 429 `rate_limited` response, mirroring the gateway's header style
+ * (`RateLimit-Limit`/`RateLimit-Remaining`/`Retry-After`). `result` is the
+ * breached limiter outcome; `scope` distinguishes per-user vs per-tenant in the
+ * human-readable message while keeping `error: "rate_limited"` stable.
+ */
+function rateLimited(
+  reply: FastifyReply,
+  result: RateLimitResult,
+  scope: string,
+): FastifyReply {
+  void reply.header("RateLimit-Limit", String(result.limit));
+  void reply.header("RateLimit-Remaining", String(result.remaining));
+  return reply
+    .header("Retry-After", String(result.retryAfterSeconds))
+    .code(429)
+    .send({
+      error: "rate_limited",
+      message: `AI chat rate limit exceeded (${scope}). Retry after the window resets.`,
+    });
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
+
+/** Body schema for question-draft generation (zod, per architect §4 Decision 4). */
+const questionGenBodySchema = z
+  .object({
+    count: z.number().int().min(1).max(20).optional(),
+    kinds: z.array(z.enum(QUESTION_DRAFT_KINDS)).min(1).optional(),
+    difficulty: z.enum(QUESTION_DIFFICULTIES).optional(),
+    topic: z.string().optional(),
+    sourceText: z.string().optional(),
+  })
+  .refine((b) => isNonEmptyString(b.topic) || isNonEmptyString(b.sourceText), {
+    message: "At least one of topic or sourceText is required.",
+  });
 
 /** Register the ai surface: reindex, RAG chat, and chat/message history reads. */
 export function registerAiRoutes(app: FastifyInstance, deps: AiRouteDeps): void {
@@ -122,6 +171,45 @@ export function registerAiRoutes(app: FastifyInstance, deps: AiRouteDeps): void 
       return badRequest(reply, "message is required.");
     }
     const message = body.message.trim();
+    if (message.length > MAX_MESSAGE_CHARS) {
+      return badRequest(reply, "message is too long.");
+    }
+
+    // Rate limits + cost ceiling (#309). Enforced AFTER cheap validation but
+    // BEFORE any embed/retrieve/Groq work (those cost money + latency). Per-user
+    // first so one user can't drain the whole tenant budget, then per-tenant,
+    // then the durable per-UTC-day spend ceiling.
+    const windowSeconds = deps.config.AI_CHAT_RATE_LIMIT_WINDOW_SECONDS;
+    const userResult = await deps.limiter.check(
+      `ai:chat:user:${ctx.tenantId}:${userId}`,
+      deps.config.AI_CHAT_USER_RATE_LIMIT_MAX,
+      windowSeconds,
+    );
+    if (!userResult.allowed) {
+      return rateLimited(reply, userResult, "per-user");
+    }
+    const tenantResult = await deps.limiter.check(
+      `ai:chat:tenant:${ctx.tenantId}`,
+      deps.config.AI_CHAT_RATE_LIMIT_MAX,
+      windowSeconds,
+    );
+    if (!tenantResult.allowed) {
+      return rateLimited(reply, tenantResult, "per-tenant");
+    }
+
+    const windowDate = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
+    const usage = await deps.store.getTenantDailyUsage(ctx, windowDate);
+    const requestCeiling = deps.config.AI_CHAT_DAILY_TENANT_REQUEST_CEILING;
+    const tokenCeiling = deps.config.AI_CHAT_DAILY_TENANT_TOKEN_CEILING;
+    if (
+      (requestCeiling > 0 && usage.requestCount >= requestCeiling) ||
+      (tokenCeiling > 0 && usage.tokenEstimate >= tokenCeiling)
+    ) {
+      return reply.code(429).send({
+        error: "cost_exceeded",
+        message: "Daily AI usage ceiling reached for this tenant.",
+      });
+    }
 
     // Resolve (and authorize) the chat, or create a new one for this caller.
     let chatId: string;
@@ -149,6 +237,7 @@ export function registerAiRoutes(app: FastifyInstance, deps: AiRouteDeps): void 
     );
     const answer = await deps.chat.complete(
       buildGroundedMessages(message, citations),
+      { maxTokens: deps.config.GROQ_MAX_TOKENS },
     );
 
     await deps.store.addMessage(ctx, {
@@ -163,6 +252,14 @@ export function registerAiRoutes(app: FastifyInstance, deps: AiRouteDeps): void 
       content: answer,
       citations,
     });
+
+    // Record worst-case token spend for the tenant's daily ceiling — only after
+    // a successful completion (we never charge a tenant for a failed request).
+    await deps.store.incrementTenantDailyUsage(
+      ctx,
+      windowDate,
+      deps.config.GROQ_MAX_TOKENS,
+    );
 
     return reply.code(200).send({ chatId, answer, citations });
   });
@@ -208,6 +305,50 @@ export function registerAiRoutes(app: FastifyInstance, deps: AiRouteDeps): void 
       }
       const messages = await deps.store.listMessages(ctx, req.params.chatId);
       return reply.code(200).send({ messages });
+    },
+  );
+
+  // Generate transient draft quiz questions from a topic/reading (issue #65).
+  // Stateless: no tenant DB read, nothing persisted — drafts are returned for
+  // human review/edit and the client maps approved drafts to the question bank.
+  app.post<{ Params: { courseId: string }; Body: unknown }>(
+    "/courses/:courseId/question-drafts",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const userId = resolveUserId(req);
+      if (!userId) {
+        return reply
+          .code(400)
+          .send({ error: "user_required", message: "Missing x-user-id." });
+      }
+
+      const parsed = questionGenBodySchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return badRequest(
+          reply,
+          parsed.error.issues[0]?.message ?? "Invalid request body.",
+        );
+      }
+
+      const params: QuestionGenParams = {
+        count: parsed.data.count ?? 5,
+        kinds: parsed.data.kinds ?? [...QUESTION_DRAFT_KINDS],
+        difficulty: parsed.data.difficulty ?? "medium",
+        topic: parsed.data.topic,
+        sourceText: parsed.data.sourceText,
+      };
+
+      const raw = await deps.chat.complete(buildQuestionGenMessages(params));
+      const drafts = parseQuestionDrafts(raw, params);
+      if (drafts.length === 0) {
+        return reply.code(502).send({
+          error: "generation_failed",
+          message: "The model did not return any usable questions.",
+        });
+      }
+
+      return reply.code(200).send({ drafts });
     },
   );
 }

@@ -11,6 +11,7 @@ import {
   type MessageRecord,
   type NewChatInput,
   type NewMessageInput,
+  type TenantDailyUsage,
   type TopicContent,
 } from "./store.js";
 
@@ -50,6 +51,8 @@ export class MemoryAiStore implements AiStore {
   private embeddings: EmbeddingRow[] = [];
   private chats: ChatRow[] = [];
   private messages: MessageRow[] = [];
+  /** Per-tenant per-UTC-day usage counters, keyed `${tenantId}:${windowDate}`. */
+  private usage = new Map<string, TenantDailyUsage>();
 
   constructor(
     private readonly generateId: () => string = randomUUID,
@@ -59,6 +62,15 @@ export class MemoryAiStore implements AiStore {
   /** Seed groundable course content (the content service owns this in prod). */
   seedTopic(tenantId: string, courseId: string, topic: TopicContent): void {
     this.topics.push({ tenantId, courseId, ...topic });
+  }
+
+  /** Seed a tenant's accumulated daily usage (tests use this to hit the ceiling). */
+  seedUsage(
+    tenantId: string,
+    windowDate: string,
+    usage: TenantDailyUsage,
+  ): void {
+    this.usage.set(`${tenantId}:${windowDate}`, { ...usage });
   }
 
   async readCourseTopics(
@@ -186,6 +198,29 @@ export class MemoryAiStore implements AiStore {
       .filter((m) => m.tenantId === ctx.tenantId && m.chatId === chatId)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map((m) => this.toMessageRecord(m));
+  }
+
+  async getTenantDailyUsage(
+    ctx: TenantContext,
+    windowDate: string,
+  ): Promise<TenantDailyUsage> {
+    const row = this.usage.get(`${ctx.tenantId}:${windowDate}`);
+    return row
+      ? { requestCount: row.requestCount, tokenEstimate: row.tokenEstimate }
+      : { requestCount: 0, tokenEstimate: 0 };
+  }
+
+  async incrementTenantDailyUsage(
+    ctx: TenantContext,
+    windowDate: string,
+    tokens: number,
+  ): Promise<void> {
+    const key = `${ctx.tenantId}:${windowDate}`;
+    const current = this.usage.get(key);
+    this.usage.set(key, {
+      requestCount: (current?.requestCount ?? 0) + 1,
+      tokenEstimate: (current?.tokenEstimate ?? 0) + tokens,
+    });
   }
 
   private toChatRecord(row: ChatRow): ChatRecord {

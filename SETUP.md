@@ -123,16 +123,17 @@ The **canonical schema is raw SQL** in [`database/schema.sql`](database/schema.s
 with tenant isolation in [`database/policies/rls.sql`](database/policies/rls.sql) and
 the least-privilege runtime role in [`database/roles.sql`](database/roles.sql).
 Apply them with `psql`, **in this order**, against your `DIRECT_URL` (which must
-point at a privileged migration/owner role — see the two-role model below):
+point at a privileged migration/owner role — see the role model below):
 
 ```bash
 psql "$DIRECT_URL" -f database/schema.sql        # tables + current_tenant_id()
 psql "$DIRECT_URL" -f database/policies/rls.sql  # FORCE ROW LEVEL SECURITY + tenant_isolation
-psql "$DIRECT_URL" -f database/roles.sql         # create app_user (NOSUPERUSER NOBYPASSRLS) + grants
+psql "$DIRECT_URL" -f database/roles.sql         # create app_user + control_plane_user (NOSUPERUSER NOBYPASSRLS) + grants
 ```
 
 `roles.sql` is idempotent and must run **as the owner/migrator role** (the one
-that owns the tables), because it grants CRUD to `app_user` and sets
+that owns the tables), because it creates the runtime roles, grants their
+privileges to `app_user` / `control_plane_user`, and sets
 `ALTER DEFAULT PRIVILEGES` for future objects. Under docker-compose this file is
 auto-applied as `/docker-entrypoint-initdb.d/03-roles.sql` on a fresh volume, so
 you only run the commands above for a non-compose / manual / remote setup.
@@ -152,17 +153,18 @@ pnpm db:migrate:dev   # create/apply a dev migration
 pnpm db:migrate       # apply migrations (deploy/CI)
 ```
 
-> **Isolation matters — the two-role model.** RLS only enforces if the
-> connecting role **cannot bypass it**. Postgres exempts SUPERUSER, table
+> **Isolation matters — the three-role model (#290, #291).** RLS only enforces
+> if the connecting role **cannot bypass it**. Postgres exempts SUPERUSER, table
 > **owners**, and `BYPASSRLS` roles from RLS *even under* `FORCE ROW LEVEL
-> SECURITY`. So this repo uses **two** Postgres roles (see
+> SECURITY`. So this repo uses **three** Postgres roles (see
 > [`database/roles.sql`](database/roles.sql) and
 > [ADR-0026](docs/ADR-0026-runtime-app-role-rls-enforcement.md)):
 >
-> | Role | Privilege | Used by |
-> | ---- | --------- | ------- |
-> | **migration / owner** (`lms` in compose) | SUPERUSER + table owner — bypasses RLS by design | `schema.sql` + `rls.sql` + `roles.sql` and the one-shot **seed** only |
-> | **runtime app role** (`app_user`) | `NOSUPERUSER NOBYPASSRLS`, non-owner, CRUD-only | **every backend service at runtime** |
+> | Role | DSN | Privilege | Used by |
+> | ---- | --- | --------- | ------- |
+> | **migration / owner** (`lms` in compose) | `MIGRATION_DATABASE_URL` | SUPERUSER + table owner — bypasses RLS by design | `schema.sql` + `rls.sql` + `roles.sql` and the one-shot **seed** only |
+> | **control-plane** (`control_plane_user`) | `CONTROL_PLANE_DATABASE_URL` | `NOSUPERUSER NOBYPASSRLS`, non-owner; `SELECT` everywhere + a narrow control-plane write set (`tenant`, `tenant_admin_delegation`, `tenant_silo_migration`, + `INSERT` on `event_outbox`) | the `tenant` service via `@lms/db.controlPlane()` |
+> | **runtime app** (`app_user`) | `DATABASE_URL` | `NOSUPERUSER NOBYPASSRLS`, non-owner; full CRUD on tenant-scoped tables, **SELECT-only** on the five control-plane tables | **every backend service at runtime** |
 >
 > Every service's runtime `DATABASE_URL` MUST connect as the **app role**, never
 > the owner — that is what makes `FORCE ROW LEVEL SECURITY` + the `app.tenant_id`
@@ -173,24 +175,29 @@ pnpm db:migrate       # apply migrations (deploy/CI)
 > python -c "import pglast; pglast.parse_sql(open('database/schema.sql',encoding='utf-8').read()); print('ok')"
 > ```
 
-#### Production / Supabase: provision the runtime app role
+#### Production / Supabase: provision the runtime roles
 
 > ⚠️ **Required prod step (tracked follow-up — not yet automated for remote
 > deploys).** A real or **Supabase** deployment does **not** get `app_user`
 > automatically (initdb scripts only run on a fresh local volume). The operator
 > MUST:
 >
-> 1. **Provision a least-privilege app role** on the target DB and apply the
->    grants — run [`database/roles.sql`](database/roles.sql) (or the equivalent
->    `CREATE ROLE … NOSUPERUSER NOBYPASSRLS` + CRUD grants) as the owner/migrator.
+> 1. **Provision the least-privilege runtime roles** on the target DB and apply
+>    the grants — run [`database/roles.sql`](database/roles.sql) (which creates
+>    both `app_user` and `control_plane_user` as `NOSUPERUSER NOBYPASSRLS`, plus
+>    their grants) as the owner/migrator.
 > 2. **Split the connection URLs** in `.env`:
->    - `DATABASE_URL` → the **least-privilege app role** (runtime services).
+>    - `DATABASE_URL` → the **least-privilege app role** (`app_user`; runtime services).
+>    - `CONTROL_PLANE_DATABASE_URL` → the dedicated **control-plane role**
+>      (`control_plane_user`; the `tenant` service's `controlPlane()` writes).
 >    - `MIGRATION_DATABASE_URL` → the **privileged owner/migrator role** (schema,
 >      `rls.sql`, `roles.sql`, and seed).
-> 3. **Verify the runtime role cannot bypass RLS** — both columns must be `f`:
+> 3. **Verify the runtime roles cannot bypass RLS** — both columns must be `f`
+>    for **both** roles:
 >    ```sql
->    SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = '<app role>';
->    -- expected:  <app role> | f | f
+>    SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
+>    WHERE rolname IN ('app_user', 'control_plane_user');
+>    -- expected:  <role> | f | f   (for each)
 >    ```
 >    If `rolsuper` or `rolbypassrls` is `t`, RLS is **not** enforced for that role
 >    and tenants can read each other's rows — fix before exposing the deploy.

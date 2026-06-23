@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createPrismaStore } from "@lms/service-tenant/dist/store.prisma.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { adminPool, appPoolUrl, dbAvailable, ensureSchemaAndRole, type PgPool } from "./helpers/db.js";
+import { adminPool, controlPlanePoolUrl, dbAvailable, ensureSchemaAndRole, type PgPool } from "./helpers/db.js";
 
 /**
  * DB-backed coverage for the tenant control plane's transactional outbox under
@@ -17,9 +17,13 @@ import { adminPool, appPoolUrl, dbAvailable, ensureSchemaAndRole, type PgPool } 
  * set_config('app.tenant_id', <new tenant id>, true) fix lets the `tenant` row
  * and its `tenant.provisioned` outbox row land atomically.
  *
- * Crucially, `controlPlane()` is pointed at the NON-superuser app role here (via
- * CONTROL_PLANE_DATABASE_URL): a superuser would silently BYPASS RLS and the
- * test would prove nothing. Skipped when no DATABASE_URL is configured.
+ * Crucially, `controlPlane()` is pointed at the NON-superuser control-plane write
+ * role here (via CONTROL_PLANE_DATABASE_URL = controlPlanePoolUrl()), which carries
+ * the real production `control_plane_user` grant shape — SELECT everywhere plus the
+ * explicit control-plane write set including INSERT on `event_outbox`, and
+ * NOBYPASSRLS. A superuser would silently BYPASS RLS and the test would prove
+ * nothing; this role genuinely guards both the control-plane write grant and the
+ * RLS-enforced outbox INSERT. Skipped when no DATABASE_URL is configured.
  */
 describe.skipIf(!dbAvailable)("Tenant provisioning: outbox write under RLS", () => {
   let admin: PgPool;
@@ -29,9 +33,10 @@ describe.skipIf(!dbAvailable)("Tenant provisioning: outbox write under RLS", () 
   beforeAll(async () => {
     await ensureSchemaAndRole();
     admin = adminPool();
-    // Force controlPlane() to connect as the non-superuser, NOBYPASSRLS app
-    // role so FORCE ROW LEVEL SECURITY genuinely applies to the outbox INSERT.
-    process.env.CONTROL_PLANE_DATABASE_URL = appPoolUrl();
+    // Force controlPlane() to connect as the non-superuser, NOBYPASSRLS
+    // control-plane write role so FORCE ROW LEVEL SECURITY genuinely applies to
+    // the outbox INSERT and the control-plane write grant is exercised end-to-end.
+    process.env.CONTROL_PLANE_DATABASE_URL = controlPlanePoolUrl();
   });
 
   afterAll(async () => {

@@ -27,6 +27,11 @@
 #   http://localhost:3001  admin console
 #   http://localhost:4000  gateway (authenticated /api/:service/*)
 # Every service is also published on its own 40xx port for direct inspection.
+# This per-service publishing is DEV-ONLY. For production, layer the override
+# `docker-compose.prod.yml` (docker compose -f docker-compose.yml -f
+# docker-compose.prod.yml up -d) to keep all domain services + postgres + redis
+# internal-only — only gateway/web/admin stay public (see docs/DEPLOYMENT.md /
+# ADR-0027: gateway is the single trust boundary for identity headers).
 #
 # Tear down:  docker compose down   (add -v to also wipe the Postgres volume)
 #

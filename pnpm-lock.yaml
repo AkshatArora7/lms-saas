@@ -349,6 +349,9 @@ importers:
       groq-sdk:
         specifier: ^0.7.0
         version: 0.7.0
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
     devDependencies:
       '@lms/eslint-config':
         specifier: workspace:*

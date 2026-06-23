@@ -1,8 +1,17 @@
 import type { AppConfig } from "@lms/config";
 import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 
-import { buildGroundedMessages, type ChatModel } from "./chat.js";
+import {
+  buildGroundedMessages,
+  buildQuestionGenMessages,
+  parseQuestionDrafts,
+  QUESTION_DIFFICULTIES,
+  QUESTION_DRAFT_KINDS,
+  type ChatModel,
+  type QuestionGenParams,
+} from "./chat.js";
 import type { Embedder } from "./embedder.js";
 import { chunkText, type AiStore, type Citation } from "./store.js";
 
@@ -51,6 +60,19 @@ function notFound(reply: FastifyReply, message: string): FastifyReply {
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
+
+/** Body schema for question-draft generation (zod, per architect §4 Decision 4). */
+const questionGenBodySchema = z
+  .object({
+    count: z.number().int().min(1).max(20).optional(),
+    kinds: z.array(z.enum(QUESTION_DRAFT_KINDS)).min(1).optional(),
+    difficulty: z.enum(QUESTION_DIFFICULTIES).optional(),
+    topic: z.string().optional(),
+    sourceText: z.string().optional(),
+  })
+  .refine((b) => isNonEmptyString(b.topic) || isNonEmptyString(b.sourceText), {
+    message: "At least one of topic or sourceText is required.",
+  });
 
 /** Register the ai surface: reindex, RAG chat, and chat/message history reads. */
 export function registerAiRoutes(app: FastifyInstance, deps: AiRouteDeps): void {
@@ -208,6 +230,50 @@ export function registerAiRoutes(app: FastifyInstance, deps: AiRouteDeps): void 
       }
       const messages = await deps.store.listMessages(ctx, req.params.chatId);
       return reply.code(200).send({ messages });
+    },
+  );
+
+  // Generate transient draft quiz questions from a topic/reading (issue #65).
+  // Stateless: no tenant DB read, nothing persisted — drafts are returned for
+  // human review/edit and the client maps approved drafts to the question bank.
+  app.post<{ Params: { courseId: string }; Body: unknown }>(
+    "/courses/:courseId/question-drafts",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const userId = resolveUserId(req);
+      if (!userId) {
+        return reply
+          .code(400)
+          .send({ error: "user_required", message: "Missing x-user-id." });
+      }
+
+      const parsed = questionGenBodySchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return badRequest(
+          reply,
+          parsed.error.issues[0]?.message ?? "Invalid request body.",
+        );
+      }
+
+      const params: QuestionGenParams = {
+        count: parsed.data.count ?? 5,
+        kinds: parsed.data.kinds ?? [...QUESTION_DRAFT_KINDS],
+        difficulty: parsed.data.difficulty ?? "medium",
+        topic: parsed.data.topic,
+        sourceText: parsed.data.sourceText,
+      };
+
+      const raw = await deps.chat.complete(buildQuestionGenMessages(params));
+      const drafts = parseQuestionDrafts(raw, params);
+      if (drafts.length === 0) {
+        return reply.code(502).send({
+          error: "generation_failed",
+          message: "The model did not return any usable questions.",
+        });
+      }
+
+      return reply.code(200).send({ drafts });
     },
   );
 }

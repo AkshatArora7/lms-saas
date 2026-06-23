@@ -1132,6 +1132,8 @@ CREATE TABLE IF NOT EXISTS ai_embedding (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS ix_ai_embedding_tenant ON ai_embedding(tenant_id, course_id);
+CREATE INDEX IF NOT EXISTS ix_ai_embedding_embedding
+  ON ai_embedding USING ivfflat (embedding vector_cosine_ops);
 
 -- Global tenant-scoped search read model (keyword pg_trgm + semantic pgvector).
 -- One denormalized row per indexable entity (course, content_topic, app_user, ...).

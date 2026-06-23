@@ -65,12 +65,28 @@ export interface VideoStore {
     status: VideoStatus,
   ): Promise<VideoRecord | null>;
 
-  /** Persist transcode output and mark the asset `ready`. */
+  /**
+   * Persist transcode output and mark the asset `ready`. Also emits a
+   * `video.ready` outbox event in the same tenant-scoped transaction as the
+   * status flip (ADR-0035).
+   */
   setRenditionsAndDuration(
     ctx: TenantContext,
     id: string,
     renditions: Rendition[],
     durationSeconds: number,
+  ): Promise<VideoRecord | null>;
+
+  /**
+   * Mark the asset `failed` (terminal) and emit a `video.failed` outbox event in
+   * the same tenant-scoped transaction (ADR-0035). The generic `setStatus` is
+   * left non-emitting so the non-terminal `transcoding` flip does not produce an
+   * event.
+   */
+  markFailed(
+    ctx: TenantContext,
+    id: string,
+    reason: string,
   ): Promise<VideoRecord | null>;
 
   /** Full-replace the caption tracks (auto from the pipeline, or manual edit). */

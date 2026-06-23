@@ -1,6 +1,7 @@
 import { withTenant } from "@lms/db";
 
 import type { Principal } from "./access.js";
+import { videoFailedEvent, videoReadyEvent } from "./events.js";
 import { ADMIN_ROLES } from "./routes.js";
 import type { CaptionTrack, Rendition } from "./transcoder.js";
 import type {
@@ -165,7 +166,45 @@ export function createPrismaStore(): VideoStore {
           durationSeconds,
           id,
         );
-        return rows[0] ? toVideo(rows[0]) : null;
+        if (!rows[0]) return null;
+        const record = toVideo(rows[0]);
+        // Emit `video.ready` in the same tx as the terminal status flip so the
+        // state change and the event are atomic (ADR-0035).
+        const ev = videoReadyEvent(record);
+        await db.$executeRawUnsafe(
+          `INSERT INTO event_outbox (tenant_id, type, actor_id, org_unit_id, payload)
+           VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5::jsonb)`,
+          ctx.tenantId,
+          ev.type,
+          ev.actorId,
+          ev.orgUnitId,
+          JSON.stringify(ev.payload),
+        );
+        return record;
+      });
+    },
+
+    async markFailed(ctx, id, reason: string) {
+      return withTenant(ctx, async (db: Db) => {
+        const rows = await db.$queryRawUnsafe<VideoRow[]>(
+          `UPDATE video_asset SET status = 'failed'
+            WHERE id = $1::uuid RETURNING ${VIDEO_COLS}`,
+          id,
+        );
+        if (!rows[0]) return null;
+        const record = toVideo(rows[0]);
+        // Emit `video.failed` in the same tx as the terminal status flip.
+        const ev = videoFailedEvent(record, reason);
+        await db.$executeRawUnsafe(
+          `INSERT INTO event_outbox (tenant_id, type, actor_id, org_unit_id, payload)
+           VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5::jsonb)`,
+          ctx.tenantId,
+          ev.type,
+          ev.actorId,
+          ev.orgUnitId,
+          JSON.stringify(ev.payload),
+        );
+        return record;
       });
     },
 

@@ -7,6 +7,11 @@ import {
   type CourseAccessPolicy,
   type Principal,
 } from "./access.js";
+import {
+  videoFailedEvent,
+  videoReadyEvent,
+  type VideoOutboxEvent,
+} from "./events.js";
 import type { CaptionTrack, Rendition } from "./transcoder.js";
 import type {
   NewVideoInput,
@@ -24,6 +29,13 @@ export const DEMO_TENANT_ID = "11111111-1111-1111-1111-111111111111";
  */
 export class MemoryVideoStore implements VideoStore {
   private videos: VideoRecord[] = [];
+
+  /**
+   * Captured outbox events, in emission order. Mirrors the rows the Prisma store
+   * INSERTs into `event_outbox`, with the acting tenant recorded so tests can
+   * assert tenant scoping (ADR-0035).
+   */
+  readonly outbox: (VideoOutboxEvent & { tenantId: string })[] = [];
 
   constructor(
     private readonly generateId: () => string = randomUUID,
@@ -106,7 +118,29 @@ export class MemoryVideoStore implements VideoStore {
     video.renditions = renditions;
     video.durationSeconds = durationSeconds;
     video.status = "ready";
-    return { ...video };
+    const record = { ...video };
+    // Emit `video.ready` alongside the terminal status flip (ADR-0035).
+    this.outbox.push({ tenantId: ctx.tenantId, ...videoReadyEvent(record) });
+    return record;
+  }
+
+  async markFailed(
+    ctx: TenantContext,
+    id: string,
+    reason: string,
+  ): Promise<VideoRecord | null> {
+    const video = this.videos.find(
+      (v) => v.id === id && v.tenantId === ctx.tenantId,
+    );
+    if (!video) return null;
+    video.status = "failed";
+    const record = { ...video };
+    // Emit `video.failed` alongside the terminal status flip (ADR-0035).
+    this.outbox.push({
+      tenantId: ctx.tenantId,
+      ...videoFailedEvent(record, reason),
+    });
+    return record;
   }
 
   async setCaptions(

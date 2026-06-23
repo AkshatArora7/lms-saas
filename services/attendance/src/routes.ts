@@ -2,6 +2,7 @@ import type { AppConfig } from "@lms/config";
 import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+import type { GuardianChildrenResolver } from "./guardian-resolver.js";
 import type {
   AttendanceCategory,
   AttendanceStore,
@@ -9,11 +10,27 @@ import type {
   RecordInput,
 } from "./store.js";
 
+/** Trusted caller identity, stamped by the gateway/BFF from verified claims. */
+export interface Caller {
+  userId: string;
+  roles: string[];
+}
+
 export interface AttendanceRouteDeps {
   config: AppConfig;
   store: AttendanceStore;
   /** Resolve the tenant for a request (the gateway injects `x-tenant-id`). */
   resolveTenant: (req: FastifyRequest) => TenantContext;
+  /**
+   * Resolve the authenticated caller from the trusted `x-user-id` header (#190).
+   * Throws when `x-user-id` is absent so the guardian routes fail closed (401).
+   */
+  resolveCaller: (req: FastifyRequest) => Caller;
+  /**
+   * Authority for the set of children a guardian may currently read (active link
+   * + satisfied consent), owned by user-org and consumed via this port (#190).
+   */
+  guardianResolver: GuardianChildrenResolver;
 }
 
 const DEFAULT_CHRONIC_ABSENCE_THRESHOLD = 0.1;
@@ -39,9 +56,27 @@ function resolveTenantOr400(
   }
 }
 
+function resolveCallerOr401(
+  deps: AttendanceRouteDeps,
+  req: FastifyRequest,
+  reply: FastifyReply,
+): Caller | null {
+  try {
+    return deps.resolveCaller(req);
+  } catch {
+    void reply
+      .code(401)
+      .send({ error: "unauthorized", message: "Missing caller identity." });
+    return null;
+  }
+}
+
 function badRequest(reply: FastifyReply, message: string): FastifyReply {
   return reply.code(400).send({ error: "invalid_request", message });
 }
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
@@ -251,6 +286,55 @@ export function registerAttendanceRoutes(
       if (!ctx) return reply;
       const history = await deps.store.userHistory(ctx, req.params.id);
       return reply.code(200).send({ history });
+    },
+  );
+
+  // --- Guardian-scoped attendance view (#190) ---------------------------------
+  // The guardian is the AUTHENTICATED caller (trusted `x-user-id`), never a
+  // client-supplied param. The resolver returns ONLY active + consented children
+  // for this tenant; a studentId not in that set is denied (404) and no
+  // attendance read is ever attempted for it (deny-by-default).
+
+  // List the caller's authorized children (ids + relationship). Empty is valid.
+  app.get("/guardian/children", async (req, reply) => {
+    const caller = resolveCallerOr401(deps, req, reply);
+    if (!caller) return reply;
+    const ctx = resolveTenantOr400(deps, req, reply);
+    if (!ctx) return reply;
+    const children = await deps.guardianResolver.resolveChildren(
+      ctx,
+      caller.userId,
+    );
+    return reply.code(200).send({ children });
+  });
+
+  // A specific child's attendance history — only if that child is in the
+  // caller's authorized set; otherwise 404 (deny-by-default, no existence probe).
+  app.get<{ Params: { studentId: string } }>(
+    "/guardian/children/:studentId/attendance",
+    async (req, reply) => {
+      const caller = resolveCallerOr401(deps, req, reply);
+      if (!caller) return reply;
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      if (!UUID_RE.test(req.params.studentId)) {
+        return badRequest(reply, "studentId must be a uuid.");
+      }
+      const children = await deps.guardianResolver.resolveChildren(
+        ctx,
+        caller.userId,
+      );
+      const authorized = children.some(
+        (c) => c.studentUserId === req.params.studentId,
+      );
+      if (!authorized) {
+        return reply.code(404).send({
+          error: "not_found",
+          message: "No attendance for this student.",
+        });
+      }
+      const history = await deps.store.userHistory(ctx, req.params.studentId);
+      return reply.code(200).send({ studentId: req.params.studentId, history });
     },
   );
 }

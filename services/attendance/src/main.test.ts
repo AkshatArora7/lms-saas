@@ -1,8 +1,9 @@
 import type { AppConfig } from "@lms/config";
 import type { TenantContext } from "@lms/types";
 import type { FastifyRequest } from "fastify";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { FakeGuardianChildrenResolver } from "./guardian-resolver.memory.js";
 import { buildApp } from "./main.js";
 import {
   createSeededMemoryStore,
@@ -295,5 +296,249 @@ describe("absence/tardy notifications (#191)", () => {
     });
     expect(byUser["stu-tardy"]).toMatchObject({ category: "tardy" });
     expect(byUser["stu-present"]).toBeUndefined();
+  });
+});
+
+describe("guardian-scoped attendance view (#190)", () => {
+  const GUARDIAN = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+  const CHILD = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+  const OTHER_CHILD = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+
+  /** Resolve caller from the trusted x-user-id header (mirrors prod). */
+  function resolveCaller(req: FastifyRequest) {
+    const userId = req.headers["x-user-id"];
+    if (typeof userId !== "string" || userId.length === 0) {
+      throw new Error("missing x-user-id");
+    }
+    return { userId, roles: [] };
+  }
+
+  /** Seed CHILD's attendance under the demo tenant and return the store. */
+  async function seedChildHistory(store: MemoryAttendanceStore) {
+    await store.seedDefaultCodes(TENANT);
+    const session = await store.createSession(TENANT, {
+      orgUnitId: "section-a",
+      meetingDate: "2026-03-01",
+      periodLabel: "Period 1",
+    });
+    if (!session.ok) throw new Error("seed session failed");
+    await store.setRecords(TENANT, session.session.id, [
+      { userId: CHILD, code: "P" },
+    ]);
+    return store;
+  }
+
+  function buildGuardianApp(
+    store: MemoryAttendanceStore,
+    resolver: FakeGuardianChildrenResolver,
+  ) {
+    return buildApp({
+      config,
+      store,
+      resolveTenant,
+      resolveCaller,
+      guardianResolver: resolver,
+    });
+  }
+
+  const GUARDIAN_H = { "x-tenant-id": DEMO_TENANT_ID, "x-user-id": GUARDIAN };
+
+  it("lists only the caller's authorized children", async () => {
+    const resolver = new FakeGuardianChildrenResolver([
+      {
+        tenantId: DEMO_TENANT_ID,
+        guardianUserId: GUARDIAN,
+        children: [{ studentUserId: CHILD, relationship: "parent" }],
+      },
+    ]);
+    const app = buildGuardianApp(new MemoryAttendanceStore(), resolver);
+    const res = await app.inject({
+      method: "GET",
+      url: "/guardian/children",
+      headers: GUARDIAN_H,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().children).toEqual([
+      { studentUserId: CHILD, relationship: "parent" },
+    ]);
+  });
+
+  it("returns a linked, active+consented child's attendance (happy path)", async () => {
+    const store = await seedChildHistory(new MemoryAttendanceStore());
+    const resolver = new FakeGuardianChildrenResolver([
+      {
+        tenantId: DEMO_TENANT_ID,
+        guardianUserId: GUARDIAN,
+        children: [{ studentUserId: CHILD, relationship: "parent" }],
+      },
+    ]);
+    const app = buildGuardianApp(store, resolver);
+    const res = await app.inject({
+      method: "GET",
+      url: `/guardian/children/${CHILD}/attendance`,
+      headers: GUARDIAN_H,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().studentId).toBe(CHILD);
+    expect(res.json().history).toHaveLength(1);
+    expect(res.json().history[0]).toMatchObject({ code: "P", category: "present" });
+  });
+
+  it("denies a non-linked (cross-family) student with 404 and never reads history", async () => {
+    const store = await seedChildHistory(new MemoryAttendanceStore());
+    // OTHER_CHILD has attendance, but G is NOT linked to them.
+    const other = await store.createSession(TENANT, {
+      orgUnitId: "section-b",
+      meetingDate: "2026-03-02",
+    });
+    if (other.ok) {
+      await store.setRecords(TENANT, other.session.id, [
+        { userId: OTHER_CHILD, code: "A" },
+      ]);
+    }
+    const resolver = new FakeGuardianChildrenResolver([
+      {
+        tenantId: DEMO_TENANT_ID,
+        guardianUserId: GUARDIAN,
+        children: [{ studentUserId: CHILD, relationship: "parent" }],
+      },
+    ]);
+    const app = buildGuardianApp(store, resolver);
+    const historySpy = vi.spyOn(store, "userHistory");
+    const res = await app.inject({
+      method: "GET",
+      url: `/guardian/children/${OTHER_CHILD}/attendance`,
+      headers: GUARDIAN_H,
+    });
+    expect(res.statusCode).toBe(404);
+    // Deny-by-default: no attendance read is ever attempted for a denied id.
+    expect(
+      historySpy.mock.calls.some((c) => c[1] === OTHER_CHILD),
+    ).toBe(false);
+  });
+
+  it("denies a revoked/non-consented child (resolver excludes it) with 404", async () => {
+    // The fake resolver returns an EMPTY set for G — i.e. user-org filtered out
+    // the link (revoked) or the consent (non-consented). Either collapses to
+    // "not in the authorized set" → 404.
+    const store = await seedChildHistory(new MemoryAttendanceStore());
+    const resolver = new FakeGuardianChildrenResolver([]);
+    const app = buildGuardianApp(store, resolver);
+    const children = await app.inject({
+      method: "GET",
+      url: "/guardian/children",
+      headers: GUARDIAN_H,
+    });
+    expect(children.json().children).toEqual([]);
+    const res = await app.inject({
+      method: "GET",
+      url: `/guardian/children/${CHILD}/attendance`,
+      headers: GUARDIAN_H,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("ignores a spoofed guardianId param/query — identity comes from x-user-id only", async () => {
+    // CHILD is authorized for GUARDIAN, not for the spoofed attacker id. The
+    // attacker authenticates as themselves (x-user-id) but tries to name G via a
+    // query param; the param is ignored and they see nothing.
+    const store = await seedChildHistory(new MemoryAttendanceStore());
+    const ATTACKER = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+    const resolver = new FakeGuardianChildrenResolver([
+      {
+        tenantId: DEMO_TENANT_ID,
+        guardianUserId: GUARDIAN,
+        children: [{ studentUserId: CHILD, relationship: "parent" }],
+      },
+    ]);
+    const app = buildGuardianApp(store, resolver);
+    const children = await app.inject({
+      method: "GET",
+      url: `/guardian/children?guardianUserId=${GUARDIAN}&guardianId=${GUARDIAN}`,
+      headers: { "x-tenant-id": DEMO_TENANT_ID, "x-user-id": ATTACKER },
+    });
+    expect(children.json().children).toEqual([]);
+    const attendance = await app.inject({
+      method: "GET",
+      url: `/guardian/children/${CHILD}/attendance?guardianUserId=${GUARDIAN}`,
+      headers: { "x-tenant-id": DEMO_TENANT_ID, "x-user-id": ATTACKER },
+    });
+    expect(attendance.statusCode).toBe(404);
+  });
+
+  it("fails closed with 401 when x-user-id is absent", async () => {
+    const app = buildGuardianApp(
+      new MemoryAttendanceStore(),
+      new FakeGuardianChildrenResolver([]),
+    );
+    const list = await app.inject({
+      method: "GET",
+      url: "/guardian/children",
+      headers: { "x-tenant-id": DEMO_TENANT_ID },
+    });
+    expect(list.statusCode).toBe(401);
+    const detail = await app.inject({
+      method: "GET",
+      url: `/guardian/children/${CHILD}/attendance`,
+      headers: { "x-tenant-id": DEMO_TENANT_ID },
+    });
+    expect(detail.statusCode).toBe(401);
+  });
+
+  it("isolates tenants — a guardian in tenant A cannot read tenant B's child", async () => {
+    const store = await seedChildHistory(new MemoryAttendanceStore());
+    // Resolver only authorizes the child under the DEMO tenant, not OTHER.
+    const resolver = new FakeGuardianChildrenResolver([
+      {
+        tenantId: DEMO_TENANT_ID,
+        guardianUserId: GUARDIAN,
+        children: [{ studentUserId: CHILD, relationship: "parent" }],
+      },
+    ]);
+    const app = buildGuardianApp(store, resolver);
+    // Same guardian + child ids, but carrying tenant B's x-tenant-id.
+    const otherHeaders = {
+      "x-tenant-id": OTHER_TENANT.tenantId,
+      "x-user-id": GUARDIAN,
+    };
+    const children = await app.inject({
+      method: "GET",
+      url: "/guardian/children",
+      headers: otherHeaders,
+    });
+    expect(children.json().children).toEqual([]);
+    const attendance = await app.inject({
+      method: "GET",
+      url: `/guardian/children/${CHILD}/attendance`,
+      headers: otherHeaders,
+    });
+    expect(attendance.statusCode).toBe(404);
+  });
+
+  it("returns an empty set (200) for a guardian with no authorized children", async () => {
+    const app = buildGuardianApp(
+      new MemoryAttendanceStore(),
+      new FakeGuardianChildrenResolver([]),
+    );
+    const res = await app.inject({
+      method: "GET",
+      url: "/guardian/children",
+      headers: GUARDIAN_H,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().children).toEqual([]);
+  });
+
+  it("400s on a non-uuid studentId", async () => {
+    const app = buildGuardianApp(
+      new MemoryAttendanceStore(),
+      new FakeGuardianChildrenResolver([]),
+    );
+    const res = await app.inject({
+      method: "GET",
+      url: "/guardian/children/not-a-uuid/attendance",
+      headers: GUARDIAN_H,
+    });
+    expect(res.statusCode).toBe(400);
   });
 });

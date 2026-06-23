@@ -42,6 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.target || 'production' }}
     env:
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       DIRECT_URL: ${{ secrets.DIRECT_URL }}
     steps:
@@ -64,13 +65,13 @@ jobs:
       # Apply the canonical schema idempotently, fail-fast on any error. Order
       # matters: schema -> RLS policies -> least-privilege runtime role.
       - name: Apply canonical schema (schema.sql)
-        run: psql -v ON_ERROR_STOP=1 "$DIRECT_URL" -f database/schema.sql
+        run: psql -v ON_ERROR_STOP=1 "${MIGRATION_DATABASE_URL:-$DIRECT_URL}" -f database/schema.sql
 
       - name: Apply RLS policies (rls.sql)
-        run: psql -v ON_ERROR_STOP=1 "$DIRECT_URL" -f database/policies/rls.sql
+        run: psql -v ON_ERROR_STOP=1 "${MIGRATION_DATABASE_URL:-$DIRECT_URL}" -f database/policies/rls.sql
 
       - name: Apply runtime role (roles.sql)
-        run: psql -v ON_ERROR_STOP=1 "$DIRECT_URL" -f database/roles.sql
+        run: psql -v ON_ERROR_STOP=1 "${MIGRATION_DATABASE_URL:-$DIRECT_URL}" -f database/roles.sql
 
   verify:
     name: Schema drift + live RLS verification

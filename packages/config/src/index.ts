@@ -17,6 +17,7 @@ const schema = z.object({
   DATABASE_URL: z.string().url(),
   DIRECT_URL: z.string().url().optional(),
   CONTROL_PLANE_DATABASE_URL: z.string().url().optional(),
+  MIGRATION_DATABASE_URL: z.string().url().optional(), // privileged owner/migrator — migrate/seed tooling ONLY; never read by runtime services
 
   // Silo provisioning (Neon)
   NEON_API_KEY: z.string().optional(),

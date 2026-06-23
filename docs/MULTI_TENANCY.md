@@ -40,6 +40,10 @@ is a single codebase and a no-code migration path.
    NOBYPASSRLS` non-owners, so they **are** subject to `tenant_isolation`. This
    non-bypassing pair is the safety net that "catches the cases your code misses".
 
+   > See [docs/RUNBOOK-prod-db-roles.md](RUNBOOK-prod-db-roles.md) for the prod
+   > provisioning + verification steps (provision the app role on Supabase, apply
+   > `database/roles.sql`, set the DSNs, and verify cross-tenant isolation live).
+
    **Two complementary isolation mechanisms.** Tenant-scoped tables carry
    `tenant_id` and are protected by `FORCE ROW LEVEL SECURITY` keyed on
    `app.tenant_id` (above). The five **control-plane** tables are deliberately

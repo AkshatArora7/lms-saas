@@ -53,9 +53,51 @@ ALTER DEFAULT PRIVILEGES FOR ROLE lms IN SCHEMA public
 ALTER DEFAULT PRIVILEGES FOR ROLE lms IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO app_user;
 
--- NOTE: app_user intentionally gets CRUD on the control-plane `tenant` table
--- (which is deliberately NOT in rls.sql's `tenant_tables` loop) so controlPlane()
--- reads and the outbox relay's tenant enumeration work. This does NOT weaken
--- tenant isolation: every tenant-OWNED table carries tenant_id and is protected
--- by the FORCE'd `tenant_isolation` policy, to which app_user (NOBYPASSRLS,
--- non-owner) is fully subject.
+-- ----------------------------------------------------------------------------
+-- Least-privilege hardening for CONTROL-PLANE tables (Issue #291).
+-- ----------------------------------------------------------------------------
+-- The blanket CRUD grant above intentionally covers EVERY table so no service
+-- 500s on a missing privilege and future tenant-scoped tables keep CRUD by
+-- default. We then REVOKE write privileges from app_user on the control-plane
+-- tables that have NO runtime writer, leaving SELECT intact. The control-plane
+-- tables are exactly those NOT in rls.sql's `tenant_tables` loop (and not the
+-- join-isolated `role_permission`): tenant, plan, permission,
+-- tenant_admin_delegation, tenant_silo_migration.
+--
+-- SELECT-ONLY (no runtime writer — read-only at runtime, seeded by owner `lms`):
+--   * plan        — global billing catalog; only READ to resolve a tenant's plan.
+--   * permission  — global permission catalog; only READ for authz checks.
+-- (SELECT is preserved below, so controlPlane()/authz reads still work.)
+--
+-- KEPT CRUD (a legitimate runtime path writes these AS app_user via
+-- controlPlane(), which in the demo stack SHARES the app_user credential —
+-- docker-compose.yml sets CONTROL_PLANE_DATABASE_URL to the app_user DSN, and
+-- the tenant-provisioning integration test pins controlPlane() to the
+-- non-superuser app_user precisely so the in-transaction outbox INSERT stays
+-- RLS-enforced). Revoking writes here WOULD break the running stack:
+--   * tenant                 — tenant service INSERTs/UPDATEs tenant rows
+--                              (provisioning, parent promotion, status/tier).
+--   * tenant_admin_delegation — tenant service INSERTs/UPDATEs delegations.
+--   * tenant_silo_migration   — pool->silo promotion saga writes its run state.
+-- This does NOT weaken tenant isolation: every tenant-OWNED table carries
+-- tenant_id and is protected by the FORCE'd `tenant_isolation` policy, to which
+-- app_user (NOBYPASSRLS, non-owner) is fully subject.
+--
+-- FOLLOW-UP (Issue #291 AC#3): introduce a dedicated, write-capable control-plane
+-- DB role (its own CONTROL_PLANE_DATABASE_URL credential) so these three tables
+-- can ALSO drop to SELECT-only for app_user without a permission 500 in the
+-- demo stack. Deferred to a separate change to keep the running stack green.
+DO $$
+DECLARE
+  t text;
+  select_only_control_plane text[] := ARRAY['plan','permission'];
+BEGIN
+  FOREACH t IN ARRAY select_only_control_plane LOOP
+    -- roles.sql runs AFTER schema.sql, but guard so a partial DB can't error.
+    IF to_regclass(format('public.%I', t)) IS NOT NULL THEN
+      EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON %I FROM app_user;', t);
+      -- Belt-and-suspenders: ensure SELECT survives (authz/billing reads).
+      EXECUTE format('GRANT SELECT ON %I TO app_user;', t);
+    END IF;
+  END LOOP;
+END $$;

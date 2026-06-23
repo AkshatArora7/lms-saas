@@ -9,6 +9,7 @@ import {
   type MessageRecord,
   type NewChatInput,
   type NewMessageInput,
+  type TenantDailyUsage,
   type TopicContent,
 } from "./store.js";
 
@@ -38,6 +39,11 @@ interface MessageRow {
   content: string;
   citations: unknown;
   created_at: Date | string;
+}
+
+interface UsageRow {
+  request_count: number | string;
+  token_estimate: number | string;
 }
 
 function iso(value: Date | string): string {
@@ -223,6 +229,41 @@ export function createPrismaStore(): AiStore {
           chatId,
         );
         return rows.map(toMessageRecord);
+      });
+    },
+
+    async getTenantDailyUsage(ctx, windowDate): Promise<TenantDailyUsage> {
+      return withTenant(ctx, async (db) => {
+        const rows = await db.$queryRawUnsafe<UsageRow[]>(
+          `SELECT request_count, token_estimate
+             FROM ai_usage
+            WHERE tenant_id = $1::uuid AND window_date = $2::date
+            LIMIT 1`,
+          ctx.tenantId,
+          windowDate,
+        );
+        const row = rows[0];
+        if (!row) return { requestCount: 0, tokenEstimate: 0 };
+        return {
+          requestCount: Number(row.request_count),
+          tokenEstimate: Number(row.token_estimate),
+        };
+      });
+    },
+
+    async incrementTenantDailyUsage(ctx, windowDate, tokens): Promise<void> {
+      await withTenant(ctx, async (db) => {
+        await db.$executeRawUnsafe(
+          `INSERT INTO ai_usage (tenant_id, window_date, request_count, token_estimate)
+           VALUES ($1::uuid, $2::date, 1, $3::bigint)
+           ON CONFLICT (tenant_id, window_date)
+           DO UPDATE SET request_count = ai_usage.request_count + 1,
+                         token_estimate = ai_usage.token_estimate + EXCLUDED.token_estimate,
+                         updated_at = now()`,
+          ctx.tenantId,
+          windowDate,
+          tokens,
+        );
       });
     },
   };

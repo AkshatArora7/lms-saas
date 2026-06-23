@@ -56,6 +56,29 @@ const schema = z.object({
   // by Upstash Redis when its creds are set, else an in-process limiter.
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(600),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+
+  // AI chat rate limiting + cost ceiling (#309). The ai `POST
+  // /courses/:courseId/chat` endpoint enforces a per-tenant AND per-user request
+  // rate limit (same limiter core as the gateway, Upstash-optional), plus a
+  // durable per-tenant per-UTC-day usage ceiling that bounds Groq spend.
+  AI_CHAT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+  AI_CHAT_USER_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
+  AI_CHAT_RATE_LIMIT_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60),
+  AI_CHAT_DAILY_TENANT_REQUEST_CEILING: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(2000),
+  // 0 = token ceiling disabled (request ceiling still applies).
+  AI_CHAT_DAILY_TENANT_TOKEN_CEILING: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(0),
 });
 
 export type AppConfig = z.infer<typeof schema>;

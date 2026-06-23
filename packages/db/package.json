@@ -10,9 +10,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src",
     "generate": "prisma generate",
-    "migrate:dev": "prisma migrate dev",
-    "migrate:deploy": "prisma migrate deploy",
-    "seed": "tsx prisma/seed.ts",
+    "migrate:dev": "node scripts/with-migration-dsn.mjs prisma migrate dev",
+    "migrate:deploy": "node scripts/with-migration-dsn.mjs prisma migrate deploy",
+    "seed": "node scripts/with-migration-dsn.mjs tsx prisma/seed.ts",
     "db:seed:demo": "tsx prisma/seed.demo.ts",
     "clean": "rimraf dist .turbo"
   },

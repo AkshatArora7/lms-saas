@@ -116,7 +116,10 @@ app exposes only `GET /health` and a manual `POST /relay/run`):
   per-resource authz **on top of** tenant RLS; the web BFF forwards the same
   headers from its server session when it calls a service directly. See
   [ADR-0027](ADR-0027-trusted-identity-headers.md). In production, domain
-  services must stay internal-only so identity can't be self-stamped.
+  services must stay internal-only so identity can't be self-stamped — see
+  [ADR-0027](ADR-0027-trusted-identity-headers.md) and
+  [DEPLOYMENT.md → Production service exposure (internal-only)](DEPLOYMENT.md#production-service-exposure-internal-only)
+  for how this is enforced (only gateway/web/admin publish host ports).
 - **Messaging**: transactional **outbox** + **inbox** (exactly-once) tables,
   drained by the `relay` worker through an abstracted transport (in-process / HTTP
   today; QStash a future seam). Consumer dedupe is keyed on `event_inbox

@@ -1,0 +1,128 @@
+# -----------------------------------------------------------------------------
+# PRODUCTION exposure override. Layer this on top of the canonical
+# docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+#
+# What it does: removes host port publishing for EVERY domain service plus the
+# datastores (postgres + redis) and the relay, so that ONLY the gateway (4000),
+# web (3000) and admin (3001) stay publicly reachable. Every locked-down service
+# sets `ports: !override []`. Compose normally MERGES `ports` lists by appending,
+# so a plain `ports: []` would NOT drop the base publish; the `!override` tag
+# (Compose >= v2.24) forces the value to fully replace the base, so the empty
+# list removes the host publish. Each also adds an informational
+# `expose:` of its own internal container port. Services remain reachable
+# service-to-service over the shared default bridge via DNS service names
+# (e.g. http://identity:4001) - `expose:` is documentation only; intra-bridge
+# reachability does not require it.
+#
+# Why (ADR-0027): the gateway is the single trust boundary. It strips any
+# client-supplied x-user-id / x-user-roles / x-tenant-id headers and re-stamps
+# them from verified JWT claims. If a domain service were directly reachable
+# from an untrusted network, a client could spoof those identity headers and
+# bypass authentication/authorization. Keeping domain services internal-only
+# closes that header-spoofing vector. See docs/DEPLOYMENT.md.
+#
+# We deliberately do NOT add an `internal: true` network - that would block
+# required outbound egress (Groq / Supabase / Upstash). Not publishing host
+# ports on the shared default bridge is the correct, minimal enforcement.
+#
+# Dev is unchanged: keep running `docker compose up -d` (base file alone), which
+# publishes every service's 40xx port for local inspection on a trusted network.
+# -----------------------------------------------------------------------------
+name: lms
+
+services:
+  # Datastores - never publicly reachable in production.
+  postgres:
+    ports: !override []
+    expose: ["5432"]
+  redis:
+    ports: !override []
+    expose: ["6379"]
+
+  # Domain microservices - reachable only service-to-service (gateway fronts them).
+  identity:
+    ports: !override []
+    expose: ["4001"]
+  tenant:
+    ports: !override []
+    expose: ["4002"]
+  user-org:
+    ports: !override []
+    expose: ["4003"]
+  enrollment:
+    ports: !override []
+    expose: ["4004"]
+  course:
+    ports: !override []
+    expose: ["4005"]
+  content:
+    ports: !override []
+    expose: ["4006"]
+  assignment:
+    ports: !override []
+    expose: ["4007"]
+  assessment:
+    ports: !override []
+    expose: ["4008"]
+  grading:
+    ports: !override []
+    expose: ["4009"]
+  discussion:
+    ports: !override []
+    expose: ["4010"]
+  announcement:
+    ports: !override []
+    expose: ["4011"]
+  notification:
+    ports: !override []
+    expose: ["4012"]
+  calendar:
+    ports: !override []
+    expose: ["4013"]
+  rubric:
+    ports: !override []
+    expose: ["4014"]
+  analytics:
+    ports: !override []
+    expose: ["4015"]
+  reporting:
+    ports: !override []
+    expose: ["4016"]
+  ai:
+    ports: !override []
+    expose: ["4017"]
+  lti:
+    ports: !override []
+    expose: ["4018"]
+  sis:
+    ports: !override []
+    expose: ["4019"]
+  video:
+    ports: !override []
+    expose: ["4020"]
+  search:
+    ports: !override []
+    expose: ["4021"]
+  billing:
+    ports: !override []
+    expose: ["4022"]
+  audit:
+    ports: !override []
+    expose: ["4023"]
+  mobile-bff:
+    ports: !override []
+    expose: ["4024"]
+  attendance:
+    ports: !override []
+    expose: ["4025"]
+
+  # Outbox relay (no inbound traffic; polls the DB) - internal-only.
+  relay:
+    ports: !override []
+    expose: ["4026"]
+
+  # NOTE: gateway (4000), web (3000) and admin (3001) intentionally have NO entry
+  # here, so they inherit their public host port publish from docker-compose.yml.

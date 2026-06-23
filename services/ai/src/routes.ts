@@ -18,6 +18,8 @@ import { chunkText, type AiStore, type Citation } from "./store.js";
 const CONTENT_SOURCE_TYPE = "content_topic";
 const RETRIEVAL_K = 5;
 const CHAT_FEATURE = "tutor";
+/** Reject student messages longer than this before any embed/retrieve/model call. */
+const MAX_MESSAGE_CHARS = 4000;
 
 export interface AiRouteDeps {
   config: AppConfig;
@@ -144,6 +146,9 @@ export function registerAiRoutes(app: FastifyInstance, deps: AiRouteDeps): void 
       return badRequest(reply, "message is required.");
     }
     const message = body.message.trim();
+    if (message.length > MAX_MESSAGE_CHARS) {
+      return badRequest(reply, "message is too long.");
+    }
 
     // Resolve (and authorize) the chat, or create a new one for this caller.
     let chatId: string;
@@ -171,6 +176,7 @@ export function registerAiRoutes(app: FastifyInstance, deps: AiRouteDeps): void 
     );
     const answer = await deps.chat.complete(
       buildGroundedMessages(message, citations),
+      { maxTokens: deps.config.GROQ_MAX_TOKENS },
     );
 
     await deps.store.addMessage(ctx, {

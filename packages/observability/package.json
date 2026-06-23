@@ -1,0 +1,35 @@
+{
+  "name": "@lms/observability",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./register": { "types": "./dist/register.d.ts", "default": "./dist/register.js" }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.52.0",
+    "@opentelemetry/instrumentation-fastify": "^0.38.0",
+    "@opentelemetry/instrumentation-http": "^0.52.0",
+    "@opentelemetry/instrumentation-undici": "^0.4.0",
+    "@opentelemetry/resources": "^1.25.0",
+    "@opentelemetry/sdk-node": "^0.52.0",
+    "@opentelemetry/semantic-conventions": "^1.25.0"
+  },
+  "devDependencies": {
+    "@lms/eslint-config": "workspace:*",
+    "@lms/tsconfig": "workspace:*",
+    "@opentelemetry/sdk-trace-base": "^1.25.0",
+    "vitest": "^2.0.5"
+  }
+}

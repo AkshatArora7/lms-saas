@@ -55,6 +55,15 @@ x-common-env: &common-env
   JWT_ISSUER: ${JWT_ISSUER:-https://auth.lms.local}
   JWT_AUDIENCE: ${JWT_AUDIENCE:-lms-api}
   GROQ_API_KEY: ${GROQ_API_KEY:-}
+  # Distributed tracing (#83): preload the OTel SDK into every service. No-op
+  # unless OTEL_ENABLED=true AND an OTLP endpoint is set (see @lms/observability).
+  # Empty-string defaults for the optional URL/headers are read raw by the
+  # preload and treated as "unset" — they never reach @lms/config's URL zod.
+  NODE_OPTIONS: ${NODE_OPTIONS:---require @lms/observability/register}
+  OTEL_ENABLED: ${OTEL_ENABLED:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+  OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
 
 x-svc-healthcheck: &svc-healthcheck
   test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:'+(process.env.PORT||'4000')+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
@@ -138,6 +147,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4000
+      OTEL_SERVICE_NAME: gateway
       SERVICE_URL_IDENTITY: http://identity:4001
       SERVICE_URL_TENANT: http://tenant:4002
       SERVICE_URL_USER_ORG: http://user-org:4003
@@ -180,6 +190,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4001
+      OTEL_SERVICE_NAME: identity
       # DB-backed sign-in: with the demo seed applied (see the `seed` service),
       # login flows through the RLS-scoped Prisma store — app_user +
       # user_credential, roles via role_assignment→role→role_permission. The
@@ -204,6 +215,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4002
+      OTEL_SERVICE_NAME: tenant
     depends_on:
       postgres:
         condition: service_healthy
@@ -221,6 +233,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4003
+      OTEL_SERVICE_NAME: user-org
     depends_on:
       postgres:
         condition: service_healthy
@@ -238,6 +251,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4004
+      OTEL_SERVICE_NAME: enrollment
     depends_on:
       postgres:
         condition: service_healthy
@@ -255,6 +269,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4005
+      OTEL_SERVICE_NAME: course
     depends_on:
       postgres:
         condition: service_healthy
@@ -272,6 +287,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4006
+      OTEL_SERVICE_NAME: content
     depends_on:
       postgres:
         condition: service_healthy
@@ -289,6 +305,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4007
+      OTEL_SERVICE_NAME: assignment
     depends_on:
       postgres:
         condition: service_healthy
@@ -306,6 +323,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4008
+      OTEL_SERVICE_NAME: assessment
     depends_on:
       postgres:
         condition: service_healthy
@@ -323,6 +341,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4009
+      OTEL_SERVICE_NAME: grading
     depends_on:
       postgres:
         condition: service_healthy
@@ -340,6 +359,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4010
+      OTEL_SERVICE_NAME: discussion
     depends_on:
       postgres:
         condition: service_healthy
@@ -357,6 +377,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4011
+      OTEL_SERVICE_NAME: announcement
     depends_on:
       postgres:
         condition: service_healthy
@@ -374,6 +395,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4012
+      OTEL_SERVICE_NAME: notification
     depends_on:
       postgres:
         condition: service_healthy
@@ -391,6 +413,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4013
+      OTEL_SERVICE_NAME: calendar
     depends_on:
       postgres:
         condition: service_healthy
@@ -408,6 +431,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4014
+      OTEL_SERVICE_NAME: rubric
     depends_on:
       postgres:
         condition: service_healthy
@@ -425,6 +449,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4015
+      OTEL_SERVICE_NAME: analytics
     depends_on:
       postgres:
         condition: service_healthy
@@ -442,6 +467,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4016
+      OTEL_SERVICE_NAME: reporting
     depends_on:
       postgres:
         condition: service_healthy
@@ -459,6 +485,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4017
+      OTEL_SERVICE_NAME: ai
     depends_on:
       postgres:
         condition: service_healthy
@@ -476,6 +503,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4018
+      OTEL_SERVICE_NAME: lti
     depends_on:
       postgres:
         condition: service_healthy
@@ -493,6 +521,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4019
+      OTEL_SERVICE_NAME: sis
     depends_on:
       postgres:
         condition: service_healthy
@@ -510,6 +539,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4020
+      OTEL_SERVICE_NAME: video
     depends_on:
       postgres:
         condition: service_healthy
@@ -527,6 +557,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4021
+      OTEL_SERVICE_NAME: search
     depends_on:
       postgres:
         condition: service_healthy
@@ -544,6 +575,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4022
+      OTEL_SERVICE_NAME: billing
     depends_on:
       postgres:
         condition: service_healthy
@@ -561,6 +593,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4023
+      OTEL_SERVICE_NAME: audit
     depends_on:
       postgres:
         condition: service_healthy
@@ -578,6 +611,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4024
+      OTEL_SERVICE_NAME: mobile-bff
       GATEWAY_URL: http://gateway:4000
     depends_on:
       postgres:
@@ -598,6 +632,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4025
+      OTEL_SERVICE_NAME: attendance
     depends_on:
       postgres:
         condition: service_healthy
@@ -622,6 +657,7 @@ services:
     environment:
       <<: *common-env
       PORT: 4026
+      OTEL_SERVICE_NAME: relay
       NOTIFICATION_EVENTS_URL: http://notification:4012/events
       RELAY_POLL_INTERVAL_MS: ${RELAY_POLL_INTERVAL_MS:-5000}
     depends_on:

@@ -18,6 +18,7 @@
     "@lms/db": "workspace:*",
     "@lms/events": "workspace:*",
     "@lms/logger": "workspace:*",
+    "@lms/observability": "workspace:*",
     "@lms/types": "workspace:*",
     "fastify": "^4.28.1"
   },

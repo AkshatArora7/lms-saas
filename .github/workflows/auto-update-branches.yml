@@ -1,0 +1,97 @@
+name: Auto-update PR branches
+
+# When `main` advances, keep open non-draft PR branches that target `main`
+# up to date by merging `main` into each behind branch (`gh pr update-branch`).
+# This removes the manual "Update branch" click that branch protection's
+# "Require branches up to date" otherwise forces before a PR can merge, so
+# auto-merge (.github/workflows/auto-merge.yml) can fire once CI re-greens.
+#
+# Acceptance-criteria map for issue #188:
+#   AC1 (branch protection: required check "Lint · Typecheck · Build · Test"
+#        + "Require branches up to date")           -> ALREADY ACTIVE
+#   AC2 (delete head branch on merge)               -> OWNER one-time setting (below)
+#   AC3 (auto-enable auto-merge)                    -> .github/workflows/auto-merge.yml
+#   AC4 (this workflow: keep branches up to date)   -> implemented here
+#   AC5 (Project board item -> Done on merge)       -> OWNER one-time setting (below)
+#
+# Owner / admin one-time settings this workflow CANNOT do (GITHUB_TOKEN lacks
+# the scope), do these once in the GitHub UI:
+#   AC2 Settings -> General -> Pull Requests ->
+#       check "Automatically delete head branches".
+#   AC5 Either: Project (Projects v2) -> ... -> Workflows ->
+#       "Item closed" (and/or PR "merged") -> set Status = Done (built-in,
+#       no token needed); OR a separate workflow using a PAT/GitHub App token
+#       with the `project` scope (GITHUB_TOKEN does not carry it).
+#
+# Loop safety (why this does not run forever):
+#   `gh pr update-branch` merges `main` into the PR's HEAD branch and pushes
+#   that PR branch. That is a push to a feature branch, not to `main`, so it
+#   raises `pull_request: synchronize` on the PR (re-running CI on the PR) and
+#   does NOT re-trigger THIS workflow (which only listens to push on `main`).
+#   No self-retrigger is possible. See note on GITHUB_TOKEN below.
+#
+# GITHUB_TOKEN caveat:
+#   Events that a workflow's own GITHUB_TOKEN causes normally do NOT trigger
+#   further workflow runs (GitHub's recursion guard). `gh pr update-branch`,
+#   however, goes through the REST "update branch" endpoint which advances the
+#   PR head and emits `pull_request: synchronize`; in practice this re-runs the
+#   PR's required checks, which is what auto-merge waits on. If a hardened repo
+#   ever suppresses those runs, swap GITHUB_TOKEN for a PAT / GitHub App token.
+
+on:
+  push:
+    branches: [main]
+
+# Serialize on main: if several pushes to main land close together, cancel the
+# in-flight run and let the latest one enumerate against the newest main, so we
+# never update branches against a stale tip.
+concurrency:
+  group: auto-update-branches
+  cancel-in-progress: true
+
+# Least-privilege: update-branch needs to push the merge to PR head branches
+# (contents) and read/act on PRs (pull-requests). Nothing else.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-behind-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update behind PR branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Enumerate open, non-draft PRs targeting main. We DO NOT pre-filter
+          # on mergeStateStatus: GitHub computes it lazily, so right after a
+          # push to main many PRs read UNKNOWN/blank instead of BEHIND, and a
+          # strict `== "BEHIND"` filter would skip exactly the PRs we must
+          # update. Instead we attempt update-branch on every candidate and
+          # treat "already up to date" / merge-conflict as a non-fatal no-op.
+          numbers=$(gh pr list \
+            --base main \
+            --state open \
+            --draft=false \
+            --json number \
+            --jq '.[].number')
+
+          if [ -z "$numbers" ]; then
+            echo "No open non-draft PRs targeting main. Nothing to update."
+            exit 0
+          fi
+
+          for n in $numbers; do
+            echo "::group::PR #$n"
+            # Per-PR isolation: a conflicting / non-fast-forwardable PR cannot
+            # be auto-updated. Warn and continue; do NOT fail the job. An
+            # "already up to date" PR also lands here and is a harmless no-op.
+            if gh pr update-branch "$n"; then
+              echo "Updated PR #$n with latest main."
+            else
+              echo "::warning title=PR #$n not updated::Could not update PR #$n (likely merge conflicts or already up to date). Skipping; resolve conflicts manually if needed."
+            fi
+            echo "::endgroup::"
+          done
+
+          echo "Done. The job succeeds even if some PRs could not be updated."

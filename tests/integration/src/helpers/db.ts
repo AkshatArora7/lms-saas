@@ -20,6 +20,18 @@ export type PgClient = pg.PoolClient;
 export const APP_ROLE = "lms_rls_app";
 const APP_PASSWORD = "lms_rls_app_pw";
 
+/**
+ * A dedicated NON-superuser login role mirroring the production `control_plane_user`
+ * (database/roles.sql): SELECT on every table plus a small, explicit control-plane
+ * WRITE set — I/U/D on `tenant`, `tenant_admin_delegation`, `tenant_silo_migration`
+ * and INSERT on the tenant-scoped `event_outbox` (the transactional-outbox row
+ * provisionTenant writes inside the same controlPlane() transaction). It is
+ * NOSUPERUSER NOBYPASSRLS so that in-tx outbox INSERT stays fully RLS-subject —
+ * exactly the grant this test must guard. Throwaway local/CI credentials.
+ */
+export const CONTROL_PLANE_ROLE = "lms_rls_control_plane";
+const CONTROL_PLANE_PASSWORD = "lms_rls_control_plane_pw";
+
 const ADVISORY_LOCK_KEY = 727274;
 
 export function databaseUrl(): string | undefined {
@@ -58,9 +70,23 @@ export function appPool(): PgPool {
 }
 
 /**
- * Make sure the schema + RLS policies are applied and the non-superuser app role
- * exists with CRUD privileges. Idempotent and safe to call from multiple test
- * files concurrently (serialised with a Postgres advisory lock).
+ * Same host/database as DATABASE_URL but connecting as the control-plane write
+ * role (`lms_rls_control_plane`). Used to point `controlPlane()` at a principal
+ * with the real production control_plane_user grant shape.
+ */
+export function controlPlanePoolUrl(): string {
+  const url = new URL(databaseUrl()!);
+  url.username = CONTROL_PLANE_ROLE;
+  url.password = CONTROL_PLANE_PASSWORD;
+  return url.toString();
+}
+
+/**
+ * Make sure the schema + RLS policies are applied and the non-superuser test
+ * roles exist: the app role (`lms_rls_app`, full CRUD) and the control-plane
+ * write role (`lms_rls_control_plane`, SELECT + the explicit control-plane write
+ * set). Idempotent and safe to call from multiple test files concurrently
+ * (serialised with a Postgres advisory lock).
  */
 export async function ensureSchemaAndRole(): Promise<void> {
   const root = findRepoRoot();
@@ -101,6 +127,36 @@ export async function ensureSchemaAndRole(): Promise<void> {
     await client.query(
       `ALTER DEFAULT PRIVILEGES IN SCHEMA public
          GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${APP_ROLE}`,
+    );
+
+    // Control-plane write role, mirroring production `control_plane_user`
+    // (database/roles.sql): SELECT everywhere + a small explicit write set
+    // (I/U/D on the 3 control-plane tables + INSERT on event_outbox), NOBYPASSRLS
+    // so the in-tx outbox INSERT stays RLS-subject.
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${CONTROL_PLANE_ROLE}') THEN
+          CREATE ROLE ${CONTROL_PLANE_ROLE} LOGIN PASSWORD '${CONTROL_PLANE_PASSWORD}'
+            NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+        END IF;
+      END $$;
+    `);
+    await client.query(`GRANT USAGE ON SCHEMA public TO ${CONTROL_PLANE_ROLE}`);
+    await client.query(
+      `GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${CONTROL_PLANE_ROLE}`,
+    );
+    await client.query(
+      `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${CONTROL_PLANE_ROLE}`,
+    );
+    await client.query(
+      `GRANT INSERT, UPDATE, DELETE ON tenant, tenant_admin_delegation, tenant_silo_migration TO ${CONTROL_PLANE_ROLE}`,
+    );
+    await client.query(
+      `GRANT INSERT ON event_outbox TO ${CONTROL_PLANE_ROLE}`,
+    );
+    await client.query(
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA public
+         GRANT SELECT ON TABLES TO ${CONTROL_PLANE_ROLE}`,
     );
   } finally {
     await client.query("SELECT pg_advisory_unlock($1)", [ADVISORY_LOCK_KEY]);

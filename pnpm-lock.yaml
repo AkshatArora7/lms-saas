@@ -269,6 +269,22 @@ importers:
         specifier: ^2.0.5
         version: 2.1.9(@types/node@20.19.43)(jsdom@25.0.1)
 
+  packages/ratelimit:
+    dependencies:
+      '@lms/config':
+        specifier: workspace:*
+        version: link:../config
+    devDependencies:
+      '@lms/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@lms/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      vitest:
+        specifier: ^2.0.5
+        version: 2.1.9(@types/node@20.19.43)(jsdom@25.0.1)
+
   packages/tsconfig: {}
 
   packages/types:
@@ -340,6 +356,9 @@ importers:
       '@lms/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@lms/ratelimit':
+        specifier: workspace:*
+        version: link:../../packages/ratelimit
       '@lms/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -869,6 +888,9 @@ importers:
       '@lms/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@lms/ratelimit':
+        specifier: workspace:*
+        version: link:../../packages/ratelimit
       '@lms/types':
         specifier: workspace:*
         version: link:../../packages/types

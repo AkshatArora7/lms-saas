@@ -512,15 +512,22 @@ AGENTS.md    rules every contributor/AI agent must follow
 One command brings up the **entire** platform — Postgres + Redis + all 26
 services behind the API gateway + the web app (3000) + the admin console (3001) —
 exactly the way it runs on a container host in production. There are two ways to
-get the images, and **brand-new collaborators want the first one**:
+get the images. **Collaborators use the first (build-from-source) — it is the
+supported, credential-free path.** The second (pull prebuilt GHCR images) is
+**owner/CI-only** and requires access to the owner's private GHCR packages. See
+[ADR-0034](docs/ADR-0034-collaborator-run-path.md).
 
-| | Build from source (collaborators / contributors) | Pull prebuilt images (owner / CI) |
+| | Build from source (supported — collaborators) | Pull prebuilt images (owner / CI only — requires private GHCR access) |
 | --- | --- | --- |
 | **Command** | `pnpm start:build` | `pnpm start` (= `docker compose up -d`) |
 | **Raw** | `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build` | `docker compose up -d` |
-| **Needs** | only **Docker Desktop + this repo** | access to the owner's private GHCR images |
+| **Needs** | only **Docker Desktop + this repo** | **private** GHCR pull access (owner/CI only) |
 | **Accounts** | **none** — no Supabase, no GHCR, no Upstash | GHCR pull access |
 | **Images** | built from the **current source** | `ghcr.io/akshatarora7/lms-saas/<name>:latest` |
+
+> **Policy:** image visibility + supported run path are fixed in
+> [ADR-0034](docs/ADR-0034-collaborator-run-path.md). Cold build-from-source is
+> slow today — speed-up tracked in #299.
 
 > **First run builds ~29 images** (26 services + seed + web + admin) and can take
 > a while; later runs are cached and fast.
@@ -532,7 +539,7 @@ requirement for the build-from-source path — no external accounts.
 # Recommended for collaborators — build everything from local source:
 pnpm start:build
 
-# Owner / CI — pull the prebuilt GHCR images instead:
+# Owner / CI only — requires private GHCR pull access; collaborators use start:build
 pnpm start
 ```
 

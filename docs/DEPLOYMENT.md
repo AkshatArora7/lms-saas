@@ -362,21 +362,27 @@ See [docs/RUNBOOK-prod-db-roles.md](RUNBOOK-prod-db-roles.md) for the prod
 provisioning + verification steps (create `app_user`, apply `database/roles.sql`,
 set the DSNs, and verify cross-tenant isolation on the live DB).
 
-### Images: GHCR by default, build-from-source override
+### Images: build-from-source is the supported collaborator path; GHCR pull is owner/CI-only
 
-A bare `docker compose up -d` (`pnpm start`) defaults the gateway, the 26
+`pnpm start` (a bare `docker compose up -d`) defaults the gateway, the 26
 services, `web` and `admin` to the owner-built GHCR images
-`ghcr.io/akshatarora7/lms-saas/<name>:latest` and **pulls** them on first run —
-which requires access to those (private) images.
+`ghcr.io/akshatarora7/lms-saas/<name>:latest` and **pulls** them on first run.
+This path is **owner/CI-only**: it requires access to those **private** images,
+so **collaborators should not use it**.
 
-Collaborators who can't pull GHCR — or who want to run the **current source** —
-build every image locally with the **`docker-compose.build.yml` override**:
+**Collaborators (and anyone running the current source) use this — it is the
+supported, credential-free path:** build every image locally with the
+**`docker-compose.build.yml` override**:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 # shortcut:
 pnpm start:build
 ```
+
+See [ADR-0034](ADR-0034-collaborator-run-path.md) for the recorded decision
+(images stay private; build-from-source is the supported path; cold-build speed
+is tracked in #299).
 
 The override adds **only** a `build:` block (context `.` + each service's
 existing `services/<name>/Dockerfile`) to all 29 buildable services (26

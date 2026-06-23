@@ -57,7 +57,11 @@ export async function runPipeline(
     );
   } catch (err) {
     log.error({ err, videoId }, "video pipeline failed");
-    await deps.store.setStatus(ctx, videoId, "failed").catch(() => undefined);
+    // markFailed flips status → 'failed' and emits `video.failed` (terminal).
+    const reason = err instanceof Error ? err.message : String(err);
+    await deps.store
+      .markFailed(ctx, videoId, reason)
+      .catch(() => undefined);
   }
 }
 

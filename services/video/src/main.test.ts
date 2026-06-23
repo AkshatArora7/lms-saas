@@ -9,10 +9,15 @@ import {
   type CourseAccessPolicy,
 } from "./access.js";
 import { buildApp } from "./main.js";
+import { videoFailedEvent, videoReadyEvent } from "./events.js";
 import { SyncPipelineRunner } from "./pipeline.js";
 import { DEMO_TENANT_ID, MemoryVideoStore } from "./store.memory.js";
-import { parseCaptionTracks } from "./store.js";
-import { blobBase, StubTranscoder } from "./transcoder.js";
+import { parseCaptionTracks, type VideoRecord } from "./store.js";
+import {
+  blobBase,
+  StubTranscoder,
+  type Transcoder,
+} from "./transcoder.js";
 
 const config = {
   TENANT_MODE: "hybrid",
@@ -520,6 +525,162 @@ describe("video service", () => {
       },
     });
     expect(getB.statusCode).toBe(404);
+  });
+
+  // --- Outbox domain events (#318) --------------------------------------
+  it("emits exactly one video.ready event on a successful transcode", async () => {
+    const store = new MemoryVideoStore();
+    const app = buildTestApp(new FakeCourseAccessPolicy(), store);
+    const created = await createReadyVideo(app); // owner = TEACHER_ID
+
+    expect(store.outbox).toHaveLength(1);
+    const ev = store.outbox[0]!;
+    expect(ev.type).toBe("video.ready");
+    expect(ev.tenantId).toBe(DEMO_TENANT_ID);
+    expect(ev.actorId).toBe(TEACHER_ID);
+    expect(ev.orgUnitId).toBeNull();
+    expect(ev.payload).toMatchObject({
+      videoId: created.id,
+      title: "Lecture 1",
+      courseId: null,
+      renditionCount: 3,
+      captionLangs: ["en"],
+      ownerId: TEACHER_ID,
+      recipientIds: [TEACHER_ID],
+    });
+    expect(typeof ev.payload.durationSeconds).toBe("number");
+    expect(ev.payload.durationSeconds as number).toBeGreaterThan(0);
+  });
+
+  it("emits a video.failed event (with reason) when the transcoder throws", async () => {
+    const store = new MemoryVideoStore();
+    const failingTranscoder: Transcoder = {
+      async transcode() {
+        throw new Error("ffmpeg exploded");
+      },
+    };
+    const captioner = new StubCaptioner();
+    const pipeline = new SyncPipelineRunner({
+      store,
+      transcoder: failingTranscoder,
+      captioner,
+    });
+    const app = buildApp({
+      config,
+      store,
+      resolveTenant,
+      transcoder: failingTranscoder,
+      captioner,
+      pipeline,
+      courseAccessPolicy: new FakeCourseAccessPolicy(),
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/videos",
+      headers: TEACHER_HEADERS,
+      payload: {
+        title: "Lecture 1",
+        sourceBlobUrl: "https://blob.local/t/x/video/v/lecture-01.mp4",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const created = res.json().video as Record<string, unknown>;
+
+    expect(store.outbox).toHaveLength(1);
+    const ev = store.outbox[0]!;
+    expect(ev.type).toBe("video.failed");
+    expect(ev.tenantId).toBe(DEMO_TENANT_ID);
+    expect(ev.actorId).toBe(TEACHER_ID);
+    expect(ev.payload).toMatchObject({
+      videoId: created.id,
+      ownerId: TEACHER_ID,
+      reason: "ffmpeg exploded",
+      recipientIds: [TEACHER_ID],
+    });
+  });
+
+  it("emits nothing for the intermediate 'transcoding' status flip", async () => {
+    const store = new MemoryVideoStore();
+    // setStatus is the generic, non-emitting flip used for 'transcoding'.
+    const video = await store.createVideo(TENANT_A, {
+      title: "x",
+      sourceBlobUrl: "https://blob.local/x.mp4",
+      ownerId: TEACHER_ID,
+    });
+    await store.setStatus(TENANT_A, video.id, "transcoding");
+    expect(store.outbox).toHaveLength(0);
+  });
+
+  it("scopes events to the acting tenant (no cross-tenant leak)", async () => {
+    const store = new MemoryVideoStore();
+    const app = buildTestApp(new FakeCourseAccessPolicy(), store);
+    await createReadyVideo(app); // tenant A (demo)
+    expect(store.outbox.every((e) => e.tenantId === DEMO_TENANT_ID)).toBe(true);
+  });
+
+  // --- Pure event-builder unit tests ------------------------------------
+  const SAMPLE_VIDEO: VideoRecord = {
+    id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    tenantId: DEMO_TENANT_ID,
+    ownerId: TEACHER_ID,
+    title: "Sample",
+    sourceBlobUrl: "https://blob.local/s.mp4",
+    status: "ready",
+    renditions: [
+      { quality: "480p", url: "https://blob.local/480p.m3u8", type: "hls" },
+      { quality: "720p", url: "https://blob.local/720p.m3u8", type: "hls" },
+    ],
+    captions: [
+      { lang: "en", label: "English", url: "https://blob.local/en.vtt", kind: "auto" },
+      { lang: "fr", label: "Français", url: "https://blob.local/fr.vtt", kind: "manual" },
+    ],
+    durationSeconds: 123,
+    courseId: COURSE_ID,
+    createdAt: new Date().toISOString(),
+  };
+
+  it("videoReadyEvent maps the envelope + payload exactly", () => {
+    const ev = videoReadyEvent(SAMPLE_VIDEO);
+    expect(ev.type).toBe("video.ready");
+    expect(ev.actorId).toBe(TEACHER_ID);
+    expect(ev.orgUnitId).toBeNull();
+    expect(ev.payload).toEqual({
+      videoId: SAMPLE_VIDEO.id,
+      courseId: COURSE_ID,
+      title: "Sample",
+      durationSeconds: 123,
+      renditionCount: 2,
+      captionLangs: ["en", "fr"],
+      ownerId: TEACHER_ID,
+      recipientIds: [TEACHER_ID],
+    });
+  });
+
+  it("videoFailedEvent maps the envelope + payload exactly", () => {
+    const ev = videoFailedEvent(SAMPLE_VIDEO, "boom");
+    expect(ev.type).toBe("video.failed");
+    expect(ev.actorId).toBe(TEACHER_ID);
+    expect(ev.orgUnitId).toBeNull();
+    expect(ev.payload).toEqual({
+      videoId: SAMPLE_VIDEO.id,
+      courseId: COURSE_ID,
+      title: "Sample",
+      ownerId: TEACHER_ID,
+      reason: "boom",
+      recipientIds: [TEACHER_ID],
+    });
+  });
+
+  it("video event builders fall back to no recipients when ownerId is null", () => {
+    const ownerless: VideoRecord = { ...SAMPLE_VIDEO, ownerId: null };
+    const ready = videoReadyEvent(ownerless);
+    const failed = videoFailedEvent(ownerless, "x");
+    expect(ready.actorId).toBeNull();
+    expect(ready.payload.recipientIds).toEqual([]);
+    expect(ready.payload.ownerId).toBeNull();
+    expect(failed.actorId).toBeNull();
+    expect(failed.payload.recipientIds).toEqual([]);
   });
 
   // --- Pure helper unit tests -------------------------------------------

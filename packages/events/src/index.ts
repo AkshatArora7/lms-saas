@@ -43,6 +43,8 @@ export const EVENT_TYPES = {
   SUBMISSION_FEEDBACK_RELEASED: "submission.feedback_released",
   ATTENDANCE_FLAGGED: "attendance.flagged",
   DISCUSSION_POST_CREATED: "discussion.post_created",
+  VIDEO_READY: "video.ready",
+  VIDEO_FAILED: "video.failed",
   LEARNING_EVENT_CAPTURED: "learning.event_captured",
 } as const;
 

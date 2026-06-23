@@ -42,15 +42,20 @@ x-common-env: &common-env
   NODE_ENV: production
   TENANT_MODE: ${TENANT_MODE:-hybrid}
   DEFAULT_TENANT_TIER: ${DEFAULT_TENANT_TIER:-pool}
-  # Two-role DB model (#286 / ADR-0026): RUNTIME services connect as the
-  # least-privilege `app_user` (NOSUPERUSER NOBYPASSRLS, non-owner) so Postgres
-  # FORCE RLS is enforced. The privileged owner/migrator role `lms` is used ONLY
-  # by initdb (schema+rls+roles) and the one-shot `seed` service (which overrides
-  # DATABASE_URL below). Override DATABASE_URL in .env (e.g. a Supabase pooler URL
-  # for IPv4, pointed at a least-priv role) to point the whole mesh at Supabase.
+  # Three-role DB model (#286 / #290 / #291, ADR-0026): RUNTIME per-request
+  # services connect as the least-privilege `app_user` (NOSUPERUSER NOBYPASSRLS,
+  # non-owner) via DATABASE_URL so Postgres FORCE RLS is enforced — and app_user
+  # is SELECT-only on the five control-plane tables. CONTROL-PLANE writes (tenant
+  # provisioning, admin delegation, silo saga + the in-tx event_outbox row) flow
+  # through the dedicated `control_plane_user` role via CONTROL_PLANE_DATABASE_URL
+  # (also NOSUPERUSER NOBYPASSRLS, so its outbox INSERT stays RLS-subject). The
+  # privileged owner/migrator role `lms` is used ONLY by initdb (schema+rls+roles)
+  # and the one-shot `seed` service (which overrides DATABASE_URL below). Override
+  # any of these in .env (e.g. a Supabase pooler URL for IPv4, pointed at the
+  # matching least-priv role) to point the whole mesh at Supabase.
   DATABASE_URL: ${DATABASE_URL:-postgresql://app_user:app_user@postgres:5432/lms}
   DIRECT_URL: ${DIRECT_URL:-postgresql://app_user:app_user@postgres:5432/lms}
-  CONTROL_PLANE_DATABASE_URL: ${CONTROL_PLANE_DATABASE_URL:-postgresql://app_user:app_user@postgres:5432/lms}
+  CONTROL_PLANE_DATABASE_URL: ${CONTROL_PLANE_DATABASE_URL:-postgresql://control_plane_user:control_plane_user@postgres:5432/lms}
   JWT_SECRET: ${JWT_SECRET:-local-compose-dev-secret-change-me-please}
   JWT_ISSUER: ${JWT_ISSUER:-https://auth.lms.local}
   JWT_AUDIENCE: ${JWT_AUDIENCE:-lms-api}

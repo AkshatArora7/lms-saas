@@ -1318,6 +1318,21 @@
             "Restricted data collection for minors",
             "Documented data flows"
           ]
+        },
+        {
+          "type": "chore",
+          "priority": "P2",
+          "points": 2,
+          "title": "chore(security): redact live Supabase project ref + role name from tracked docs/handshakes",
+          "as_a": "platform engineer",
+          "i_want": "the live Supabase project ref and privileged role name redacted from tracked docs/handshakes (and stray tracked .claude/ handshakes untracked)",
+          "so_that": "the repo doesn't disclose our live project identity / privileged role even though no exploitable secret was committed",
+          "ac": [
+            "Redact the concrete project ref/role to <ref> placeholders in tracked docs/handshakes (docs/DEPLOYMENT.md, README.md, .claude/handshakes/fix-runtime-rls-role.md)",
+            "git rm --cached the tracked .claude/handshakes/*.md files that should never have been committed (they violate the AGENTS.md rule that .claude/ is gitignored), so they stop being tracked going forward",
+            "Confirm via git grep that no concrete live project ref remains in tracked files (placeholders only)",
+            "No history scrub required because no exploitable secret (password/key) was ever committed — only a non-secret identifier — so a normal redaction commit suffices"
+          ]
         }
       ]
     },
@@ -1475,6 +1490,23 @@
             "services depend_on postgres healthy; web/admin depend_on the services they call; healthchecks present.",
             "No secrets committed (env via gitignored .env); tenant isolation (RLS) unaffected; Conventional Commits, no Copilot trailer.",
             "README + docs/DEPLOYMENT.md document the one-command full-app workflow."
+          ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 8,
+          "title": "Cut Docker cold build time with shared base/deps image + turbo prune (L5/L6) and measure full-mesh wall-clock",
+          "as_a": "platform engineer",
+          "i_want": "to measure the full 30-image cold Docker build wall-clock end-to-end and implement the deferred L5 (a shared base/deps image all services FROM) and L6 (turbo prune --docker per-service minimal contexts) levers from the #299 design",
+          "so_that": "building every service image from source is dramatically faster and the per-image savings demonstrated in #299 translate into a guaranteed, measured total cold-build reduction",
+          "ac": [
+            "Full 30-image cold build-from-source wall-clock is measured and recorded (before AND after) on a documented reference machine - not just an illustrative per-image figure",
+            "A shared base/deps image is built once and reused by service images so there is no Nx redundant full pnpm install (L5), OR turbo prune --docker produces minimal per-service build contexts (L6) - whichever the architect selects",
+            "Warm-rebuild isolation from #299 is preserved (regression check: changing exactly one service rebuilds only that service's image, not the whole mesh)",
+            "pnpm start:build still works for collaborators end-to-end, or any new bake/orchestration that replaces it is documented",
+            ".dockerignore still excludes node_modules; the measured before/after reduction is documented in docs/DEPLOYMENT.md",
+            "Predecessor recorded: this builds on #299 (PR #368), which shipped L1-L4 (BuildKit pnpm-store cache mount, manifest-first install, scoped per-service COPY across all 30 images)"
           ]
         }
       ]

@@ -5,6 +5,22 @@
 - **Owning scope:** `database/` (schema-agent), `docker-compose.yml` (infra), docs
 - **Author:** Architect agent
 
+> **Update (#290, #291): this two-role decision has since been extended to a
+> THREE-role model.** #290 split out `MIGRATION_DATABASE_URL` (the privileged
+> owner/migrator `lms`, used for DDL + seeds only — never runtime), and #291
+> added a dedicated control-plane role `control_plane_user` (reached via
+> `CONTROL_PLANE_DATABASE_URL`, the principal behind `@lms/db.controlPlane()`).
+> With #291, `app_user` is now **SELECT-only** on the five control-plane tables
+> (`tenant`, `plan`, `permission`, `tenant_admin_delegation`,
+> `tenant_silo_migration`) while keeping full CRUD on tenant-scoped tables; every
+> control-plane WRITE moved to `control_plane_user` (`NOSUPERUSER NOBYPASSRLS`,
+> non-owner, `SELECT` everywhere + `INSERT/UPDATE/DELETE` on the three
+> control-plane write tables and `INSERT` on `event_outbox`). The original
+> two-role decision below still stands — the third role only narrows it further.
+> For the current model see [`docs/MULTI_TENANCY.md`](MULTI_TENANCY.md), `SETUP.md`
+> §5, and the authoritative grants in
+> [`database/roles.sql`](../database/roles.sql).
+
 ## Context
 
 Tenant isolation in the pool tier rests on three layers

@@ -286,10 +286,16 @@ external setup**.
 To point the whole mesh at Supabase (or any external Postgres), set
 `DATABASE_URL` in `.env` (gitignored; Compose reads it automatically for
 `${VAR}` interpolation); `DIRECT_URL` and `CONTROL_PLANE_DATABASE_URL` fall back
-to it. A remote deploy also needs the **least-privilege runtime app role** split
-from the migration/owner role — the **two-role model** that makes
-`FORCE ROW LEVEL SECURITY` actually enforce; see
-[ADR-0026](ADR-0026-runtime-app-role-rls-enforcement.md) and `SETUP.md` §5.
+to it. A remote deploy also wants the **three-role model** that makes
+`FORCE ROW LEVEL SECURITY` actually enforce (#290 + #291; see
+[ADR-0026](ADR-0026-runtime-app-role-rls-enforcement.md) and `SETUP.md` §5):
+`MIGRATION_DATABASE_URL` → the privileged **owner/migrator** role (`lms`; DDL +
+seeds only, never runtime), `DATABASE_URL` → the least-privilege **runtime app**
+role (`app_user`, `NOSUPERUSER NOBYPASSRLS`, SELECT-only on the control-plane
+tables), and `CONTROL_PLANE_DATABASE_URL` → the dedicated **control-plane** role
+(`control_plane_user`, `NOSUPERUSER NOBYPASSRLS` with a narrow control-plane
+write set) — set it explicitly for a hardened deploy rather than letting it fall
+back to the `app_user` `DATABASE_URL`.
 `JWT_SECRET` and `GROQ_API_KEY` are likewise sourced from `.env` — the in-compose
 `JWT_SECRET` fallback is a **dev-only** placeholder, so set a real one before any
 real deployment.

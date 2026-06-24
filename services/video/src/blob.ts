@@ -20,18 +20,14 @@ export const ALLOWED_CONTENT_TYPES = new Set<string>([
 /** Default max upload size (5 GB) — lecture videos run large. */
 export const DEFAULT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024;
 
-export interface SignedUpload {
-  /** Tenant-namespaced object key. */
-  key: string;
-  /** URL the client PUTs the bytes to. */
-  uploadUrl: string;
-  /** Stable URL the object will be served from (stored on the asset). */
-  blobUrl: string;
-}
-
-export interface BlobSigner {
-  sign(key: string, contentType: string): SignedUpload;
-}
+// The signer seam + its types + the offline DevBlobSigner now live in the
+// shared @lms/blob package (production Vercel Blob signer ships there too).
+// Re-exported here so the rest of this service keeps importing from "./blob".
+export {
+  type BlobSigner,
+  type SignedUpload,
+  DevBlobSigner,
+} from "@lms/blob";
 
 export type ValidateUploadResult =
   | { ok: true }
@@ -76,17 +72,4 @@ export function videoBlobKey(
   filename: string,
 ): string {
   return `t/${tenantId}/video/${id}/${safeName(filename)}`;
-}
-
-/**
- * Deterministic dev/test signer. Returns a fake but well-formed signed URL so
- * the upload flow is exercisable without real object storage. Production swaps
- * in a Vercel Blob signer behind the same interface.
- */
-export class DevBlobSigner implements BlobSigner {
-  constructor(private readonly baseUrl: string = "https://blob.local") {}
-  sign(key: string, _contentType: string): SignedUpload {
-    const blobUrl = `${this.baseUrl}/${key}`;
-    return { key, uploadUrl: `${blobUrl}?upload=1`, blobUrl };
-  }
 }

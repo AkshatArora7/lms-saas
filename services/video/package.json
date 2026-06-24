@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@lms/auth": "workspace:*",
+    "@lms/blob": "workspace:*",
     "@lms/config": "workspace:*",
     "@lms/db": "workspace:*",
     "@lms/events": "workspace:*",

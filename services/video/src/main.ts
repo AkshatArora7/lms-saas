@@ -13,6 +13,7 @@
  * RLS scopes every query. Deployable as a container image (Dockerfile ->
  * GHCR -> container host) or, for edge/BFF roles, as Vercel Functions.
  */
+import { makeBlobSigner } from "@lms/blob";
 import { loadConfig, type AppConfig } from "@lms/config";
 import { createLogger } from "@lms/logger";
 import type { TenantContext } from "@lms/types";
@@ -21,7 +22,7 @@ import Fastify, {
   type FastifyRequest,
 } from "fastify";
 
-import { DevBlobSigner, type BlobSigner } from "./blob.js";
+import { type BlobSigner } from "./blob.js";
 import {
   DbCourseAccessPolicy,
   FakeCourseAccessPolicy,
@@ -131,7 +132,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     store,
     resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
     resolveCaller: options.resolveCaller ?? headerCallerResolver(),
-    blobSigner: options.blobSigner ?? new DevBlobSigner(),
+    blobSigner: options.blobSigner ?? makeBlobSigner(config),
     courseAccessPolicy:
       options.courseAccessPolicy ?? new DbCourseAccessPolicy(),
     transcoder,

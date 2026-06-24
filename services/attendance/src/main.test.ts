@@ -767,7 +767,7 @@ describe("attendance compliance/SIS export (#377)", () => {
     );
     const lines = res.body.split("\r\n");
     expect(lines[0]).toBe(
-      "tenant_id,section_id,meeting_date,period_label,student_id,code,category,minutes_late,comment",
+      "tenant_id,section_id,meeting_date,period_label,student_id,code,category,minutes_late,comment,participation_score,participation_note",
     );
     expect(lines[1]).toContain(`${DEMO_TENANT_ID},${SECTION},2026-03-02`);
     expect(lines[1]).toContain('"late, sick"');
@@ -836,5 +836,268 @@ describe("attendance compliance/SIS export (#377)", () => {
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain(OTHER_TENANT.tenantId);
     expect(res.body).not.toContain(DEMO_TENANT_ID);
+  });
+});
+
+describe("class participation (#378)", () => {
+  async function openSessionId(app: ReturnType<typeof buildTestApp>) {
+    const opened = await openSession(app);
+    return (opened.json() as { session: { id: string } }).session.id;
+  }
+
+  function setParticipation(
+    app: ReturnType<typeof buildTestApp>,
+    sessionId: string,
+    records: unknown,
+    headers: Record<string, string> = HEADERS,
+  ) {
+    return app.inject({
+      method: "PUT",
+      url: `/sessions/${sessionId}/participation`,
+      headers,
+      payload: { records },
+    });
+  }
+
+  it("records participation with score only, note only, and both (200)", async () => {
+    const app = buildTestApp();
+    const sessionId = await openSessionId(app);
+    const res = await setParticipation(app, sessionId, [
+      { userId: "stu-1", score: 4 },
+      { userId: "stu-2", note: "asked great questions" },
+      { userId: "stu-3", score: 2, note: "quiet today" },
+    ]);
+    expect(res.statusCode).toBe(200);
+    const { records } = res.json() as {
+      records: Array<{ userId: string; score: number | null; note: string | null }>;
+    };
+    expect(records).toHaveLength(3);
+    const byUser = Object.fromEntries(records.map((r) => [r.userId, r]));
+    expect(byUser["stu-1"]).toMatchObject({ score: 4, note: null });
+    expect(byUser["stu-2"]).toMatchObject({ score: null, note: "asked great questions" });
+    expect(byUser["stu-3"]).toMatchObject({ score: 2, note: "quiet today" });
+  });
+
+  it("rejects a score outside 0..4 (400)", async () => {
+    const app = buildTestApp();
+    const sessionId = await openSessionId(app);
+    for (const score of [-1, 5, 2.5]) {
+      const res = await setParticipation(app, sessionId, [
+        { userId: "stu-1", score },
+      ]);
+      expect(res.statusCode).toBe(400);
+    }
+  });
+
+  it("rejects an item with neither score nor note (400)", async () => {
+    const app = buildTestApp();
+    const sessionId = await openSessionId(app);
+    const res = await setParticipation(app, sessionId, [{ userId: "stu-1" }]);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects an empty records array (400)", async () => {
+    const app = buildTestApp();
+    const sessionId = await openSessionId(app);
+    const res = await setParticipation(app, sessionId, []);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("upsert overwrites a prior entry for the same student", async () => {
+    const app = buildTestApp();
+    const sessionId = await openSessionId(app);
+    await setParticipation(app, sessionId, [{ userId: "stu-1", score: 1 }]);
+    const res = await setParticipation(app, sessionId, [
+      { userId: "stu-1", score: 4, note: "much improved" },
+    ]);
+    expect(res.statusCode).toBe(200);
+    const { records } = res.json() as {
+      records: Array<{ userId: string; score: number | null; note: string | null }>;
+    };
+    const mine = records.filter((r) => r.userId === "stu-1");
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ score: 4, note: "much improved" });
+  });
+
+  it("returns 409 once the session is finalized", async () => {
+    const app = buildTestApp();
+    const sessionId = await openSessionId(app);
+    await setParticipation(app, sessionId, [{ userId: "stu-1", score: 3 }]);
+    await app.inject({
+      method: "POST",
+      url: `/sessions/${sessionId}/finalize`,
+      headers: HEADERS,
+    });
+    const res = await setParticipation(app, sessionId, [
+      { userId: "stu-1", score: 0 },
+    ]);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: "session_finalized" });
+  });
+
+  it("returns 409 for a missing session", async () => {
+    const app = buildTestApp();
+    const res = await setParticipation(app, "no-such-session", [
+      { userId: "stu-1", score: 3 },
+    ]);
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("requires a tenant context (400)", async () => {
+    const app = buildTestApp();
+    const sessionId = await openSessionId(app);
+    const res = await app.inject({
+      method: "PUT",
+      url: `/sessions/${sessionId}/participation`,
+      payload: { records: [{ userId: "stu-1", score: 3 }] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("surfaces participation on GET /sessions/:id", async () => {
+    const app = buildTestApp();
+    const sessionId = await openSessionId(app);
+    await setParticipation(app, sessionId, [{ userId: "stu-1", score: 3 }]);
+    const res = await app.inject({
+      method: "GET",
+      url: `/sessions/${sessionId}`,
+      headers: HEADERS,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      participation: Array<{ userId: string; score: number | null }>;
+    };
+    expect(body.participation).toHaveLength(1);
+    expect(body.participation[0]).toMatchObject({ userId: "stu-1", score: 3 });
+  });
+
+  it("isolates tenants — a second tenant cannot see or edit participation", async () => {
+    const store = createSeededMemoryStore();
+    const app = buildApp({ config, store, resolveTenant });
+    const sessionId = await openSessionId(app);
+    await setParticipation(app, sessionId, [{ userId: "stu-1", score: 4 }]);
+
+    // Tenant B targeting tenant A's session id sees it as not-found → 409.
+    const otherEdit = await setParticipation(
+      app,
+      sessionId,
+      [{ userId: "stu-1", score: 0 }],
+      { "x-tenant-id": OTHER_TENANT.tenantId },
+    );
+    expect(otherEdit.statusCode).toBe(409);
+
+    // Tenant B reading the session sees nothing (404 — session is tenant A's).
+    const otherGet = await app.inject({
+      method: "GET",
+      url: `/sessions/${sessionId}`,
+      headers: { "x-tenant-id": OTHER_TENANT.tenantId },
+    });
+    expect(otherGet.statusCode).toBe(404);
+
+    // Tenant A's row is intact and unchanged by tenant B's attempt.
+    const list = await store.listParticipation(TENANT, sessionId);
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ score: 4 });
+  });
+
+  it("averageParticipation reflects only non-null scores, null when none", async () => {
+    const app = buildTestApp();
+    const section = "section-participation";
+    // Session 1: stu-1 scores 4, stu-2 a note only.
+    const s1 = await openSession(app, {
+      orgUnitId: section,
+      meetingDate: "2026-04-01",
+    });
+    const id1 = (s1.json() as { session: { id: string } }).session.id;
+    // stu-2 has attendance (so it surfaces in the summary) plus a NOTE-ONLY
+    // participation entry — its note must not count toward the average.
+    await app.inject({
+      method: "PUT",
+      url: `/sessions/${id1}/records`,
+      headers: HEADERS,
+      payload: { records: [{ userId: "stu-2", code: "P" }] },
+    });
+    await setParticipation(app, id1, [
+      { userId: "stu-1", score: 4 },
+      { userId: "stu-2", note: "engaged verbally" },
+    ]);
+    // Session 2: stu-1 scores 2.
+    const s2 = await openSession(app, {
+      orgUnitId: section,
+      meetingDate: "2026-04-02",
+    });
+    const id2 = (s2.json() as { session: { id: string } }).session.id;
+    await setParticipation(app, id2, [{ userId: "stu-1", score: 2 }]);
+
+    const summary = await app.inject({
+      method: "GET",
+      url: `/sections/${section}/attendance/summary`,
+      headers: HEADERS,
+    });
+    const { students } = (
+      summary.json() as {
+        summary: {
+          students: Array<{
+            userId: string;
+            participationCount: number;
+            averageParticipation: number | null;
+          }>;
+        };
+      }
+    ).summary;
+    const stu1 = students.find((s) => s.userId === "stu-1")!;
+    expect(stu1.participationCount).toBe(2);
+    expect(stu1.averageParticipation).toBe(3); // (4 + 2) / 2
+    const stu2 = students.find((s) => s.userId === "stu-2")!;
+    // Note-only entry contributes no score → count 0, average null.
+    expect(stu2.participationCount).toBe(0);
+    expect(stu2.averageParticipation).toBeNull();
+  });
+
+  it("includes participation columns in the CSV export", async () => {
+    const store = new MemoryAttendanceStore();
+    await store.seedDefaultCodes(TENANT);
+    const SECTION = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+    const session = await store.createSession(TENANT, {
+      orgUnitId: SECTION,
+      meetingDate: "2026-05-02",
+      periodLabel: "Period 1",
+    });
+    if (!session.ok) throw new Error("seed failed");
+    await store.setRecords(TENANT, session.session.id, [
+      { userId: "stu-1", code: "P" },
+    ]);
+    await store.setParticipation(TENANT, session.session.id, [
+      { userId: "stu-1", score: 3, note: "strong" },
+    ]);
+
+    function resolveCaller(req: FastifyRequest) {
+      const userId = req.headers["x-user-id"];
+      if (typeof userId !== "string" || userId.length === 0) {
+        throw new Error("missing x-user-id");
+      }
+      const rolesHeader = req.headers["x-user-roles"];
+      const roles =
+        typeof rolesHeader === "string"
+          ? rolesHeader.split(",").map((r) => r.trim()).filter(Boolean)
+          : [];
+      return { userId, roles };
+    }
+    const app = buildApp({ config, store, resolveTenant, resolveCaller });
+    const res = await app.inject({
+      method: "GET",
+      url: "/export?from=2026-05-01&to=2026-05-31",
+      headers: {
+        "x-tenant-id": DEMO_TENANT_ID,
+        "x-user-id": "admin-1",
+        "x-user-roles": "org_admin",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const lines = res.body.split("\r\n");
+    expect(lines[0]!.endsWith(",participation_score,participation_note")).toBe(
+      true,
+    );
+    expect(lines[1]!.endsWith(",3,strong")).toBe(true);
   });
 });

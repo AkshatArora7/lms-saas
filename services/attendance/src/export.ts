@@ -45,7 +45,7 @@ export function canExportAttendance(roles: readonly string[]): boolean {
  * SIS/compliance importers pin to these positions/names.
  */
 export const ATTENDANCE_CSV_HEADER =
-  "tenant_id,section_id,meeting_date,period_label,student_id,code,category,minutes_late,comment";
+  "tenant_id,section_id,meeting_date,period_label,student_id,code,category,minutes_late,comment,participation_score,participation_note";
 
 /** RFC-4180 quote a single field: wrap in quotes iff it contains `,` `"` or a newline; double embedded quotes. */
 function csvField(value: string | number | null): string {
@@ -76,6 +76,8 @@ export function toCsv(rows: readonly AttendanceExportRow[]): string {
         csvField(row.category),
         csvField(row.minutesLate),
         csvField(row.comment),
+        csvField(row.participationScore),
+        csvField(row.participationNote),
       ].join(","),
     );
   }
@@ -102,6 +104,8 @@ export interface OneRosterResult {
     code: string;
     category: AttendanceCategory;
     minutesLate: number | null;
+    participationScore: number | null;
+    participationNote: string | null;
   };
   student: OneRosterRef;
   class: OneRosterRef;
@@ -137,6 +141,8 @@ export function toOneRoster(
         code: row.code,
         category: row.category,
         minutesLate: row.minutesLate,
+        participationScore: row.participationScore,
+        participationNote: row.participationNote,
       },
       student: {
         sourcedId: studentSourcedId,

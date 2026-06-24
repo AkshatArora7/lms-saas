@@ -24,8 +24,11 @@ import {
   type CreateSessionResult,
   type NewAttendanceCodeInput,
   type NewSessionInput,
+  type ParticipationInput,
+  type ParticipationRecord,
   type RecordInput,
   type SectionAttendanceSummary,
+  type SetParticipationResult,
   type SetRecordsResult,
   type SisEntityType,
   type SisIdMapEntry,
@@ -45,6 +48,7 @@ export class MemoryAttendanceStore implements AttendanceStore {
   private codes: AttendanceCodeRecord[] = [];
   private sessions: AttendanceSessionRecord[] = [];
   private records: AttendanceRecordRecord[] = [];
+  private participation: ParticipationRecord[] = [];
   private emitted: AttendanceEvent[] = [];
   /** sis_id_map rows, tenant-tagged, mirroring the RLS-isolated table (#377). */
   private sisMap: (SisIdMapEntry & { tenantId: string })[] = [];
@@ -169,6 +173,7 @@ export class MemoryAttendanceStore implements AttendanceStore {
   ): Promise<{
     session: AttendanceSessionRecord;
     records: AttendanceRecordRecord[];
+    participation: ParticipationRecord[];
   } | null> {
     const session = this.sessions.find(
       (s) => s.id === id && s.tenantId === ctx.tenantId,
@@ -177,6 +182,9 @@ export class MemoryAttendanceStore implements AttendanceStore {
     return {
       session,
       records: this.records.filter((r) => r.sessionId === id),
+      participation: this.participation.filter(
+        (p) => p.sessionId === id && p.tenantId === ctx.tenantId,
+      ),
     };
   }
 
@@ -222,6 +230,56 @@ export class MemoryAttendanceStore implements AttendanceStore {
       ok: true,
       records: this.records.filter((r) => r.sessionId === sessionId),
     };
+  }
+
+  async setParticipation(
+    ctx: TenantContext,
+    sessionId: string,
+    records: ParticipationInput[],
+    recordedBy: string | null = null,
+  ): Promise<SetParticipationResult> {
+    void recordedBy; // recorded_by is not surfaced on ParticipationRecord (mirrors prod)
+    const session = this.sessions.find(
+      (s) => s.id === sessionId && s.tenantId === ctx.tenantId,
+    );
+    if (!session) return { ok: false, reason: "finalized" };
+    if (session.status === "finalized") {
+      return { ok: false, reason: "finalized" };
+    }
+
+    for (const r of records) {
+      const existing = this.participation.find(
+        (x) => x.sessionId === sessionId && x.userId === r.userId,
+      );
+      if (existing) {
+        existing.score = r.score ?? null;
+        existing.note = r.note ?? null;
+      } else {
+        this.participation.push({
+          id: this.generateId(),
+          tenantId: ctx.tenantId,
+          sessionId,
+          userId: r.userId,
+          score: r.score ?? null,
+          note: r.note ?? null,
+        });
+      }
+    }
+    return {
+      ok: true,
+      records: this.participation.filter(
+        (p) => p.sessionId === sessionId && p.tenantId === ctx.tenantId,
+      ),
+    };
+  }
+
+  async listParticipation(
+    ctx: TenantContext,
+    sessionId: string,
+  ): Promise<ParticipationRecord[]> {
+    return this.participation.filter(
+      (p) => p.sessionId === sessionId && p.tenantId === ctx.tenantId,
+    );
   }
 
   async finalizeSession(
@@ -277,13 +335,11 @@ export class MemoryAttendanceStore implements AttendanceStore {
     const relevant = this.records.filter((r) => sessionIds.has(r.sessionId));
 
     const byUser = new Map<string, StudentAttendanceSummary>();
-    for (const r of relevant) {
-      const category = this.codeCategory(ctx.tenantId, r.code);
-      if (!category) continue;
-      let s = byUser.get(r.userId);
+    const ensure = (userId: string): StudentAttendanceSummary => {
+      let s = byUser.get(userId);
       if (!s) {
         s = {
-          userId: r.userId,
+          userId,
           total: 0,
           present: 0,
           absent: 0,
@@ -291,11 +347,40 @@ export class MemoryAttendanceStore implements AttendanceStore {
           excused: 0,
           absenceRate: 0,
           chronicAbsence: false,
+          participationCount: 0,
+          averageParticipation: null,
         };
-        byUser.set(r.userId, s);
+        byUser.set(userId, s);
       }
+      return s;
+    };
+
+    for (const r of relevant) {
+      const category = this.codeCategory(ctx.tenantId, r.code);
+      if (!category) continue;
+      const s = ensure(r.userId);
       s.total += 1;
       s[category] += 1;
+    }
+
+    // Participation rollup over this section's sessions: only non-null scores
+    // count toward the average (notes do not); average is null when none.
+    const partByUser = new Map<string, number[]>();
+    for (const p of this.participation) {
+      if (p.tenantId !== ctx.tenantId) continue;
+      if (!sessionIds.has(p.sessionId)) continue;
+      if (p.score === null) continue;
+      const scores = partByUser.get(p.userId) ?? [];
+      scores.push(p.score);
+      partByUser.set(p.userId, scores);
+    }
+    for (const [userId, scores] of partByUser) {
+      const s = ensure(userId);
+      s.participationCount = scores.length;
+      s.averageParticipation =
+        scores.length > 0
+          ? scores.reduce((a, b) => a + b, 0) / scores.length
+          : null;
     }
 
     const students = [...byUser.values()].map((s) => {
@@ -359,6 +444,14 @@ export class MemoryAttendanceStore implements AttendanceStore {
         }
         if (sectionId !== null && session.orgUnitId !== sectionId) return [];
         const category = this.codeCategory(ctx.tenantId, r.code) ?? "present";
+        // LEFT-JOIN mirror: pair each attendance row with its participation
+        // entry on (sessionId, userId), or null when none exists.
+        const part = this.participation.find(
+          (p) =>
+            p.tenantId === ctx.tenantId &&
+            p.sessionId === r.sessionId &&
+            p.userId === r.userId,
+        );
         return [
           {
             tenantId: ctx.tenantId,
@@ -371,6 +464,8 @@ export class MemoryAttendanceStore implements AttendanceStore {
             category,
             minutesLate: r.minutesLate,
             comment: r.comment,
+            participationScore: part?.score ?? null,
+            participationNote: part?.note ?? null,
           },
         ];
       })

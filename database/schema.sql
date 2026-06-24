@@ -1061,6 +1061,25 @@ CREATE INDEX IF NOT EXISTS ix_attendance_record_user
 CREATE INDEX IF NOT EXISTS ix_attendance_record_session
   ON attendance_record(session_id);
 
+-- Per-student class-participation entry within an attendance session.
+-- Engagement scored 0..4 and/or a free-text note; at least one must be present.
+CREATE TABLE IF NOT EXISTS participation_record (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id    uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  session_id   uuid NOT NULL REFERENCES attendance_session(id) ON DELETE CASCADE,
+  user_id      uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  score        int CHECK (score BETWEEN 0 AND 4),
+  note         text,
+  recorded_by  uuid REFERENCES app_user(id) ON DELETE SET NULL,
+  recorded_at  timestamptz NOT NULL DEFAULT now(),
+  CHECK (score IS NOT NULL OR note IS NOT NULL),
+  UNIQUE (session_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS ix_participation_record_user
+  ON participation_record(tenant_id, user_id);
+CREATE INDEX IF NOT EXISTS ix_participation_record_session
+  ON participation_record(session_id);
+
 -- ============================================================================
 -- NOTIFICATIONS  (multi-channel)
 -- ============================================================================

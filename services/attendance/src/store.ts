@@ -58,6 +58,23 @@ export interface RecordInput {
   comment?: string | null;
 }
 
+/** A per-student class-participation entry within a session (#378). */
+export interface ParticipationInput {
+  userId: string;
+  score?: number | null; // 0..4 engagement scale
+  note?: string | null;
+}
+
+/** A persisted participation row (mirrors AttendanceRecordRecord). */
+export interface ParticipationRecord {
+  id: string;
+  tenantId: string;
+  sessionId: string;
+  userId: string;
+  score: number | null;
+  note: string | null;
+}
+
 export type CreateSessionResult =
   | { ok: true; session: AttendanceSessionRecord }
   | { ok: false; reason: "duplicate" };
@@ -65,6 +82,10 @@ export type CreateSessionResult =
 export type SetRecordsResult =
   | { ok: true; records: AttendanceRecordRecord[] }
   | { ok: false; reason: "finalized" | "unknown_code" };
+
+export type SetParticipationResult =
+  | { ok: true; records: ParticipationRecord[] }
+  | { ok: false; reason: "finalized" };
 
 /** Per-student attendance rollup for a section. */
 export interface StudentAttendanceSummary {
@@ -76,6 +97,10 @@ export interface StudentAttendanceSummary {
   excused: number;
   absenceRate: number;
   chronicAbsence: boolean;
+  /** Number of participation entries with a non-null score (#378). */
+  participationCount: number;
+  /** Mean of non-null participation scores; null when none (never 0). (#378) */
+  averageParticipation: number | null;
 }
 
 export interface SectionAttendanceSummary {
@@ -107,6 +132,10 @@ export interface AttendanceExportRow {
   category: AttendanceCategory;
   minutesLate: number | null;
   comment: string | null;
+  /** Participation score for (session, user), null when none (#378). */
+  participationScore: number | null;
+  /** Participation note for (session, user), null when none (#378). */
+  participationNote: string | null;
 }
 
 /** Inclusive date range (+ optional section filter) for an export query. */
@@ -153,6 +182,7 @@ export interface AttendanceStore {
   ): Promise<{
     session: AttendanceSessionRecord;
     records: AttendanceRecordRecord[];
+    participation: ParticipationRecord[];
   } | null>;
 
   /** Upsert per-student records for a session; rejects if already finalized. */
@@ -161,6 +191,23 @@ export interface AttendanceStore {
     sessionId: string,
     records: RecordInput[],
   ): Promise<SetRecordsResult>;
+
+  /**
+   * Upsert per-student participation for a session; rejects if finalized (#378).
+   * `recordedBy` is the trusted caller's id (or null); NEVER read from the body.
+   */
+  setParticipation(
+    ctx: TenantContext,
+    sessionId: string,
+    records: ParticipationInput[],
+    recordedBy?: string | null,
+  ): Promise<SetParticipationResult>;
+
+  /** Read a session's participation rows (#378). */
+  listParticipation(
+    ctx: TenantContext,
+    sessionId: string,
+  ): Promise<ParticipationRecord[]>;
 
   finalizeSession(
     ctx: TenantContext,

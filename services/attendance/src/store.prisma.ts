@@ -22,7 +22,10 @@ import {
   type CreateSessionResult,
   type NewAttendanceCodeInput,
   type NewSessionInput,
+  type ParticipationInput,
+  type ParticipationRecord,
   type RecordInput,
+  type SetParticipationResult,
   type SetRecordsResult,
   type SisEntityType,
   type SisIdMapEntry,
@@ -56,6 +59,15 @@ interface RecordRow {
   code: string;
   minutes_late: number | null;
   comment: string | null;
+}
+
+interface ParticipationRow {
+  id: string;
+  tenant_id: string;
+  session_id: string;
+  user_id: string;
+  score: number | null;
+  note: string | null;
 }
 
 function isoDate(value: Date | string): string {
@@ -97,8 +109,21 @@ function toRecord(row: RecordRow): AttendanceRecordRecord {
   };
 }
 
+function toParticipation(row: ParticipationRow): ParticipationRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    sessionId: row.session_id,
+    userId: row.user_id,
+    // Postgres int comes back as a JS number, but guard NULL explicitly.
+    score: row.score === null ? null : Number(row.score),
+    note: row.note,
+  };
+}
+
 const SESSION_COLUMNS = `id, tenant_id, org_unit_id, timetable_entry_id, meeting_date, period_label, status, taken_by`;
 const RECORD_COLUMNS = `id, tenant_id, session_id, user_id, code, minutes_late, comment`;
+const PARTICIPATION_COLUMNS = `id, tenant_id, session_id, user_id, score, note`;
 
 /**
  * Postgres-backed attendance store. Every call runs through `withTenant`, so all
@@ -258,7 +283,15 @@ export function createPrismaStore(
           `SELECT ${RECORD_COLUMNS} FROM attendance_record WHERE session_id = $1::uuid`,
           id,
         );
-        return { session: toSession(session), records: records.map(toRecord) };
+        const participation = await db.$queryRawUnsafe<ParticipationRow[]>(
+          `SELECT ${PARTICIPATION_COLUMNS} FROM participation_record WHERE session_id = $1::uuid`,
+          id,
+        );
+        return {
+          session: toSession(session),
+          records: records.map(toRecord),
+          participation: participation.map(toParticipation),
+        };
       });
     },
 
@@ -305,6 +338,59 @@ export function createPrismaStore(
           sessionId,
         );
         return { ok: true, records: updated.map(toRecord) };
+      });
+    },
+
+    async setParticipation(
+      ctx,
+      sessionId,
+      records: ParticipationInput[],
+      recordedBy: string | null = null,
+    ) {
+      return withTenant<SetParticipationResult>(ctx, async (db) => {
+        const sessions = await db.$queryRawUnsafe<SessionRow[]>(
+          `SELECT ${SESSION_COLUMNS} FROM attendance_session WHERE id = $1::uuid LIMIT 1`,
+          sessionId,
+        );
+        const session = sessions[0];
+        if (!session || session.status === "finalized") {
+          return { ok: false, reason: "finalized" };
+        }
+
+        for (const r of records) {
+          await db.$executeRawUnsafe(
+            `INSERT INTO participation_record
+               (id, tenant_id, session_id, user_id, score, note, recorded_by)
+             VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7::uuid)
+             ON CONFLICT (session_id, user_id)
+             DO UPDATE SET score = EXCLUDED.score,
+                           note = EXCLUDED.note,
+                           recorded_by = EXCLUDED.recorded_by`,
+            generateId(),
+            ctx.tenantId,
+            sessionId,
+            r.userId,
+            r.score ?? null,
+            r.note ?? null,
+            recordedBy,
+          );
+        }
+
+        const updated = await db.$queryRawUnsafe<ParticipationRow[]>(
+          `SELECT ${PARTICIPATION_COLUMNS} FROM participation_record WHERE session_id = $1::uuid`,
+          sessionId,
+        );
+        return { ok: true, records: updated.map(toParticipation) };
+      });
+    },
+
+    async listParticipation(ctx, sessionId) {
+      return withTenant(ctx, async (db) => {
+        const rows = await db.$queryRawUnsafe<ParticipationRow[]>(
+          `SELECT ${PARTICIPATION_COLUMNS} FROM participation_record WHERE session_id = $1::uuid`,
+          sessionId,
+        );
+        return rows.map(toParticipation);
       });
     },
 
@@ -391,11 +477,11 @@ export function createPrismaStore(
         );
 
         const byUser = new Map<string, StudentAttendanceSummary>();
-        for (const row of rows) {
-          let s = byUser.get(row.user_id);
+        const ensure = (userId: string): StudentAttendanceSummary => {
+          let s = byUser.get(userId);
           if (!s) {
             s = {
-              userId: row.user_id,
+              userId,
               total: 0,
               present: 0,
               absent: 0,
@@ -403,12 +489,41 @@ export function createPrismaStore(
               excused: 0,
               absenceRate: 0,
               chronicAbsence: false,
+              participationCount: 0,
+              averageParticipation: null,
             };
-            byUser.set(row.user_id, s);
+            byUser.set(userId, s);
           }
+          return s;
+        };
+
+        for (const row of rows) {
+          const s = ensure(row.user_id);
           const n = Number(row.n);
           s.total += n;
           s[row.category] += n;
+        }
+
+        // Second aggregate: participation over this section's sessions, only
+        // rows with a non-null score (notes never count toward the average).
+        // Users with participation but no attendance still surface (left-merge).
+        const partRows = await db.$queryRawUnsafe<
+          { user_id: string; cnt: bigint; avg: string | number }[]
+        >(
+          `SELECT p.user_id,
+                  COUNT(p.score)::bigint AS cnt,
+                  AVG(p.score) AS avg
+             FROM participation_record p
+             JOIN attendance_session s ON s.id = p.session_id
+            WHERE s.org_unit_id = $1::uuid AND p.score IS NOT NULL
+            GROUP BY p.user_id`,
+          orgUnitId,
+        );
+        for (const row of partRows) {
+          const s = ensure(row.user_id);
+          const count = Number(row.cnt);
+          s.participationCount = count;
+          s.averageParticipation = count > 0 ? Number(row.avg) : null;
         }
 
         const students = [...byUser.values()].map((s) => {
@@ -476,18 +591,24 @@ export function createPrismaStore(
             category: AttendanceCategory;
             minutes_late: number | null;
             comment: string | null;
+            participation_score: number | null;
+            participation_note: string | null;
           }[]
         >(
           // RLS scopes by tenant; the explicit BETWEEN bounds the date range and
           // the optional $3 narrows to one section. Deterministic ORDER BY gives
-          // a stable CSV/OneRoster row order across runs.
+          // a stable CSV/OneRoster row order across runs. The LEFT JOIN to
+          // participation_record keeps the row count == attendance rows (#378).
           `SELECT r.tenant_id, r.session_id, s.org_unit_id, s.meeting_date,
                   s.period_label, r.user_id, r.code, c.category,
-                  r.minutes_late, r.comment
+                  r.minutes_late, r.comment,
+                  p.score AS participation_score, p.note AS participation_note
              FROM attendance_record r
              JOIN attendance_session s ON s.id = r.session_id
              JOIN attendance_code c
                ON c.tenant_id = r.tenant_id AND c.code = r.code
+             LEFT JOIN participation_record p
+               ON p.session_id = r.session_id AND p.user_id = r.user_id
             WHERE s.meeting_date BETWEEN $1::date AND $2::date
               AND ($3::uuid IS NULL OR s.org_unit_id = $3::uuid)
             ORDER BY s.meeting_date, s.org_unit_id, r.user_id`,
@@ -507,6 +628,11 @@ export function createPrismaStore(
             category: row.category,
             minutesLate: row.minutes_late,
             comment: row.comment,
+            participationScore:
+              row.participation_score === null
+                ? null
+                : Number(row.participation_score),
+            participationNote: row.participation_note,
           }),
         );
       });

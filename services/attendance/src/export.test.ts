@@ -26,6 +26,8 @@ function row(overrides: Partial<AttendanceExportRow> = {}): AttendanceExportRow 
     category: "absent",
     minutesLate: null,
     comment: null,
+    participationScore: null,
+    participationNote: null,
     ...overrides,
   };
 }
@@ -48,7 +50,7 @@ describe("toCsv — stable header + RFC-4180 (#377)", () => {
   it("emits the exact stable header even for zero rows", () => {
     expect(toCsv([])).toBe(ATTENDANCE_CSV_HEADER);
     expect(ATTENDANCE_CSV_HEADER).toBe(
-      "tenant_id,section_id,meeting_date,period_label,student_id,code,category,minutes_late,comment",
+      "tenant_id,section_id,meeting_date,period_label,student_id,code,category,minutes_late,comment,participation_score,participation_note",
     );
   });
 
@@ -57,7 +59,7 @@ describe("toCsv — stable header + RFC-4180 (#377)", () => {
     const [header, line] = csv.split("\r\n");
     expect(header).toBe(ATTENDANCE_CSV_HEADER);
     expect(line).toBe(
-      `${TENANT},section-a,2026-03-01,Period 1,user-1,A,absent,,`,
+      `${TENANT},section-a,2026-03-01,Period 1,user-1,A,absent,,,,`,
     );
   });
 
@@ -80,6 +82,15 @@ describe("toCsv — stable header + RFC-4180 (#377)", () => {
     const csv = toCsv([row({ userId: "u1" }), row({ userId: "u2" })]);
     expect(csv.split("\r\n")).toHaveLength(3);
   });
+
+  it("appends participation_score and participation_note in the last two columns (#378)", () => {
+    const csv = toCsv([
+      row({ participationScore: 3, participationNote: 'great, "engaged"' }),
+    ]);
+    const line = csv.split("\r\n")[1]!;
+    // The two participation fields are the final two columns, in that order.
+    expect(line.endsWith(',3,"great, ""engaged"""')).toBe(true);
+  });
 });
 
 describe("toOneRoster — sis_id_map mapping + uuid fallback (#377)", () => {
@@ -96,7 +107,13 @@ describe("toOneRoster — sis_id_map mapping + uuid fallback (#377)", () => {
     expect(r.status).toBe("active");
     expect(r.scoreDate).toBe("2026-03-01");
     expect(r.dateLastModified).toBe("2026-03-01");
-    expect(r.metadata).toEqual({ code: "A", category: "absent", minutesLate: null });
+    expect(r.metadata).toEqual({
+      code: "A",
+      category: "absent",
+      minutesLate: null,
+      participationScore: null,
+      participationNote: null,
+    });
     expect(r.student).toEqual({
       sourcedId: "sis-user-1",
       href: "/users/sis-user-1",
@@ -127,5 +144,15 @@ describe("toOneRoster — sis_id_map mapping + uuid fallback (#377)", () => {
     const r = results[0]!;
     expect(r.comment).toBe("doctor note");
     expect(r.metadata.minutesLate).toBe(12);
+  });
+
+  it("carries participation score/note through metadata (#378)", () => {
+    const { results } = toOneRoster(
+      [row({ participationScore: 4, participationNote: "led discussion" })],
+      idMap,
+    );
+    const r = results[0]!;
+    expect(r.metadata.participationScore).toBe(4);
+    expect(r.metadata.participationNote).toBe("led discussion");
   });
 });

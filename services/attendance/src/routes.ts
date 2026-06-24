@@ -14,6 +14,7 @@ import type {
   AttendanceExportRow,
   AttendanceStore,
   NewSessionInput,
+  ParticipationInput,
   RecordInput,
 } from "./store.js";
 
@@ -142,6 +143,42 @@ function parseRecords(raw: unknown): RecordInput[] | null {
   return out;
 }
 
+function isScore0to4(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 4
+  );
+}
+
+/**
+ * Validate a participation payload (#378). Mirrors `parseRecords`: non-empty
+ * array; each item needs a non-empty-string `userId`; `score` (if present) is an
+ * integer 0..4; `note` (if present) is a non-empty string; AT LEAST ONE of
+ * score/note must be present — mirroring the DB CHECK so bad input fails at the
+ * edge. Returns null on any violation (route maps to 400).
+ */
+function parseParticipation(raw: unknown): ParticipationInput[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const out: ParticipationInput[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) return null;
+    const r = item as Record<string, unknown>;
+    if (!isNonEmptyString(r.userId)) return null;
+    const hasScore = r.score !== undefined && r.score !== null;
+    const hasNote = r.note !== undefined && r.note !== null;
+    if (hasScore && !isScore0to4(r.score)) return null;
+    if (hasNote && !isNonEmptyString(r.note)) return null;
+    // At least one of score/note must be present (DB CHECK at the edge).
+    const score = hasScore ? (r.score as number) : null;
+    const note = isNonEmptyString(r.note) ? r.note.trim() : null;
+    if (score === null && note === null) return null;
+    out.push({ userId: r.userId, score, note });
+  }
+  return out;
+}
+
 /** Register the attendance domain surface: codes, sessions, records, summaries. */
 export function registerAttendanceRoutes(
   app: FastifyInstance,
@@ -252,6 +289,44 @@ export function registerAttendanceRoutes(
             "One or more records reference an unknown attendance code.",
           );
         }
+        return reply.code(409).send({
+          error: "session_finalized",
+          message: "Session not found or already finalized.",
+        });
+      }
+      return reply.code(200).send({ records: result.records });
+    },
+  );
+
+  app.put<{ Params: { id: string } }>(
+    "/sessions/:id/participation",
+    async (req, reply) => {
+      const ctx = resolveTenantOr400(deps, req, reply);
+      if (!ctx) return reply;
+      const records = parseParticipation((req.body as RecordsBody)?.records);
+      if (!records) {
+        return badRequest(
+          reply,
+          "records must be a non-empty array of { userId, score? (0-4 int), note? } " +
+            "where at least one of score or note is present.",
+        );
+      }
+      // recorded_by comes ONLY from the server-trusted caller (x-user-id), never
+      // the request body. Tenant context alone authorizes the write (mirrors
+      // PUT /records); a missing caller is allowed and stamps recorded_by=null.
+      let recordedBy: string | null = null;
+      try {
+        recordedBy = deps.resolveCaller(req).userId;
+      } catch {
+        recordedBy = null;
+      }
+      const result = await deps.store.setParticipation(
+        ctx,
+        req.params.id,
+        records,
+        recordedBy,
+      );
+      if (!result.ok) {
         return reply.code(409).send({
           error: "session_finalized",
           message: "Session not found or already finalized.",

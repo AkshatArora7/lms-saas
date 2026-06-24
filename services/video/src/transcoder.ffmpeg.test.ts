@@ -8,6 +8,7 @@ import {
   FfmpegTranscoder,
   FULL_LADDER,
   selectLadder,
+  tenantArtifactKeyPrefix,
   type LadderRung,
 } from "./transcoder.ffmpeg.js";
 import { StubTranscoder } from "./transcoder.js";
@@ -92,6 +93,49 @@ describe("artifactKeyPrefix (tenant isolation boundary)", () => {
       "t/x/video/y",
     );
     expect(artifactKeyPrefix("v.mp4")).toBe("");
+  });
+});
+
+describe("tenantArtifactKeyPrefix (trusted write-key isolation)", () => {
+  const CALLER = "11111111-1111-1111-1111-111111111111";
+  const VICTIM = "22222222-2222-2222-2222-222222222222";
+  const ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+
+  it("derives the write prefix from the trusted tenantId + id", () => {
+    expect(tenantArtifactKeyPrefix(CALLER, ID)).toBe(
+      `t/${CALLER}/video/${ID}`,
+    );
+  });
+
+  it("ignores a cross-tenant sourceBlobUrl — writes stay under the caller's prefix", () => {
+    // An attacker in CALLER creates a video whose source URL points at the
+    // VICTIM tenant's storage prefix (and even uses path traversal). The write
+    // key MUST be bound to the caller's own tenantId/id, never the URL.
+    const adversarialSourceUrls = [
+      `https://blob.local/t/${VICTIM}/video/evil/x.mp4`,
+      `https://blob.local/t/${CALLER}/video/${ID}/../../t/${VICTIM}/x.mp4`,
+      `https://attacker.example/anything/at/all/x.mp4`,
+    ];
+    const prefix = tenantArtifactKeyPrefix(CALLER, ID);
+    expect(prefix).toBe(`t/${CALLER}/video/${ID}`);
+    for (const sourceUrl of adversarialSourceUrls) {
+      // The URL-derived prefix (the OLD, vulnerable derivation) leaks the
+      // victim tenant / escapes the caller's namespace — proving the URL is
+      // untrustworthy as a write key.
+      const urlPrefix = artifactKeyPrefix(sourceUrl);
+      const urlPrefixEscapes =
+        urlPrefix.includes(VICTIM) ||
+        urlPrefix.includes("..") ||
+        !urlPrefix.startsWith(`t/${CALLER}/`);
+      expect(urlPrefixEscapes).toBe(true);
+      // … but the trusted prefix (what the transcoder actually keys on) is
+      // bound to the caller's identity and never references the victim.
+      const artifactKey = `${prefix}/master.m3u8`;
+      expect(artifactKey).toBe(`t/${CALLER}/video/${ID}/master.m3u8`);
+      expect(artifactKey.startsWith(`t/${CALLER}/video/${ID}/`)).toBe(true);
+      expect(artifactKey.includes(VICTIM)).toBe(false);
+      expect(artifactKey.includes("..")).toBe(false);
+    }
   });
 });
 

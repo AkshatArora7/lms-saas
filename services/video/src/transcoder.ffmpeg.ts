@@ -57,6 +57,20 @@ export function selectLadder(sourceHeight: number): LadderRung[] {
 
 /**
  * Derive the tenant-namespaced blob KEY prefix for an asset's artifacts from its
+ * TRUSTED identity — `asset.tenantId` + `asset.id` — to the canonical
+ * `t/{tenantId}/video/{id}` directory (mirroring `videoBlobKey`'s convention,
+ * `blob.ts`). This is the ONLY value used to key artifact WRITES: it is bound to
+ * the server-side asset row, never to the client-supplied `sourceBlobUrl`, so a
+ * crafted source URL (e.g. one pointing at `t/{otherTenant}/video/...` or using
+ * `../` traversal) can never cause renditions/segments/manifests to land outside
+ * the caller's own tenant prefix — the storage isolation boundary. Pure & total.
+ */
+export function tenantArtifactKeyPrefix(tenantId: string, id: string): string {
+  return `t/${tenantId}/video/${id}`;
+}
+
+/**
+ * Derive the tenant-namespaced blob KEY prefix for an asset's artifacts from its
  * source URL. Source keys are `t/{tenantId}/video/{id}/{filename}` (see
  * `videoBlobKey`); this strips the scheme/host and the trailing filename so
  * renditions/manifests are keyed under the SAME `t/{tenantId}/video/{id}`
@@ -64,6 +78,10 @@ export function selectLadder(sourceHeight: number): LadderRung[] {
  *
  * Falls back to slicing off the last path segment when no `t/{tenantId}/video/`
  * marker is present (defensive; production URLs always carry it).
+ *
+ * NOTE: This URL-parsing helper is NOT used to key artifact writes — the
+ * client-supplied `sourceBlobUrl` is untrusted, so writes use the trusted
+ * {@link tenantArtifactKeyPrefix} instead. Retained for diagnostics/tests.
  */
 export function artifactKeyPrefix(sourceBlobUrl: string): string {
   let path = sourceBlobUrl;
@@ -205,8 +223,11 @@ export class FfmpegTranscoder implements Transcoder {
       // 2. Probe real duration + height.
       const { durationSeconds, height } = await probe(ffprobePath, sourceFile);
 
-      // 3. Transcode each ladder rung to its own HLS variant.
-      const keyPrefix = artifactKeyPrefix(asset.sourceBlobUrl);
+      // 3. Transcode each ladder rung to its own HLS variant. The artifact
+      // write key prefix is bound to the asset's TRUSTED identity
+      // (tenantId + id), NOT the client-supplied source URL, so a crafted
+      // sourceBlobUrl can never write outside the caller's tenant prefix.
+      const keyPrefix = tenantArtifactKeyPrefix(asset.tenantId, asset.id);
       const rungs = selectLadder(height);
       const variants: Array<{ rung: LadderRung; manifestName: string }> = [];
       const renditions: Rendition[] = [];

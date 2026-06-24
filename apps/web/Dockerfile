@@ -1,23 +1,15 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build for the web app (Next.js standalone, pnpm workspace).
-FROM node:20-slim AS base
-ENV PNPM_HOME=/pnpm PATH=$PNPM_HOME:$PATH
-RUN corepack enable
-WORKDIR /app
+#
+# The shared base + workspace-deps (openssl/ca-certificates, corepack, the full
+# `pnpm install`) now live in docker/base.Dockerfile and are built ONCE as
+# ${BASE_IMAGE} (#369, L5). This file consumes that image for both its build and
+# runtime stages instead of re-running the install. Build the base first:
+#   pnpm build:base   (or `pnpm start:build`, which runs it before compose).
+ARG BASE_IMAGE=lms-base-deps:local
 
-# manifests: extract ONLY package manifests + lockfile so the deps layer is reused
-# across source-only changes (node_modules already excluded by .dockerignore).
-FROM base AS manifests
-COPY . /tmp/ctx
-RUN cd /tmp/ctx \
- && find . -type f \( -name package.json -o -name pnpm-lock.yaml -o -name pnpm-workspace.yaml \) -print \
-    | xargs -I{} cp --parents {} /app/
-
-# deps: install the full workspace from manifests only, with a cached pnpm store.
-FROM base AS deps
-COPY --from=manifests /app ./
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+# deps: the shared, pre-installed workspace (includes the standardized base).
+FROM ${BASE_IMAGE} AS deps
 
 # build: bring in ONLY shared packages + this app's source, then build.
 FROM deps AS build
@@ -29,7 +21,7 @@ COPY apps/web ./apps/web
 # deps, so @lms/ui is compiled before the Next build.
 RUN pnpm --filter "@lms/web..." build
 
-FROM base AS runtime
+FROM deps AS runtime
 ENV NODE_ENV=production PORT=3000
 # Next.js standalone output for a monorepo: the self-contained server (with a
 # minimal node_modules) is traced under .next/standalone preserving the

@@ -60,7 +60,12 @@ const COURSE_STYLES = `
   gap: var(--lms-space-2);
   align-items: center;
 }
-.lms-cd__header-actions { flex-shrink: 0; }
+.lms-cd__header-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lms-space-2);
+}
 @media (min-width: 768px) {
   .lms-cd__header {
     flex-direction: row;
@@ -200,6 +205,13 @@ export default async function CoursePage({
               </div>
             </div>
             <div className="lms-cd__header-actions">
+              <Button
+                href={`/courses/${course.id}/tutor`}
+                size="sm"
+                variant="secondary"
+              >
+                {t(m, "course.askTutor")}
+              </Button>
               <Button
                 href={`/courses/${course.id}/discussions`}
                 size="sm"

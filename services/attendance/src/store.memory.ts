@@ -13,6 +13,8 @@ import {
   DEFAULT_ATTENDANCE_CODES,
   type AttendanceCategory,
   type AttendanceCodeRecord,
+  type AttendanceExportRange,
+  type AttendanceExportRow,
   type AttendanceHistoryEntry,
   type AttendanceRecordRecord,
   type AttendanceSessionRecord,
@@ -23,6 +25,8 @@ import {
   type RecordInput,
   type SectionAttendanceSummary,
   type SetRecordsResult,
+  type SisEntityType,
+  type SisIdMapEntry,
   type StudentAttendanceSummary,
 } from "./store.js";
 
@@ -40,6 +44,8 @@ export class MemoryAttendanceStore implements AttendanceStore {
   private sessions: AttendanceSessionRecord[] = [];
   private records: AttendanceRecordRecord[] = [];
   private emitted: AttendanceEvent[] = [];
+  /** sis_id_map rows, tenant-tagged, mirroring the RLS-isolated table (#377). */
+  private sisMap: (SisIdMapEntry & { tenantId: string })[] = [];
 
   constructor(
     private readonly generateId: () => string = randomUUID,
@@ -296,6 +302,77 @@ export class MemoryAttendanceStore implements AttendanceStore {
           },
         ];
       });
+  }
+
+  async exportAttendance(
+    ctx: TenantContext,
+    range: AttendanceExportRange,
+  ): Promise<AttendanceExportRow[]> {
+    const sectionId = range.sectionId ?? null;
+    const sessionsById = new Map(
+      this.sessions
+        .filter((s) => s.tenantId === ctx.tenantId)
+        .map((s) => [s.id, s]),
+    );
+    return this.records
+      .filter((r) => r.tenantId === ctx.tenantId)
+      .flatMap((r) => {
+        const session = sessionsById.get(r.sessionId);
+        if (!session) return [];
+        if (session.meetingDate < range.from || session.meetingDate > range.to) {
+          return [];
+        }
+        if (sectionId !== null && session.orgUnitId !== sectionId) return [];
+        const category = this.codeCategory(ctx.tenantId, r.code) ?? "present";
+        return [
+          {
+            tenantId: ctx.tenantId,
+            sessionId: r.sessionId,
+            orgUnitId: session.orgUnitId,
+            meetingDate: session.meetingDate,
+            periodLabel: session.periodLabel,
+            userId: r.userId,
+            code: r.code,
+            category,
+            minutesLate: r.minutesLate,
+            comment: r.comment,
+          },
+        ];
+      })
+      .sort((a, b) => {
+        if (a.meetingDate !== b.meetingDate) {
+          return a.meetingDate < b.meetingDate ? -1 : 1;
+        }
+        if (a.orgUnitId !== b.orgUnitId) {
+          return a.orgUnitId < b.orgUnitId ? -1 : 1;
+        }
+        return a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0;
+      });
+  }
+
+  async sisIdMap(
+    ctx: TenantContext,
+    entityTypes: readonly SisEntityType[],
+    internalIds: readonly string[],
+  ): Promise<SisIdMapEntry[]> {
+    const wantedTypes = new Set(entityTypes);
+    const wantedIds = new Set(internalIds);
+    return this.sisMap
+      .filter(
+        (m) =>
+          m.tenantId === ctx.tenantId &&
+          wantedTypes.has(m.entityType) &&
+          wantedIds.has(m.internalId),
+      )
+      .map(({ tenantId: _tenantId, ...entry }) => entry);
+  }
+
+  /** Seed a sis_id_map entry for a tenant (test/dev convenience, #377). */
+  seedSisIdMap(
+    tenantId: string,
+    entry: SisIdMapEntry,
+  ): void {
+    this.sisMap.push({ tenantId, ...entry });
   }
 }
 

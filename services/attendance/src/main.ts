@@ -22,6 +22,8 @@ import Fastify, {
   type FastifyRequest,
 } from "fastify";
 
+import { createHttpEnrollmentRosterResolver } from "./enrollment-resolver.http.js";
+import type { EnrollmentRosterResolver } from "./enrollment-resolver.js";
 import { createHttpGuardianChildrenResolver } from "./guardian-resolver.http.js";
 import { createHttpStudentGuardiansResolver } from "./guardians.http.js";
 import type { StudentGuardiansResolver } from "./guardians.js";
@@ -47,6 +49,12 @@ export interface BuildAppOptions {
    * Ignored when `store` is supplied (the store already has its resolver).
    */
   guardiansResolver?: StudentGuardiansResolver;
+  /**
+   * Resolves a section's active roster to seed records on session create
+   * (#376). Defaults to the gateway-backed HTTP resolver; tests inject a fake.
+   * Ignored when `store` is supplied (the store already has its resolver).
+   */
+  enrollmentResolver?: EnrollmentRosterResolver;
   resolveCaller?: AttendanceRouteDeps["resolveCaller"];
   guardianResolver?: AttendanceRouteDeps["guardianResolver"];
 }
@@ -118,9 +126,19 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       gatewayUrl: process.env.GATEWAY_URL ?? "http://gateway:4000",
     });
 
+  const enrollmentResolver =
+    options.enrollmentResolver ??
+    createHttpEnrollmentRosterResolver({
+      // Section enrollment authority lives in the enrollment context, reached
+      // through the gateway (same convention as the guardian resolvers).
+      gatewayUrl: process.env.GATEWAY_URL ?? "http://gateway:4000",
+    });
+
   registerAttendanceRoutes(app, {
     config,
-    store: options.store ?? createPrismaStore(randomUUID, guardiansResolver),
+    store:
+      options.store ??
+      createPrismaStore(randomUUID, guardiansResolver, enrollmentResolver),
     resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
     resolveCaller: options.resolveCaller ?? headerCallerResolver(),
     guardianResolver:

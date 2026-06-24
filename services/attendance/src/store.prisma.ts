@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { withTenant } from "@lms/db";
 
+import type { EnrollmentRosterResolver } from "./enrollment-resolver.js";
 import {
   attendanceEvent,
   recipientsFor,
@@ -109,6 +110,13 @@ export function createPrismaStore(
    * never JOINed inside withTenant.
    */
   guardians: StudentGuardiansResolver = { resolveGuardians: async () => [] },
+  /**
+   * Resolves a section's actively-enrolled students via the enrollment port
+   * (#376). Like the guardian fetch, the call happens OUTSIDE the db tx —
+   * enrollment lives in a different bounded context, so the roster is fetched
+   * through the port, never JOINed inside withTenant. Fail-closed (returns []).
+   */
+  enrollment: EnrollmentRosterResolver = { resolveRoster: async () => [] },
 ): AttendanceStore {
   return {
     async listCodes(ctx) {
@@ -164,6 +172,18 @@ export function createPrismaStore(
     },
 
     async createSession(ctx, input: NewSessionInput) {
+      // Phase A (NO tx): derive the roster from active section enrollment via
+      // the enrollment port — a cross-bounded-context call that must NOT run a
+      // JOIN inside withTenant (AC c). Fail-closed → [] means the session is
+      // still created with an empty roster (degrade gracefully; AC a).
+      const students = await enrollment.resolveRoster(ctx, input.orgUnitId);
+
+      // Phase B (tx, withTenant): duplicate-check + INSERT the session, then
+      // seed one attendance_record per active student with the tenant's default
+      // code. ON CONFLICT (session_id, user_id) DO NOTHING makes the seeding
+      // idempotent against the existing UNIQUE(session_id, user_id) (AC b), and
+      // the records are normal rows on an `open` session so they stay editable
+      // until finalize (AC d).
       return withTenant<CreateSessionResult>(ctx, async (db) => {
         const periodLabel = input.periodLabel ?? null;
         const existing = await db.$queryRawUnsafe<{ id: string }[]>(
@@ -191,7 +211,34 @@ export function createPrismaStore(
           periodLabel,
           input.takenBy ?? null,
         );
-        return { ok: true, session: toSession(rows[0]!) };
+        const session = toSession(rows[0]!);
+
+        if (students.length > 0) {
+          // Resolve the tenant's default code (is_default=true); a record's FK
+          // (tenant_id, code) -> attendance_code requires an existing code, so
+          // without a default we skip seeding and leave an empty session.
+          const defaultRows = await db.$queryRawUnsafe<{ code: string }[]>(
+            `SELECT code FROM attendance_code WHERE is_default = true LIMIT 1`,
+          );
+          const defaultCode = defaultRows[0]?.code;
+          if (defaultCode) {
+            for (const s of students) {
+              await db.$executeRawUnsafe(
+                `INSERT INTO attendance_record
+                   (id, tenant_id, session_id, user_id, code)
+                 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5)
+                 ON CONFLICT (session_id, user_id) DO NOTHING`,
+                generateId(),
+                ctx.tenantId,
+                session.id,
+                s.userId,
+                defaultCode,
+              );
+            }
+          }
+        }
+
+        return { ok: true, session };
       });
     },
 

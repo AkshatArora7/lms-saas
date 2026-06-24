@@ -1,0 +1,24 @@
+{
+  "name": "@lms/blob",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@lms/config": "workspace:*",
+    "@vercel/blob": "^0.27.0"
+  },
+  "devDependencies": {
+    "@lms/eslint-config": "workspace:*",
+    "@lms/tsconfig": "workspace:*",
+    "vitest": "^2.0.5"
+  }
+}

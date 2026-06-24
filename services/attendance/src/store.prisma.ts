@@ -13,6 +13,8 @@ import {
   DEFAULT_ATTENDANCE_CODES,
   type AttendanceCategory,
   type AttendanceCodeRecord,
+  type AttendanceExportRange,
+  type AttendanceExportRow,
   type AttendanceHistoryEntry,
   type AttendanceRecordRecord,
   type AttendanceSessionRecord,
@@ -22,6 +24,8 @@ import {
   type NewSessionInput,
   type RecordInput,
   type SetRecordsResult,
+  type SisEntityType,
+  type SisIdMapEntry,
   type StudentAttendanceSummary,
 } from "./store.js";
 
@@ -452,6 +456,86 @@ export function createPrismaStore(
             code: row.code,
             category: row.category,
             minutesLate: row.minutes_late,
+          }),
+        );
+      });
+    },
+
+    async exportAttendance(ctx, range: AttendanceExportRange) {
+      return withTenant(ctx, async (db) => {
+        const sectionId = range.sectionId ?? null;
+        const rows = await db.$queryRawUnsafe<
+          {
+            tenant_id: string;
+            session_id: string;
+            org_unit_id: string;
+            meeting_date: Date | string;
+            period_label: string | null;
+            user_id: string;
+            code: string;
+            category: AttendanceCategory;
+            minutes_late: number | null;
+            comment: string | null;
+          }[]
+        >(
+          // RLS scopes by tenant; the explicit BETWEEN bounds the date range and
+          // the optional $3 narrows to one section. Deterministic ORDER BY gives
+          // a stable CSV/OneRoster row order across runs.
+          `SELECT r.tenant_id, r.session_id, s.org_unit_id, s.meeting_date,
+                  s.period_label, r.user_id, r.code, c.category,
+                  r.minutes_late, r.comment
+             FROM attendance_record r
+             JOIN attendance_session s ON s.id = r.session_id
+             JOIN attendance_code c
+               ON c.tenant_id = r.tenant_id AND c.code = r.code
+            WHERE s.meeting_date BETWEEN $1::date AND $2::date
+              AND ($3::uuid IS NULL OR s.org_unit_id = $3::uuid)
+            ORDER BY s.meeting_date, s.org_unit_id, r.user_id`,
+          range.from,
+          range.to,
+          sectionId,
+        );
+        return rows.map(
+          (row): AttendanceExportRow => ({
+            tenantId: row.tenant_id,
+            sessionId: row.session_id,
+            orgUnitId: row.org_unit_id,
+            meetingDate: isoDate(row.meeting_date),
+            periodLabel: row.period_label,
+            userId: row.user_id,
+            code: row.code,
+            category: row.category,
+            minutesLate: row.minutes_late,
+            comment: row.comment,
+          }),
+        );
+      });
+    },
+
+    async sisIdMap(
+      ctx,
+      entityTypes: readonly SisEntityType[],
+      internalIds: readonly string[],
+    ) {
+      if (entityTypes.length === 0 || internalIds.length === 0) return [];
+      return withTenant(ctx, async (db) => {
+        const rows = await db.$queryRawUnsafe<
+          { entity_type: SisEntityType; internal_id: string; source_id: string }[]
+        >(
+          // ANY($N) with text[] / uuid[] params keeps it a single statement.
+          // RLS scopes by tenant.
+          `SELECT entity_type, internal_id, source_id
+             FROM sis_id_map
+            WHERE entity_type = ANY($1::text[])
+              AND internal_id = ANY($2::uuid[])`,
+          entityTypes as string[],
+          internalIds as string[],
+        );
+        return rows.map(
+          (row): SisIdMapEntry => ({
+            entityType: row.entity_type,
+            internalId: row.internal_id,
+            sourceId: row.source_id,
           }),
         );
       });

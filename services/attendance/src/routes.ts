@@ -2,9 +2,16 @@ import type { AppConfig } from "@lms/config";
 import type { TenantContext } from "@lms/types";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+import {
+  canExportAttendance,
+  toCsv,
+  toOneRoster,
+  type OneRosterIdMap,
+} from "./export.js";
 import type { GuardianChildrenResolver } from "./guardian-resolver.js";
 import type {
   AttendanceCategory,
+  AttendanceExportRow,
   AttendanceStore,
   NewSessionInput,
   RecordInput,
@@ -77,6 +84,15 @@ function badRequest(reply: FastifyReply, message: string): FastifyReply {
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Strict calendar date (YYYY-MM-DD) — also rejects impossible dates. */
+function isCalendarDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
@@ -337,4 +353,92 @@ export function registerAttendanceRoutes(
       return reply.code(200).send({ studentId: req.params.studentId, history });
     },
   );
+
+  // --- Compliance / SIS export (#377) -----------------------------------------
+  // GET /export?from=&to=&sectionId?=&format=csv|oneroster — admin/compliance
+  // only. Caller is the trusted x-user-id/x-user-roles identity (401 if absent),
+  // role-gated to admin/compliance (403). Every read runs inside withTenant so
+  // RLS scopes the export to the caller's tenant (no cross-tenant leak). Only
+  // ids/codes are emitted — no learner names/emails (PII minimization).
+  app.get<{
+    Querystring: {
+      from?: string;
+      to?: string;
+      sectionId?: string;
+      format?: string;
+    };
+  }>("/export", async (req, reply) => {
+    const caller = resolveCallerOr401(deps, req, reply);
+    if (!caller) return reply;
+    if (!canExportAttendance(caller.roles)) {
+      return reply.code(403).send({
+        error: "forbidden",
+        message: "Exporting attendance requires an admin or compliance role.",
+      });
+    }
+    const ctx = resolveTenantOr400(deps, req, reply);
+    if (!ctx) return reply;
+
+    const { from, to, sectionId, format } = req.query;
+    if (!isCalendarDate(from) || !isCalendarDate(to)) {
+      return badRequest(reply, "from and to must be valid YYYY-MM-DD dates.");
+    }
+    if (from > to) {
+      return badRequest(reply, "from must be on or before to.");
+    }
+    if (sectionId !== undefined && !UUID_RE.test(sectionId)) {
+      return badRequest(reply, "sectionId must be a uuid.");
+    }
+    const fmt = format ?? "csv";
+    if (fmt !== "csv" && fmt !== "oneroster") {
+      return badRequest(reply, "format must be csv or oneroster.");
+    }
+
+    const rows = await deps.store.exportAttendance(ctx, {
+      from,
+      to,
+      sectionId: sectionId ?? null,
+    });
+
+    if (fmt === "csv") {
+      return reply
+        .code(200)
+        .header("content-type", "text/csv; charset=utf-8")
+        .header(
+          "content-disposition",
+          `attachment; filename="attendance_${from}_${to}.csv"`,
+        )
+        .send(toCsv(rows));
+    }
+
+    // oneroster: resolve sourcedIds from sis_id_map (user + class), falling back
+    // to the internal uuid in the formatter when a tenant is not SIS-synced.
+    const idMap = await buildOneRosterIdMap(deps, ctx, rows);
+    return reply
+      .code(200)
+      .header("content-type", "application/json")
+      .send(toOneRoster(rows, idMap));
+  });
+}
+
+/** Resolve user/class sourcedId maps from `sis_id_map` for the export rows (#377). */
+async function buildOneRosterIdMap(
+  deps: AttendanceRouteDeps,
+  ctx: TenantContext,
+  rows: readonly AttendanceExportRow[],
+): Promise<OneRosterIdMap> {
+  const userIds = [...new Set(rows.map((r) => r.userId))];
+  const orgUnitIds = [...new Set(rows.map((r) => r.orgUnitId))];
+  const entries = await deps.store.sisIdMap(
+    ctx,
+    ["user", "class"],
+    [...userIds, ...orgUnitIds],
+  );
+  const user = new Map<string, string>();
+  const klass = new Map<string, string>();
+  for (const e of entries) {
+    if (e.entityType === "user") user.set(e.internalId, e.sourceId);
+    else klass.set(e.internalId, e.sourceId);
+  }
+  return { user, class: klass };
 }

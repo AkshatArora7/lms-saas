@@ -95,6 +95,37 @@ export interface AttendanceHistoryEntry {
   minutesLate: number | null;
 }
 
+/** A flattened attendance datum for a date-range export (#377). */
+export interface AttendanceExportRow {
+  tenantId: string;
+  sessionId: string;
+  orgUnitId: string;
+  meetingDate: string;
+  periodLabel: string | null;
+  userId: string;
+  code: string;
+  category: AttendanceCategory;
+  minutesLate: number | null;
+  comment: string | null;
+}
+
+/** Inclusive date range (+ optional section filter) for an export query. */
+export interface AttendanceExportRange {
+  from: string;
+  to: string;
+  sectionId?: string | null;
+}
+
+/** Entity types we resolve OneRoster sourcedIds for from `sis_id_map`. */
+export type SisEntityType = "user" | "class";
+
+/** A single internal-id -> external sourcedId mapping from `sis_id_map`. */
+export interface SisIdMapEntry {
+  entityType: SisEntityType;
+  internalId: string;
+  sourceId: string;
+}
+
 /**
  * Persistence boundary for the attendance service. Routes depend only on this
  * interface, so production uses an RLS-scoped Postgres implementation while
@@ -146,6 +177,26 @@ export interface AttendanceStore {
     ctx: TenantContext,
     userId: string,
   ): Promise<AttendanceHistoryEntry[]>;
+
+  /**
+   * Date-range attendance export (#377): every record whose session's
+   * meeting_date falls inside [from, to], optionally filtered to one section.
+   * Runs inside `withTenant` so RLS bounds it to the caller's tenant.
+   */
+  exportAttendance(
+    ctx: TenantContext,
+    range: AttendanceExportRange,
+  ): Promise<AttendanceExportRow[]>;
+
+  /**
+   * Resolve `sis_id_map` rows for the given entity types and internal ids
+   * (OneRoster sourcedId mapping, #377). Runs inside `withTenant`.
+   */
+  sisIdMap(
+    ctx: TenantContext,
+    entityTypes: readonly SisEntityType[],
+    internalIds: readonly string[],
+  ): Promise<SisIdMapEntry[]>;
 }
 
 /** The standard attendance vocabulary seeded for a new tenant. */

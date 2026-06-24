@@ -653,3 +653,188 @@ describe("guardian-scoped attendance view (#190)", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe("attendance compliance/SIS export (#377)", () => {
+  const ADMIN = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+  const STUDENT = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+  const SECTION = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+
+  /** Caller resolver reading x-user-id + x-user-roles (mirrors prod). */
+  function resolveCaller(req: FastifyRequest) {
+    const userId = req.headers["x-user-id"];
+    if (typeof userId !== "string" || userId.length === 0) {
+      throw new Error("missing x-user-id");
+    }
+    const rolesHeader = req.headers["x-user-roles"];
+    const roles =
+      typeof rolesHeader === "string"
+        ? rolesHeader.split(",").map((r) => r.trim()).filter(Boolean)
+        : [];
+    return { userId, roles };
+  }
+
+  function buildExportApp(store: MemoryAttendanceStore) {
+    return buildApp({ config, store, resolveTenant, resolveCaller });
+  }
+
+  /** Seed one absent record in [SECTION] on 2026-03-02 under the demo tenant. */
+  async function seedExport(
+    store: MemoryAttendanceStore,
+    ctx = TENANT,
+    section = SECTION,
+  ) {
+    await store.seedDefaultCodes(ctx);
+    const session = await store.createSession(ctx, {
+      orgUnitId: section,
+      meetingDate: "2026-03-02",
+      periodLabel: "Period 1",
+    });
+    if (!session.ok) throw new Error("seed session failed");
+    await store.setRecords(ctx, session.session.id, [
+      { userId: STUDENT, code: "A", comment: "late, sick" },
+    ]);
+    return session.session.id;
+  }
+
+  const ADMIN_H = {
+    "x-tenant-id": DEMO_TENANT_ID,
+    "x-user-id": ADMIN,
+    "x-user-roles": "org_admin",
+  };
+
+  it("401s when no caller identity is present", async () => {
+    const app = buildExportApp(new MemoryAttendanceStore());
+    const res = await app.inject({
+      method: "GET",
+      url: "/export?from=2026-03-01&to=2026-03-31",
+      headers: { "x-tenant-id": DEMO_TENANT_ID },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("403s when the caller is not an admin/compliance role", async () => {
+    const app = buildExportApp(new MemoryAttendanceStore());
+    const res = await app.inject({
+      method: "GET",
+      url: "/export?from=2026-03-01&to=2026-03-31",
+      headers: {
+        "x-tenant-id": DEMO_TENANT_ID,
+        "x-user-id": ADMIN,
+        "x-user-roles": "instructor,learner",
+      },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe("forbidden");
+  });
+
+  it("400s on a missing/invalid date range", async () => {
+    const app = buildExportApp(new MemoryAttendanceStore());
+    const missing = await app.inject({
+      method: "GET",
+      url: "/export",
+      headers: ADMIN_H,
+    });
+    expect(missing.statusCode).toBe(400);
+
+    const reversed = await app.inject({
+      method: "GET",
+      url: "/export?from=2026-03-31&to=2026-03-01",
+      headers: ADMIN_H,
+    });
+    expect(reversed.statusCode).toBe(400);
+
+    const bad = await app.inject({
+      method: "GET",
+      url: "/export?from=2026-13-01&to=2026-03-31",
+      headers: ADMIN_H,
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it("200s CSV for an admin with the stable header and RFC-4180 quoting", async () => {
+    const store = new MemoryAttendanceStore();
+    await seedExport(store);
+    const app = buildExportApp(store);
+    const res = await app.inject({
+      method: "GET",
+      url: "/export?from=2026-03-01&to=2026-03-31",
+      headers: ADMIN_H,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/csv");
+    expect(res.headers["content-disposition"]).toContain(
+      'filename="attendance_2026-03-01_2026-03-31.csv"',
+    );
+    const lines = res.body.split("\r\n");
+    expect(lines[0]).toBe(
+      "tenant_id,section_id,meeting_date,period_label,student_id,code,category,minutes_late,comment",
+    );
+    expect(lines[1]).toContain(`${DEMO_TENANT_ID},${SECTION},2026-03-02`);
+    expect(lines[1]).toContain('"late, sick"');
+  });
+
+  it("filters to a single section via sectionId", async () => {
+    const store = new MemoryAttendanceStore();
+    await seedExport(store);
+    const app = buildExportApp(store);
+    const other = "abababab-abab-abab-abab-abababababab";
+    const res = await app.inject({
+      method: "GET",
+      url: `/export?from=2026-03-01&to=2026-03-31&sectionId=${other}`,
+      headers: ADMIN_H,
+    });
+    expect(res.statusCode).toBe(200);
+    // header only — no row matches the other section.
+    expect(res.body.split("\r\n")).toHaveLength(1);
+  });
+
+  it("200s OneRoster JSON using sis_id_map with internal-uuid fallback", async () => {
+    const store = new MemoryAttendanceStore();
+    await seedExport(store);
+    // Map the student to a SIS sourcedId but leave the class unmapped → fallback.
+    store.seedSisIdMap(DEMO_TENANT_ID, {
+      entityType: "user",
+      internalId: STUDENT,
+      sourceId: "sis-student-007",
+    });
+    const app = buildExportApp(store);
+    const res = await app.inject({
+      method: "GET",
+      url: "/export?from=2026-03-01&to=2026-03-31&format=oneroster",
+      headers: ADMIN_H,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("application/json");
+    const body = res.json() as {
+      results: {
+        student: { sourcedId: string };
+        class: { sourcedId: string };
+      }[];
+    };
+    expect(body.results).toHaveLength(1);
+    expect(body.results[0]!.student.sourcedId).toBe("sis-student-007");
+    expect(body.results[0]!.class.sourcedId).toBe(SECTION);
+  });
+
+  it("is tenant-isolated — a second tenant sees no rows", async () => {
+    const store = new MemoryAttendanceStore();
+    await seedExport(store, TENANT);
+    await seedExport(store, OTHER_TENANT);
+    const app = buildExportApp(store);
+    const res = await app.inject({
+      method: "GET",
+      url: "/export?from=2026-03-01&to=2026-03-31",
+      headers: {
+        "x-tenant-id": OTHER_TENANT.tenantId,
+        "x-user-id": ADMIN,
+        "x-user-roles": "super_admin",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    // Only OTHER_TENANT's single row, never the demo tenant's.
+    const lines = res.body.split("\r\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain(OTHER_TENANT.tenantId);
+    expect(res.body).not.toContain(DEMO_TENANT_ID);
+  });
+});

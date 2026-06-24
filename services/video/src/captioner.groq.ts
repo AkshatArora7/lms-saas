@@ -13,8 +13,9 @@
  *   3. POST the audio to Groq `audio/transcriptions` (model from config, default
  *      `whisper-large-v3`, `response_format=vtt`) → timed VTT text.
  *   4. Upload the VTT via `@lms/blob` `putObject` under the asset's
- *      tenant-namespaced prefix (derived from the source key), preserving
- *      storage isolation.
+ *      tenant-namespaced prefix, keyed PURELY from the trusted server-side
+ *      identity (`asset.tenantId`/`asset.id`) — never the client-supplied
+ *      `sourceBlobUrl` — preserving storage isolation.
  *
  * `ffmpeg-static` is imported lazily inside `caption()` (dynamic `import()`),
  * exactly like `groqChatModel`'s lazy `groq-sdk` import and `putObject`'s lazy
@@ -43,18 +44,33 @@ const GROQ_TRANSCRIPTIONS_URL =
 
 /**
  * Derive the tenant-namespaced object KEY for the auto-caption VTT from the
- * source blob URL. Pure and total. The source key is `t/{tenantId}/video/{id}/
- * {filename}` (see `videoBlobKey`); we strip the origin (scheme + host) and the
- * final filename segment, then place the VTT under a `captions/` sibling —
- * yielding `t/{tenantId}/video/{id}/captions/en.vtt`. Because the key keeps the
- * `t/{tenantId}/...` prefix verbatim, the upload can NEVER land outside the
- * asset's tenant prefix (the storage isolation boundary). Mirrors the path the
- * offline {@link StubCaptioner} points at (`blobBase(url)/captions/en.vtt`).
+ * asset's TRUSTED server-side identity (`asset.tenantId` + `asset.id`). Pure and
+ * total. Reuses the `t/{tenantId}/video/{id}` directory convention of
+ * `videoBlobKey` (`blob.ts:69-75`) and places the VTT under a `captions/`
+ * sibling → `t/{tenantId}/video/{id}/captions/en.vtt`. Because the key is built
+ * ONLY from trusted identity (never from the client-supplied `sourceBlobUrl`),
+ * the upload can NEVER land outside the caller's tenant prefix (the storage
+ * isolation boundary). This is the write-path key (mirrors #315's
+ * `tenantArtifactKeyPrefix`).
+ */
+export function tenantCaptionKey(tenantId: string, id: string): string {
+  return `t/${tenantId}/video/${id}/captions/en.vtt`;
+}
+
+/**
+ * DIAGNOSTICS ONLY — do NOT use on the write path. Derives a caption key by
+ * string-parsing the (client-supplied) source blob URL: strips the origin
+ * (scheme + host) and the final filename segment, then appends `captions/
+ * en.vtt`. Because the result echoes whatever prefix the URL encodes, it MUST
+ * NOT be used to key a blob WRITE — a crafted `sourceBlobUrl` could redirect the
+ * write into another tenant's prefix. Use {@link tenantCaptionKey} for writes.
+ * Kept for logging/diagnostics and so the StubCaptioner-style URL shape can be
+ * inspected in isolation.
  */
 export function captionKey(sourceBlobUrl: string): string {
   // blobBase strips the trailing filename → ".../t/{tenant}/video/{id}".
   const dir = blobBase(sourceBlobUrl);
-  // Strip the origin so we hand putObject a store-relative key, not a URL.
+  // Strip the origin so we hand back a store-relative key, not a URL.
   const withoutScheme = dir.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
   const firstSlash = withoutScheme.indexOf("/");
   const path = firstSlash === -1 ? withoutScheme : withoutScheme.slice(firstSlash + 1);
@@ -124,8 +140,12 @@ export class GroqCaptioner implements Captioner {
       // 3. Transcribe to timed VTT via Groq Whisper.
       const vtt = await this.transcribe(audioPath);
 
-      // 4. Upload the VTT under the asset's tenant-namespaced prefix.
-      const key = captionKey(asset.sourceBlobUrl);
+      // 4. Upload the VTT under the asset's tenant-namespaced prefix. The write
+      // key is a PURE function of the TRUSTED server-side identity
+      // (asset.tenantId/asset.id from the RLS-scoped row), never the
+      // client-supplied sourceBlobUrl — so a crafted URL cannot redirect the
+      // write into another tenant's prefix (#316 security fix; mirrors #315).
+      const key = tenantCaptionKey(asset.tenantId, asset.id);
       const { url } = await putObject(this.config, key, vtt, "text/vtt");
 
       return [{ lang: "en", label: "English (auto)", url, kind: "auto" }];

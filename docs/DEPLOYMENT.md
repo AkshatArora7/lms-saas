@@ -421,46 +421,100 @@ docker compose -f docker-compose.infra.yml down -v
 
 ## Build performance (local build-from-source)
 
-The build-from-source path (`pnpm start:build`) builds ~29–30 images. The
-service Dockerfiles are structured for **BuildKit cache reuse** so neither a cold
-nor a warm build pays the full cost again. Two mechanisms do the work (#299):
+The build-from-source path (`pnpm start:build`) builds **29 images** (27
+services + `apps/web` + `apps/admin`, plus the one-shot `seed` job). The
+Dockerfiles are structured for **BuildKit cache reuse** so neither a cold nor a
+warm build pays the full cost again. Three mechanisms do the work:
 
-1. **One pnpm store, shared across every image (cold builds).** Each
-   Dockerfile mounts a shared BuildKit cache for the pnpm store
-   (`--mount=type=cache,id=pnpm-store,target=/pnpm/store`). The **first** image
-   to build populates that store; **every later image reuses it**, so their
-   `pnpm install` resolves from the local store with **zero network**. In a
-   measured run on one Windows dev machine (after `docker builder prune -af`),
-   the first image (gateway) took ~242s; the next image's install then dropped
-   from ~40s to ~21s (~47% faster, **550 packages reused, 0 downloaded**) purely
-   from the shared store. Instead of 30 independent full installs, the mesh pays
-   for the dependency download **once**.
+1. **One shared base/deps image — the full `pnpm install` runs once (#369, L5).**
+   The `base` (node:20-slim + openssl/ca-certificates + corepack) and `deps`
+   (the full `pnpm install --frozen-lockfile` of the workspace) stages now live
+   in **`docker/base.Dockerfile`** and are built **once** as the
+   `lms-base-deps:local` image. Every service/app/seed Dockerfile starts with
+   `ARG BASE_IMAGE=lms-base-deps:local` / `FROM ${BASE_IMAGE} AS deps`, so the
+   ~550-package install is **reused as a layer** instead of being re-executed in
+   29 separate image contexts. Before L5, each image re-ran its own full install
+   (L1 shared only the pnpm *store*, i.e. the download — not the install *work*).
+   `openssl`/`ca-certificates` are now standardized in that one base, removing
+   the prior drift where 7 prisma services (`ai`, `gateway`, `lti`,
+   `mobile-bff`, `reporting`, `sis`, `video`) ran `prisma generate` without
+   installing them.
 
-2. **Warm rebuilds only rebuild the services whose source changed.** The
-   Dockerfiles install dependencies **manifest-first** (copy lockfile +
-   `package.json`s, `pnpm install`, *then* copy source) and use **scoped
-   per-service `COPY`** instead of `COPY . .`. A source-only edit therefore no
-   longer busts the dependency-install layer: the changed service's
-   `pnpm install` stage stays **CACHED** and only the later stages
-   (`COPY` + `prisma generate` + `tsc`) re-run (~57s in measurement), while a
-   service whose source did not change is **fully cached and finishes in
-   seconds** (~6s, all stages cached).
+2. **One pnpm store, shared across the base build (cold builds).** The base
+   `deps` stage mounts a shared BuildKit cache for the pnpm store
+   (`--mount=type=cache,id=pnpm-store,target=/pnpm/store`), so the dependency
+   **download** is paid once.
 
-> The cold figures above are **representative per-image measurements** on a
-> single Windows dev machine, not a precise end-to-end wall-clock for all 30
-> images — the full cold mesh build was intentionally not run end-to-end. They
-> illustrate the per-image mechanism (shared store reuse, install-layer caching),
-> not a guaranteed total build time.
+3. **Warm rebuilds only rebuild the services whose source changed (#299
+   preserved).** Each consumer's `build` stage installs nothing — it copies
+   shared `packages` + that service's source on top of the shared `deps` image,
+   runs `prisma generate` where needed, then `tsc`. A source-only edit busts only
+   that service's `build` stage; the shared `deps` layer is upstream and reused.
 
-**BuildKit is required** for the cache mounts to take effect. It is the default
-on Docker Desktop and Compose v2, and each Dockerfile pins the BuildKit frontend
-with a `# syntax=docker/dockerfile:1` directive, so no extra flags are needed.
-The `.dockerignore` still excludes `**/node_modules` (Windows pnpm-junction
-safety), so builds stay clean-context correct.
+### Measured wall-clock (documented reference machine)
 
-> **Future optimization (tracked, not yet shipped):** a shared base image (L5)
-> and `turbo prune` per-service contexts (L6) would cut cold build time further;
-> they are deferred follow-ups to #299.
+Reference machine: **Windows 11 (10.0.26200, x64), 11th Gen Intel Core
+i5-1135G7 @ 2.40GHz, 8 logical CPUs, 15.4 GiB host RAM; Docker Desktop 4.78.0 /
+engine 29.5.3, linux/amd64 VM allocated 8 CPU + ~8 GiB.** BuildKit on. All runs
+after `docker builder prune -af`.
+
+| Measurement | Before (origin/main, no shared base) | After (this branch, L5) |
+| --- | --- | --- |
+| Shared base/deps image (`pnpm build:base`) | n/a (no base image) | **~68–93 s** (one time) |
+| Representative service cold (`grading`) | included in its own full install | **~38 s** on top of the base |
+| Cold smoke total (base + `grading`) | — | **~131 s** |
+| Full 29-image cold mesh | could not complete on this box (see note) | **~432 s (~7.2 min)**, one successful end-to-end run |
+
+> **Honest constraint — full *before/after* mesh on this box.** A full 29-image
+> cold build (`--hard`, all caches dropped) repeatedly **exhausted the 8 GiB
+> Docker Desktop engine** on this machine — it returned
+> `failed to solve: Unavailable: error reading from server: EOF` and on one
+> attempt took the engine down entirely. The **after** mesh completed once
+> end-to-end at **~432 s** (base 83 s + compose build 349 s) when the store cache
+> mount was warm from the base build; the **before** (origin/main) mesh — which
+> has *no* shared base and therefore runs 29 *full* installs — is heavier still
+> and did not complete here. The headline before/after delta should be captured
+> on a larger reference machine (≥16 GiB to the Docker VM) using the script
+> below; the L5 mechanism (install once vs. 29×) and the warm-isolation
+> regression are both verified on this box (above and below).
+
+Reproduce on any machine (run cold, back-to-back, same box):
+
+```bash
+# AFTER (this branch):
+node scripts/perf/measure-cold-build.mjs --hard            # full mesh, base + all 29
+node scripts/perf/measure-cold-build.mjs --smoke --hard    # cheap proof: base + grading
+
+# BEFORE (origin / PR #368 head, which has no docker/base.Dockerfile):
+git checkout origin/main
+node scripts/perf/measure-cold-build.mjs --no-base --hard  # times compose build only
+```
+
+### Warm-rebuild isolation (verified)
+
+Measured on the reference machine after the base image existed:
+
+- Edit one service's source (whitespace in `services/grading/src/main.ts`) and
+  rebuild it → the shared `deps` stage stays **CACHED**, only
+  `COPY services/grading` + `prisma generate` + `tsc` re-run (**~17 s**).
+- Rebuild an untouched service (`gateway`) → **all stages CACHED** (**~4.7 s**).
+
+Changing exactly one service rebuilds only that service's image, never the mesh —
+#299's isolation is preserved by L5. (A dependency change that touches the
+lockfile/manifests rebuilds the **base once**, then every service re-layers on
+top — correct, and still cheaper than 29 installs.)
+
+**BuildKit is required** for the cache mounts and `${BASE_IMAGE}` `FROM` to take
+effect. It is the default on Docker Desktop and Compose v2, and each Dockerfile
+pins the BuildKit frontend with `# syntax=docker/dockerfile:1`. The base image
+must build first; `pnpm start:build` runs `pnpm build:base &&` ahead of the
+compose build, so collaborators run one command exactly as before. The
+`.dockerignore` still excludes `**/node_modules` (Windows pnpm-junction safety),
+so builds stay clean-context correct.
+
+> **Deferred follow-up:** `turbo prune --docker` per-service contexts (L6) remain
+> a tracked follow-up if, after L5, the per-service `COPY packages` + build stage
+> proves to dominate cold time. See `docs/ADR-0035-shared-base-deps-image.md`.
 
 ## Local development (hot reload)
 

@@ -11,7 +11,8 @@
   "scripts": {
     "start": "docker compose up -d",
     "start:pull": "docker compose up -d",
-    "start:build": "docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build",
+    "build:base": "docker build -f docker/base.Dockerfile -t lms-base-deps:local .",
+    "start:build": "pnpm build:base && docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build",
     "stop": "docker compose down",
     "down": "docker compose down",
     "down:clean": "docker compose down -v",

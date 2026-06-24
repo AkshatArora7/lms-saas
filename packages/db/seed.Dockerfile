@@ -8,27 +8,16 @@
 # (restart: "no") that the bundled identity/web/admin wait on via
 # `service_completed_successfully`, so login can't be hit before the demo
 # accounts + dataset exist.
-FROM node:20-slim AS base
-ENV PNPM_HOME=/pnpm PATH=$PNPM_HOME:$PATH
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl \
-  && rm -rf /var/lib/apt/lists/*
-RUN corepack enable
-WORKDIR /app
+#
+# The shared base + workspace-deps (openssl/ca-certificates, corepack, the full
+# `pnpm install`) now live in docker/base.Dockerfile and are built ONCE as
+# ${BASE_IMAGE} (#369, L5). This file consumes that image for both its build and
+# runtime stages instead of re-running the install. Build the base first:
+#   pnpm build:base   (or `pnpm start:build`, which runs it before compose).
+ARG BASE_IMAGE=lms-base-deps:local
 
-# manifests: extract ONLY package manifests + lockfile so the deps layer is reused
-# across source-only changes (node_modules already excluded by .dockerignore).
-FROM base AS manifests
-COPY . /tmp/ctx
-RUN cd /tmp/ctx \
- && find . -type f \( -name package.json -o -name pnpm-lock.yaml -o -name pnpm-workspace.yaml \) -print \
-    | xargs -I{} cp --parents {} /app/
-
-# deps: install the full workspace from manifests only, with a cached pnpm store.
-FROM base AS deps
-COPY --from=manifests /app ./
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+# deps: the shared, pre-installed workspace (includes the standardized base).
+FROM ${BASE_IMAGE} AS deps
 
 # build: bring in ONLY shared packages (no services/), then build the seed deps.
 FROM deps AS build
@@ -38,7 +27,7 @@ COPY packages ./packages
 RUN pnpm --filter @lms/auth... build
 RUN pnpm --filter @lms/db generate
 
-FROM base AS runtime
+FROM deps AS runtime
 ENV NODE_ENV=production
 # Ship the installed workspace so @lms/* + the generated client + tsx resolve.
 COPY --from=build /app/node_modules ./node_modules

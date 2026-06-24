@@ -163,6 +163,50 @@ export const enMessages = {
     statusNotStarted: "Not started",
     noModulesTitle: "No modules yet",
     noModulesBody: "Content for this course hasn't been published yet.",
+    askTutor: "Ask the tutor",
+  },
+  tutor: {
+    title: "Ask the tutor",
+    about: "About {courseTitle}",
+    backToCourse: "← Back to course",
+    disclosure:
+      "Answers are AI-generated from this course's materials only. Always double-check against your course content.",
+    conversationLabel: "Conversation with the course tutor",
+    you: "You",
+    tutor: "Tutor",
+    formLabel: "Ask the course tutor",
+    questionLabel: "Your question",
+    placeholder: "Ask about this course…",
+    send: "Send",
+    sending: "Sending…",
+    helper:
+      "Press Enter to send, Shift+Enter for a new line. Up to {max} characters.",
+    charsRemaining: "{remaining} characters left",
+    thinking: "Thinking…",
+    thinkingAnnounce: "The tutor is preparing an answer.",
+    sources: "Sources",
+    sourcesLabel: "Sources for this answer",
+    sourceLink: "Source {n}: {title}",
+    sourceFallback: "Course material {n}",
+    emptyTitle: "Ask the tutor anything about this course",
+    emptyBody:
+      "Get answers grounded in this course's materials, with links to the source topics.",
+    examplesLabel: "Example questions",
+    example1: "Summarize this week's reading",
+    example2: "Explain the key concept in simple terms",
+    example3: "What should I review before the quiz?",
+    retry: "Try again",
+    errorGeneric: "Couldn't get an answer — try again.",
+    errorRateLimited:
+      "You're sending questions too quickly. Try again in a moment.",
+    errorRateLimitedAfter:
+      "You're sending questions too quickly. Try again in {seconds} seconds.",
+    errorCostExceeded:
+      "The course tutor has reached today's usage limit. Please try again tomorrow.",
+    errorTooLong: "That question is too long — please shorten it.",
+    errorSignIn: "Please sign in again.",
+    errorUnavailable:
+      "The tutor is unavailable right now. Please try again shortly.",
   },
   item: {
     backToCourse: "← Back to {course}",

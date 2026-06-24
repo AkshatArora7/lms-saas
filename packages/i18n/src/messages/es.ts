@@ -161,6 +161,50 @@ export const esMessages: Messages = {
     statusNotStarted: "Sin empezar",
     noModulesTitle: "Aún no hay módulos",
     noModulesBody: "El contenido de este curso aún no se ha publicado.",
+    askTutor: "Pregunta al tutor",
+  },
+  tutor: {
+    title: "Pregunta al tutor",
+    about: "Sobre {courseTitle}",
+    backToCourse: "← Volver al curso",
+    disclosure:
+      "Las respuestas las genera la IA solo a partir de los materiales de este curso. Verifica siempre con el contenido del curso.",
+    conversationLabel: "Conversación con el tutor del curso",
+    you: "Tú",
+    tutor: "Tutor",
+    formLabel: "Pregunta al tutor del curso",
+    questionLabel: "Tu pregunta",
+    placeholder: "Pregunta sobre este curso…",
+    send: "Enviar",
+    sending: "Enviando…",
+    helper:
+      "Pulsa Enter para enviar, Mayús+Enter para una nueva línea. Hasta {max} caracteres.",
+    charsRemaining: "Quedan {remaining} caracteres",
+    thinking: "Pensando…",
+    thinkingAnnounce: "El tutor está preparando una respuesta.",
+    sources: "Fuentes",
+    sourcesLabel: "Fuentes de esta respuesta",
+    sourceLink: "Fuente {n}: {title}",
+    sourceFallback: "Material del curso {n}",
+    emptyTitle: "Pregunta al tutor lo que quieras sobre este curso",
+    emptyBody:
+      "Obtén respuestas basadas en los materiales de este curso, con enlaces a los temas de origen.",
+    examplesLabel: "Preguntas de ejemplo",
+    example1: "Resume la lectura de esta semana",
+    example2: "Explica el concepto clave en términos sencillos",
+    example3: "¿Qué debería repasar antes del cuestionario?",
+    retry: "Inténtalo de nuevo",
+    errorGeneric: "No se pudo obtener una respuesta — inténtalo de nuevo.",
+    errorRateLimited:
+      "Estás enviando preguntas demasiado rápido. Inténtalo de nuevo en un momento.",
+    errorRateLimitedAfter:
+      "Estás enviando preguntas demasiado rápido. Inténtalo de nuevo en {seconds} segundos.",
+    errorCostExceeded:
+      "El tutor del curso ha alcanzado el límite de uso de hoy. Inténtalo de nuevo mañana.",
+    errorTooLong: "Esa pregunta es demasiado larga — por favor, acórtala.",
+    errorSignIn: "Por favor, inicia sesión de nuevo.",
+    errorUnavailable:
+      "El tutor no está disponible en este momento. Inténtalo de nuevo en breve.",
   },
   item: {
     backToCourse: "← Volver a {course}",

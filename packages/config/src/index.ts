@@ -46,6 +46,14 @@ const schema = z.object({
   GROQ_MODEL: z.string().default("llama-3.3-70b-versatile"),
   GROQ_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
 
+  // Video auto-caption provider (#316). `stub` (default) keeps the offline
+  // deterministic captioner so tests/CI run with no key/network; `groq` selects
+  // the real Groq Whisper ASR captioner, which is additionally gated on
+  // GROQ_API_KEY being set (falls back to the stub otherwise). The Whisper model
+  // is configurable so the ASR model can be pinned/upgraded without code change.
+  VIDEO_CAPTIONER: z.enum(["stub", "groq"]).default("stub"),
+  VIDEO_WHISPER_MODEL: z.string().default("whisper-large-v3"),
+
   // Observability / distributed tracing (#83). Optional + tolerant: the OTel
   // preload (@lms/observability/register) reads RAW process.env before config
   // loads, so these exist here only for documentation + typed access by app

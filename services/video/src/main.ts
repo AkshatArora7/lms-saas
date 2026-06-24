@@ -29,6 +29,7 @@ import {
   type CourseAccessPolicy,
 } from "./access.js";
 import { StubCaptioner, type Captioner } from "./captioner.js";
+import { GroqCaptioner } from "./captioner.groq.js";
 import { InlinePipelineRunner, type PipelineRunner } from "./pipeline.js";
 import {
   registerVideoRoutes,
@@ -118,6 +119,19 @@ function headerCallerResolver(): (req: FastifyRequest) => Caller {
 }
 
 /**
+ * Default captioner selection (#316): the real {@link GroqCaptioner} when
+ * `VIDEO_CAPTIONER=groq` AND a `GROQ_API_KEY` is configured, else the offline
+ * {@link StubCaptioner}. Gating on both the flag and the key means the service
+ * boots and tests pass with no key/network. Mirrors `makeChatModel(config)` /
+ * `makeBlobSigner(config)`. `BuildAppOptions.captioner` still overrides this.
+ */
+export function makeCaptioner(config: AppConfig): Captioner {
+  return config.VIDEO_CAPTIONER === "groq" && config.GROQ_API_KEY
+    ? new GroqCaptioner(config)
+    : new StubCaptioner();
+}
+
+/**
  * Build the Fastify app without binding a port, so tests can drive it via
  * `app.inject(...)`. Config is resolved lazily here (not at import time). The
  * transcode/caption pipeline defaults to deterministic offline stubs behind
@@ -137,7 +151,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   const store = options.store ?? createPrismaStore();
   const transcoder = options.transcoder ?? makeTranscoder(config);
-  const captioner = options.captioner ?? new StubCaptioner();
+  const captioner = options.captioner ?? makeCaptioner(config);
   const pipeline =
     options.pipeline ??
     new InlinePipelineRunner({ store, transcoder, captioner });

@@ -37,10 +37,25 @@ import {
 } from "./routes.js";
 import { MemoryVideoStore } from "./store.memory.js";
 import { createPrismaStore } from "./store.prisma.js";
+import { FfmpegTranscoder } from "./transcoder.ffmpeg.js";
 import { StubTranscoder, type Transcoder } from "./transcoder.js";
 
 const SERVICE = "video";
 const log = createLogger(SERVICE);
+
+/**
+ * Default transcoder: the real {@link FfmpegTranscoder} when
+ * `VIDEO_TRANSCODER=ffmpeg` is configured, else the deterministic offline
+ * {@link StubTranscoder} — so the service boots and tests pass with no FFmpeg,
+ * binary, or network. Mirrors `makeChatModel(config)` / `makeBlobSigner(config)`.
+ * The `FfmpegTranscoder` constructor imports nothing heavy; its bundled binaries
+ * are pulled lazily only when `transcode()` actually runs.
+ */
+export function makeTranscoder(config: AppConfig): Transcoder {
+  return config.VIDEO_TRANSCODER === "ffmpeg"
+    ? new FfmpegTranscoder(config)
+    : new StubTranscoder();
+}
 
 /** Overridable dependencies — tests inject an in-memory store + offline seams. */
 export interface BuildAppOptions {
@@ -121,7 +136,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }));
 
   const store = options.store ?? createPrismaStore();
-  const transcoder = options.transcoder ?? new StubTranscoder();
+  const transcoder = options.transcoder ?? makeTranscoder(config);
   const captioner = options.captioner ?? new StubCaptioner();
   const pipeline =
     options.pipeline ??

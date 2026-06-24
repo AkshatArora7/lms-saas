@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import type { TenantContext } from "@lms/types";
 
+import type { EnrollmentRosterResolver } from "./enrollment-resolver.js";
+import { FakeEnrollmentRosterResolver } from "./enrollment-resolver.memory.js";
 import {
   attendanceEvent,
   recipientsFor,
@@ -51,6 +53,8 @@ export class MemoryAttendanceStore implements AttendanceStore {
     private readonly generateId: () => string = randomUUID,
     /** Resolves a student's notifiable guardians; defaults to none (#101). */
     private readonly guardians: StudentGuardiansResolver = new MemoryStudentGuardiansResolver(),
+    /** Resolves a section's active roster for seeding; defaults to none (#376). */
+    private readonly enrollment: EnrollmentRosterResolver = new FakeEnrollmentRosterResolver(),
   ) {}
 
   private codeCategory(
@@ -104,6 +108,10 @@ export class MemoryAttendanceStore implements AttendanceStore {
     ctx: TenantContext,
     input: NewSessionInput,
   ): Promise<CreateSessionResult> {
+    // Phase A: derive the roster from active section enrollment via the port,
+    // outside any "tx" — mirrors the Prisma store's 2-phase flow (#376).
+    const students = await this.enrollment.resolveRoster(ctx, input.orgUnitId);
+
     const periodLabel = input.periodLabel ?? null;
     const duplicate = this.sessions.some(
       (s) =>
@@ -125,6 +133,33 @@ export class MemoryAttendanceStore implements AttendanceStore {
       takenBy: input.takenBy ?? null,
     };
     this.sessions.push(session);
+
+    // Seed one record per active student with the tenant's default code. The
+    // (sessionId, userId) dedup mirrors ON CONFLICT DO NOTHING, and a missing
+    // default code skips seeding (FK would forbid a code-less record) (#376).
+    if (students.length > 0) {
+      const defaultCode = this.codes.find(
+        (c) => c.tenantId === ctx.tenantId && c.isDefault,
+      )?.code;
+      if (defaultCode) {
+        for (const s of students) {
+          const exists = this.records.some(
+            (r) => r.sessionId === session.id && r.userId === s.userId,
+          );
+          if (exists) continue;
+          this.records.push({
+            id: this.generateId(),
+            tenantId: ctx.tenantId,
+            sessionId: session.id,
+            userId: s.userId,
+            code: defaultCode,
+            minutesLate: null,
+            comment: null,
+          });
+        }
+      }
+    }
+
     return { ok: true, session };
   }
 
@@ -380,8 +415,9 @@ export class MemoryAttendanceStore implements AttendanceStore {
 export function createSeededMemoryStore(
   generateId: () => string = randomUUID,
   guardians: StudentGuardiansResolver = new MemoryStudentGuardiansResolver(),
+  enrollment: EnrollmentRosterResolver = new FakeEnrollmentRosterResolver(),
 ): MemoryAttendanceStore {
-  const store = new MemoryAttendanceStore(generateId, guardians);
+  const store = new MemoryAttendanceStore(generateId, guardians, enrollment);
   void store.seedDefaultCodes({
     tenantId: DEMO_TENANT_ID,
     tier: "pool",

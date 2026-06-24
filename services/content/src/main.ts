@@ -8,6 +8,7 @@
  * Lightweight Fastify HTTP service. Deployable as a container image (Dockerfile
  * -> GHCR -> container host) or, for edge/BFF roles, as Vercel Functions.
  */
+import { makeBlobSigner } from "@lms/blob";
 import { loadConfig, type AppConfig } from "@lms/config";
 import { createLogger } from "@lms/logger";
 import type { TenantContext } from "@lms/types";
@@ -16,7 +17,7 @@ import Fastify, {
   type FastifyRequest,
 } from "fastify";
 
-import { DevBlobSigner, type BlobSigner } from "./blob.js";
+import { type BlobSigner } from "./blob.js";
 import { registerContentRoutes, type ContentRouteDeps } from "./routes.js";
 import { MemoryContentStore } from "./store.memory.js";
 import { createPrismaStore } from "./store.prisma.js";
@@ -68,7 +69,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     config,
     store: options.store ?? createPrismaStore(),
     resolveTenant: options.resolveTenant ?? headerTenantResolver(config),
-    blobSigner: options.blobSigner ?? new DevBlobSigner(),
+    blobSigner: options.blobSigner ?? makeBlobSigner(config),
     ...(options.maxUploadBytes !== undefined
       ? { maxUploadBytes: options.maxUploadBytes }
       : {}),

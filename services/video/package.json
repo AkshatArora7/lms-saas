@@ -22,11 +22,13 @@
     "@lms/observability": "workspace:*",
     "@lms/types": "workspace:*",
     "fastify": "^4.28.1",
-    "ffmpeg-static": "^5.2.0"
+    "ffmpeg-static": "^5.2.0",
+    "ffprobe-static": "^3.1.0"
   },
   "devDependencies": {
     "@lms/eslint-config": "workspace:*",
     "@lms/tsconfig": "workspace:*",
+    "@types/ffprobe-static": "^2.0.3",
     "tsx": "^4.17.0",
     "vitest": "^2.0.5"
   }

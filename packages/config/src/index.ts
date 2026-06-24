@@ -32,6 +32,14 @@ const schema = z.object({
 
   // Infra
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
+
+  // Video transcoder selection (#315). "stub" (default) is the deterministic,
+  // offline, no-FFmpeg/no-network worker so the service boots and CI passes with
+  // nothing configured; "ffmpeg" selects the real bundled-FFmpeg worker that
+  // probes/transcodes the source and uploads an HLS ladder to blob storage
+  // (requires BLOB_READ_WRITE_TOKEN at run time). Optional + additive so other
+  // services keep typechecking unchanged.
+  VIDEO_TRANSCODER: z.enum(["stub", "ffmpeg"]).default("stub"),
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),

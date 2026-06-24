@@ -21,7 +21,8 @@
     "@lms/logger": "workspace:*",
     "@lms/observability": "workspace:*",
     "@lms/types": "workspace:*",
-    "fastify": "^4.28.1"
+    "fastify": "^4.28.1",
+    "ffmpeg-static": "^5.2.0"
   },
   "devDependencies": {
     "@lms/eslint-config": "workspace:*",

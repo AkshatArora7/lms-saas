@@ -62,6 +62,11 @@ jobs:
       - name: Update behind PR branches
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Give gh the repo explicitly so it never needs a local .git to infer
+          # it. This job has no actions/checkout step, so without GH_REPO every
+          # gh call fell back to local-git detection and failed with
+          # "not a git repository", aborting the job under `bash -e`.
+          GH_REPO: ${{ github.repository }}
         run: |
           # Enumerate open, non-draft PRs targeting main. We DO NOT pre-filter
           # on mergeStateStatus: GitHub computes it lazily, so right after a

@@ -1524,6 +1524,20 @@
             "No tenant-isolation / ordering regression: postgres-healthy-before-services and seed-completed gates that protect schema/RLS init are preserved",
             "Builds on #369/#380: L5 shared base/deps image already shipped on main via PR #380 (full-mesh cold build ~432s in docs/DEPLOYMENT.md); this covers the remaining startup gap"
           ]
+        },
+        {
+          "type": "story",
+          "priority": "P3",
+          "points": 1,
+          "title": "docs(adr): resolve duplicate ADR-0035 numbering (video-outbox vs shared-base)",
+          "as_a": "platform engineer",
+          "i_want": "the two ADRs that both got numbered 0035 to be de-duplicated",
+          "so_that": "the ADR log has unique, referenceable numbers",
+          "ac": [
+            "docs/ADR-0035-video-outbox-domain-events.md (from #318) and docs/ADR-0035-shared-base-deps-image.md (from #380) no longer share a number - the later-merged one (shared-base, #380) is renumbered to the next free ADR number 0037 (0036 is already taken by docs/ADR-0036-production-video-pipeline-providers.md)",
+            "All inbound references to the renumbered ADR (in code comments, DEPLOYMENT.md, README, other ADRs; handshakes are gitignored so skip) are updated",
+            "The ADR content is otherwise unchanged"
+          ]
         }
       ]
     },

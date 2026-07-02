@@ -1508,6 +1508,22 @@
             ".dockerignore still excludes node_modules; the measured before/after reduction is documented in docs/DEPLOYMENT.md",
             "Predecessor recorded: this builds on #299 (PR #368), which shipped L1-L4 (BuildKit pnpm-store cache mount, manifest-first install, scoped per-service COPY across all 30 images)"
           ]
+        },
+        {
+          "type": "story",
+          "priority": "P2",
+          "points": 3,
+          "title": "perf(compose): cut and stabilize full-mesh startup (healthcheck HOSTNAME + health-gate tuning)",
+          "as_a": "platform engineer",
+          "i_want": "the docker-compose mesh to reach ready state faster and without the web/admin healthcheck false-negative",
+          "so_that": "docker compose up (and pnpm start / start:build) becomes ready promptly instead of appearing stuck",
+          "ac": [
+            "The learner web (:3000) and admin (:3001) containers report healthy (their healthcheck currently probes 127.0.0.1 but Next standalone binds to $HOSTNAME = the container id, so it never passes) - fix by setting HOSTNAME=0.0.0.0 (or an equivalent healthcheck target) in their compose env so up no longer waits out their retries",
+            "The tiered service_healthy startup gating is tuned (e.g. start_period/interval, or service_started where safe for non-critical deps) to reduce total time-to-ready WITHOUT weakening the gateway-before-web / postgres-before-service ordering that the trust boundary + schema init require",
+            "Time-to-ready is measured before/after for a representative subset (infra + a couple services + web) on the documented reference machine and recorded (DEPLOYMENT.md or the PR)",
+            "No tenant-isolation / ordering regression: postgres-healthy-before-services and seed-completed gates that protect schema/RLS init are preserved",
+            "Builds on #369/#380: L5 shared base/deps image already shipped on main via PR #380 (full-mesh cold build ~432s in docs/DEPLOYMENT.md); this covers the remaining startup gap"
+          ]
         }
       ]
     },

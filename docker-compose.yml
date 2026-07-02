@@ -77,10 +77,10 @@ x-common-env: &common-env
 
 x-svc-healthcheck: &svc-healthcheck
   test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:'+(process.env.PORT||'4000')+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
-  interval: 10s
-  timeout: 5s
-  retries: 15
-  start_period: 40s
+  interval: 5s
+  timeout: 3s
+  retries: 10
+  start_period: 15s
 
 services:
   # In-compose Postgres (always up). The default DB for the mesh; set DATABASE_URL
@@ -707,41 +707,45 @@ services:
       CALENDAR_SERVICE_URL: http://calendar:4013
       ATTENDANCE_SERVICE_URL: http://attendance:4025
       ANALYTICS_SERVICE_URL: http://analytics:4015
+    # Offline-safe BFF: web calls domain services directly via *_URL and renders
+    # login/branding with graceful fallbacks, so non-identity deps need only be
+    # started (not healthy). Keep identity healthy (first-login path) + seed done
+    # (schema/RLS/demo tenant isolation gate).
     depends_on:
       identity:
         condition: service_healthy
       user-org:
-        condition: service_healthy
+        condition: service_started
       enrollment:
-        condition: service_healthy
+        condition: service_started
       course:
-        condition: service_healthy
+        condition: service_started
       content:
-        condition: service_healthy
+        condition: service_started
       tenant:
-        condition: service_healthy
+        condition: service_started
       assignment:
-        condition: service_healthy
+        condition: service_started
       grading:
-        condition: service_healthy
+        condition: service_started
       discussion:
-        condition: service_healthy
+        condition: service_started
       announcement:
-        condition: service_healthy
+        condition: service_started
       calendar:
-        condition: service_healthy
+        condition: service_started
       attendance:
-        condition: service_healthy
+        condition: service_started
       analytics:
-        condition: service_healthy
+        condition: service_started
       seed:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:'+(process.env.PORT||'3000')+'/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 40s
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
     ports:
       - "3000:3000"
     restart: unless-stopped
@@ -764,27 +768,30 @@ services:
       CONTENT_SERVICE_URL: http://content:4006
       TENANT_SERVICE_URL: http://tenant:4002
       ANALYTICS_SERVICE_URL: http://analytics:4015
+    # Offline-safe BFF: admin calls domain services directly via *_URL with graceful
+    # fallbacks, so non-identity deps need only be started (not healthy). Keep
+    # identity healthy (first-login path) + seed done (schema/RLS/demo tenant gate).
     depends_on:
       identity:
         condition: service_healthy
       user-org:
-        condition: service_healthy
+        condition: service_started
       course:
-        condition: service_healthy
+        condition: service_started
       content:
-        condition: service_healthy
+        condition: service_started
       tenant:
-        condition: service_healthy
+        condition: service_started
       analytics:
-        condition: service_healthy
+        condition: service_started
       seed:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:'+(process.env.PORT||'3001')+'/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 40s
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
     ports:
       - "3001:3001"
     restart: unless-stopped

@@ -1,4 +1,4 @@
-# ADR-0035: Shared base/deps Docker image for the build-from-source mesh
+# ADR-0037: Shared base/deps Docker image for the build-from-source mesh
 
 - **Status:** Accepted
 - **Date:** 2026-06-24

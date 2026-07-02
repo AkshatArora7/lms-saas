@@ -514,7 +514,7 @@ so builds stay clean-context correct.
 
 > **Deferred follow-up:** `turbo prune --docker` per-service contexts (L6) remain
 > a tracked follow-up if, after L5, the per-service `COPY packages` + build stage
-> proves to dominate cold time. See `docs/ADR-0035-shared-base-deps-image.md`.
+> proves to dominate cold time. See `docs/ADR-0037-shared-base-deps-image.md`.
 
 ## Local development (hot reload)
 
